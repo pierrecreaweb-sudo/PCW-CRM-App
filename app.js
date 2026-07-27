@@ -26,6 +26,17 @@ const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abon
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
 const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";
+
+// Options de projet, proposées selon le type de projet sélectionné
+const TYPES_SITE = ["Site Web One Page", "Site Vitrine", "Site Vitrine +"];
+const TYPES_APP = ["Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
+const OPTIONS_SITE = ["Nom de domaine", "Hébergement", "Maintenance & mise à jour", "Page supplémentaire", "Rédaction de contenu"];
+const OPTIONS_APP = ["Module supplémentaire", "Accès multi-utilisateurs", "Maintenance & évolutions", "Hébergement base de données"];
+function optionsListForType(type) {
+  if (TYPES_SITE.includes(type)) return OPTIONS_SITE;
+  if (TYPES_APP.includes(type)) return OPTIONS_APP;
+  return null;
+}
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
   "30% d'acompte à la commande.",
@@ -458,6 +469,7 @@ function openEventRecap(id) {
       ${line("Email", c && c.email)}
       ${line("Provenance", c && c.provenance)}
       ${line("Type de projet", e.type_evenement)}
+      ${line("Options", e.options)}
       ${line("Formule", e.type_prestation)}
       ${line("Budget", e.budget ? e.budget + " €" : "")}
       ${line("Statut", e.statut)}
@@ -575,6 +587,7 @@ function renderDevis() {
       <td>${badge(d.statut, STATUT_COLORS[d.statut])}</td>
       <td class="row-actions">
         <button title="Éditer le devis" onclick="openDevisEditor(${d.id})">✎</button>
+        <button title="Visualiser" onclick="generateDevisPDF(${d.id}, 'preview')">👁</button>
         <button title="Télécharger le PDF" onclick="generateDevisPDF(${d.id})">⬇</button>
         <button title="Créer une facture" onclick="createFactureFromDevis(${d.id})">🧾</button>
         <button onclick="confirmDelete('devis', ${d.id}, renderDevis)">🗑</button>
@@ -804,7 +817,7 @@ function drawFooter(doc) {
   doc.text(doc.splitTextToSize(legal, 175), 105, h - 12, { align: "center" });
   doc.setTextColor(0); doc.setFontSize(11);
 }
-async function generateDevisPDF(id) {
+async function generateDevisPDF(id, mode) {
   const d = findDevis(id);
   if (!d) return;
   if (!window.jspdf) { showToast("Générateur PDF indisponible (hors-ligne)"); return; }
@@ -855,7 +868,8 @@ async function generateDevisPDF(id) {
     d.cgv.forEach((c2, i) => { const t = doc.splitTextToSize((i + 1) + ". " + c2, 175); doc.text(t, 20, y); y += t.length * 5 + 1; if (y > 255) { doc.addPage(); y = 20; } });
   }
   drawFooter(doc);
-  doc.save((d.numero || "devis").replace(/\s+/g, "_") + ".pdf");
+  if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
+  else { doc.save((d.numero || "devis").replace(/\s+/g, "_") + ".pdf"); }
 }
 
 // ========================================================================
@@ -887,6 +901,7 @@ function renderFactures() {
       <td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td>
       <td>${badge(f.statut, STATUT_COLORS[f.statut])}</td>
       <td class="row-actions">
+        <button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button>
         <button title="Télécharger la facture (PDF)" onclick="generateFacturePDF(${f.id})">⬇</button>
         ${pdfBtn}
         <button onclick="openFactureDialog(${f.id})">✎</button>
@@ -931,7 +946,7 @@ function createFactureFromDevis(devisId) {
   });
   showToast("Facture pré-remplie depuis " + (d.numero || "le devis"));
 }
-async function generateFacturePDF(id) {
+async function generateFacturePDF(id, mode) {
   const f = findFacture(id); if (!f) return;
   if (!window.jspdf) { showToast("Générateur PDF indisponible (hors-ligne)"); return; }
   const c = findContact(f.contact_id), dev = f.devis_id ? findDevis(f.devis_id) : null;
@@ -957,7 +972,8 @@ async function generateFacturePDF(id) {
   doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
   if (f.notes) { y += 12; doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); }
   drawFooter(doc);
-  doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf");
+  if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
+  else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
 }
 
 async function downloadAttachment(pdf_path) {
@@ -971,8 +987,8 @@ function openContactHistory(contactId) {
   const c = findContact(contactId);
   const devs = cache.devis.filter(d => { const cc = devisContact(d); return cc && cc.id === contactId; });
   const facs = cache.factures.filter(f => f.contact_id === contactId);
-  const devHtml = devs.length ? devs.map(d => `<tr><td>${d.numero || "—"}</td><td>${fmtDateFR(devisDateEvt(d))}</td><td>${d.montant_ttc ? d.montant_ttc + " €" : "—"}</td><td>${badge(d.statut, STATUT_COLORS[d.statut])}</td><td class="row-actions"><button onclick="generateDevisPDF(${d.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucun devis</td></tr>`;
-  const facHtml = facs.length ? facs.map(f => `<tr><td>${f.numero || "—"}</td><td>${fmtDateFR(f.date_facture)}</td><td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td><td>${badge(f.statut, STATUT_COLORS[f.statut])}</td><td class="row-actions"><button onclick="generateFacturePDF(${f.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune facture</td></tr>`;
+  const devHtml = devs.length ? devs.map(d => `<tr><td>${d.numero || "—"}</td><td>${fmtDateFR(devisDateEvt(d))}</td><td>${d.montant_ttc ? d.montant_ttc + " €" : "—"}</td><td>${badge(d.statut, STATUT_COLORS[d.statut])}</td><td class="row-actions"><button title="Visualiser" onclick="generateDevisPDF(${d.id}, 'preview')">👁</button><button title="Télécharger" onclick="generateDevisPDF(${d.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucun devis</td></tr>`;
+  const facHtml = facs.length ? facs.map(f => `<tr><td>${f.numero || "—"}</td><td>${fmtDateFR(f.date_facture)}</td><td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td><td>${badge(f.statut, STATUT_COLORS[f.statut])}</td><td class="row-actions"><button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button><button title="Télécharger" onclick="generateFacturePDF(${f.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune facture</td></tr>`;
   showInfoModal("Historique client", `
     <p style="margin:0 0 14px;color:var(--muted);font-size:13px;">Contact : <strong>${contactLabel(c)}</strong></p>
     <h3 style="font-size:14px;margin:0 0 8px;">📄 Devis</h3>
@@ -1022,6 +1038,25 @@ function renderEvenements() {
   }).join("") : `<tr class="empty-row"><td colspan="11">Aucun projet</td></tr>`;
 }
 
+function renderOptionsUI(form, type, checkedCsv) {
+  const container = form.querySelector("#options-ui");
+  const hidden = form.elements["options"];
+  if (!container || !hidden) return;
+  const list = optionsListForType(type);
+  if (!list) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--muted);">Choisis un type de projet Site web ou Application pour voir les options disponibles.</div>`;
+    hidden.value = "";
+    return;
+  }
+  const checked = (checkedCsv || "").split(",").map(s => s.trim()).filter(Boolean);
+  container.innerHTML = `<div class="inline-checks">` + list.map(o => `<label><input type="checkbox" data-opt="${escapeAttr(o)}" ${checked.includes(o) ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
+  container.querySelectorAll("[data-opt]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const picked = Array.from(container.querySelectorAll("[data-opt]")).filter(x => x.checked).map(x => x.dataset.opt);
+      hidden.value = picked.join(", ");
+    });
+  });
+}
 function openEvenementDialog(id, defaultDate) {
   const row = id ? cache.evenements.find(e => e.id === id) : {};
   openModal({
@@ -1033,6 +1068,7 @@ function openEvenementDialog(id, defaultDate) {
       { key: "contact_id", label: "Contact / client", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
       { key: "provenance", label: "Provenance (reprise du contact)", type: "text", value: row.provenance },
       { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
+      { key: "options", label: "Options du projet", type: "options-picker", value: row.options },
       { key: "type_prestation", label: "Formule(s)", type: "checklist", options: TYPES_PRESTATION, value: row.type_prestation },
       { key: "statut", label: "Statut", type: "select", options: STATUTS_EVENEMENT, value: row.statut || "Premier contact" },
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
@@ -1044,6 +1080,9 @@ function openEvenementDialog(id, defaultDate) {
     ],
     onRender: (form) => {
       form.elements["contact_id"].addEventListener("change", () => { const c = findContact(Number(form.elements["contact_id"].value)); if (c && c.provenance && !form.elements["provenance"].value) form.elements["provenance"].value = c.provenance; });
+      const typeSel = form.elements["type_evenement__sel"];
+      renderOptionsUI(form, typeSel.value === "__other__" ? "" : typeSel.value, row.options);
+      typeSel.addEventListener("change", () => renderOptionsUI(form, typeSel.value === "__other__" ? "" : typeSel.value, ""));
     },
     onSaved: refreshAll,
   });
@@ -1201,6 +1240,8 @@ function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) 
     } else if (f.type === "checklist") {
       const selected = (f.value || "").split(",").map(s => s.trim()).filter(Boolean);
       input = `<div class="inline-checks">` + (f.options || []).map(o => `<label><input type="checkbox" name="${f.key}__${escapeAttr(o)}" ${selected.includes(o) ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
+    } else if (f.type === "options-picker") {
+      input = `<input type="hidden" name="${f.key}" value="${f.value != null ? escapeAttr(f.value) : ""}"><div id="options-ui" style="margin-top:2px;"></div>`;
     } else if (f.type === "textarea") {
       input = `<textarea name="${f.key}">${f.value || ""}</textarea>`;
     } else if (f.type === "checkbox") {
@@ -1364,6 +1405,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ed-add-line").addEventListener("click", addEditorLine);
   document.getElementById("ed-close").addEventListener("click", closeDevisEditor);
   document.getElementById("ed-save").addEventListener("click", () => saveDevisEditor(false));
+  document.getElementById("ed-view").addEventListener("click", () => { readEditorToState(); generateDevisPDF(edState.id, "preview"); });
   document.getElementById("ed-pdf").addEventListener("click", () => { readEditorToState(); generateDevisPDF(edState.id); });
   document.getElementById("ed-finaliser").addEventListener("click", openCgvPicker);
   document.getElementById("ed-lines").addEventListener("input", () => { readEditorToState(); recomputeEditor(); });
