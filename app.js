@@ -202,6 +202,21 @@ async function handleAuthSubmit() {
     else if (data.user) onLoggedIn(data.user);
   }
 }
+// Pré-remplit la Tarification avec les prestations/options PCW de base,
+// uniquement si l'onglet est encore vide (ne touche jamais à des données
+// déjà saisies). Les prix sont laissés vides — à compléter dans l'appli.
+async function seedDefaultTarification() {
+  if (cache.grille_tarifaire.length) return;
+  const prestations = TYPES_EVENEMENT.map(nom => ({ nom_presta: nom, categorie: "Prestation" }));
+  const optionsUniques = [...new Set([...OPTIONS_SITE, ...OPTIONS_APP])];
+  const options = optionsUniques.map(nom => ({ nom_presta: nom, categorie: "Option / Supplément" }));
+  const toCreate = [...prestations, ...options];
+  for (const item of toCreate) {
+    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: null, tva: 0, montant_tva: 0, pu_ttc: null });
+  }
+  await refreshCache();
+  showToast("Tarification pré-remplie — complète les prix quand tu veux");
+}
 async function onLoggedIn(user) {
   currentUser = user;
   document.getElementById("auth-screen").style.display = "none";
@@ -209,6 +224,7 @@ async function onLoggedIn(user) {
   document.getElementById("user-email-lbl").textContent = user.email;
   await refreshCache();
   await autoExpireDevis();
+  await seedDefaultTarification();
   showPage("dashboard");
 }
 async function handleLogout() {
