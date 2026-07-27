@@ -11,7 +11,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---- 2) CONSTANTES ----
-const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète", "Autre"];
+const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
 const STATUTS_PROSPECT = ["Nouveau", "Contacté", "Qualifié", "Devis envoyé", "Converti", "Perdu"];
 const STATUTS_DEVIS = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
 const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "Partiellement payée", "En retard", "Annulée"];
