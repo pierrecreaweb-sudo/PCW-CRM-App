@@ -14,7 +14,7 @@
     --bg:#F3F5FA; --sidebar:#0B1220; --sidebar-active:#17233B; --sidebar-text:#AEB7C9;
     --accent:#2F7DF6; --accent-dark:#1D5FD1; --accent-light:#EAF1FE; --card:#FFFFFF; --text:#151A24;
     --muted:#8890A0; --border:#E6E9F1; --success:#3FA772; --warning:#D99A2B;
-    --danger:#D9534F; --info:#4F7FE0;
+    --danger:#D9534F; --info:#4F7FE0; --tertiary:#8B5CF6; --tertiary-light:#F1EBFE;
     --shadow-sm:0 1px 2px rgba(16,24,40,.05);
     --shadow-md:0 2px 8px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
     --shadow-lg:0 12px 32px rgba(16,24,40,.12),0 2px 6px rgba(16,24,40,.06);
@@ -83,6 +83,15 @@
   .btn.danger{background:var(--danger);}
   select.filter,input.filter{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--card);transition:.15s;}
   select.filter:focus,input.filter:focus{outline:none;border-color:var(--accent);}
+
+  /* quick category tabs (tarification) */
+  .cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px;}
+  .cat-tab{border:1px solid var(--border);background:var(--card);padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:600;color:var(--muted);transition:.15s;}
+  .cat-tab:hover{border-color:var(--accent);color:var(--text);}
+  .cat-tab.active{color:#fff;border-color:transparent;}
+  .cat-tab.active[data-cat=""]{background:var(--text);}
+  .cat-tab.active[data-cat="Prestation"]{background:var(--accent);}
+  .cat-tab.active[data-cat="Option / Supplément"]{background:var(--tertiary);}
 
   /* table */
   table.data{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm);}
@@ -395,18 +404,20 @@
         <div class="page" id="page-tarification">
           <div class="page-title">Tarification</div>
           <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <input class="filter" id="grille-search" placeholder="Rechercher…">
-              <select class="filter" id="grille-filter-categorie"><option value="">Toutes catégories</option></select>
-            </div>
+            <input class="filter" id="grille-search" placeholder="Rechercher…" style="max-width:220px;">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn secondary" id="btn-new-grille-option">＋ Option / Supplément</button>
               <button class="btn" id="btn-new-grille">＋ Nouvelle prestation</button>
             </div>
           </div>
+          <div class="cat-tabs" id="grille-cat-tabs">
+            <button type="button" class="cat-tab active" data-cat="">Toutes</button>
+            <button type="button" class="cat-tab" data-cat="Prestation">🔵 Prestations</button>
+            <button type="button" class="cat-tab" data-cat="Option / Supplément">🟣 Options / Suppléments</button>
+          </div>
           <div class="page-note">Ces prestations et options alimentent la liste des désignations dans l'éditeur de devis. Prix exprimés hors TVA (TVA non applicable, art. 293 B du CGI).</div>
           <table class="data">
-            <thead><tr><th>Catégorie</th><th>Prestation</th><th>Détails</th><th>Prix</th><th></th></tr></thead>
+            <thead><tr><th>Catégorie</th><th>Prestation</th><th>Prix</th><th></th></tr></thead>
             <tbody id="grille-tbody"></tbody>
           </table>
         </div>
@@ -454,6 +465,7 @@
     <div class="modal-actions" style="margin-top:24px;">
       <button class="btn secondary" type="button" id="ed-close">Fermer</button>
       <button class="btn secondary" type="button" id="ed-save">Enregistrer</button>
+      <button class="btn secondary" type="button" id="ed-view">Visualiser</button>
       <button class="btn secondary" type="button" id="ed-pdf">Télécharger PDF</button>
       <button class="btn" type="button" id="ed-finaliser">Finaliser (CGV)</button>
     </div>

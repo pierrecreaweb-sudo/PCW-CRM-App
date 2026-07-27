@@ -1139,32 +1139,46 @@ function openRdvDialog(id) {
 // ========================================================================
 //  TARIFICATION (grille tarifaire)
 // ========================================================================
+const TARIF_CAT_COLORS = { "Prestation": "var(--accent)", "Option / Supplément": "var(--tertiary)" };
+let grilleCatFilter = "";
+function bindGrilleCatTabs() {
+  const wrap = document.getElementById("grille-cat-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      grilleCatFilter = btn.dataset.cat;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      renderGrille();
+    });
+  });
+}
 function renderGrille() {
   bindSearch("grille-search", renderGrille);
-  ensureFilterOptions("grille-filter-categorie", CATEGORIES_TARIF);
+  bindGrilleCatTabs();
   const search = (document.getElementById("grille-search").value || "").toLowerCase();
-  const fCat = document.getElementById("grille-filter-categorie").value;
   let rows = [...cache.grille_tarifaire];
-  if (fCat) rows = rows.filter(g => (g.categorie || "Prestation") === fCat);
+  if (grilleCatFilter) rows = rows.filter(g => (g.categorie || "Prestation") === grilleCatFilter);
   if (search) rows = rows.filter(g => ((g.nom_presta || "") + " " + (g.details || "")).toLowerCase().includes(search));
   rows.sort((a, b) => (a.categorie || "Prestation").localeCompare(b.categorie || "Prestation") || (a.nom_presta || "").localeCompare(b.nom_presta || ""));
   const tbody = document.getElementById("grille-tbody");
-  tbody.innerHTML = rows.length ? rows.map(g => `
-    <tr>
-      <td>${badge(g.categorie || "Prestation", g.categorie === "Option / Supplément" ? "var(--info)" : "var(--accent)")}</td>
-      <td>${g.nom_presta || "—"}</td><td>${g.details || "—"}</td>
+  tbody.innerHTML = rows.length ? rows.map(g => {
+    const cat = g.categorie || "Prestation";
+    return `<tr>
+      <td>${badge(cat, TARIF_CAT_COLORS[cat] || "var(--muted)")}</td>
+      <td>${g.nom_presta || "—"}</td>
       <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong></td>
       <td class="row-actions"><button onclick="openGrilleDialog(${g.id})">✎</button><button onclick="confirmDelete('grille_tarifaire', ${g.id}, renderGrille)">🗑</button></td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune prestation — ajoute ta première ligne</td></tr>`;
+    </tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="4">Aucune prestation — ajoute ta première ligne</td></tr>`;
 }
 function openGrilleDialog(id, defaultCategorie) {
   const row = id ? findGrille(id) : {};
   openModal({
     title: id ? "Modifier la prestation" : "Nouvelle prestation", table: "grille_tarifaire", id,
     fields: [
-      { key: "categorie", label: "Catégorie", type: "select", options: CATEGORIES_TARIF, value: row.categorie || defaultCategorie || "Prestation" },
+      { key: "categorie", label: "Catégorie", type: "radioset", options: CATEGORIES_TARIF, colors: TARIF_CAT_COLORS, value: row.categorie || defaultCategorie || "Prestation" },
       { key: "nom_presta", label: "Nom de la prestation / option", type: "text", required: true, value: row.nom_presta },
-      { key: "details", label: "Détails", type: "textarea", value: row.details },
       { key: "pu_ttc", label: "Prix (€)", type: "number", value: row.pu_ttc },
     ],
     beforeSave: (v) => { v.pu_ht = v.pu_ttc; v.tva = 0; v.montant_tva = 0; },
@@ -1227,11 +1241,16 @@ const PAGE_FILTERS = {
   evenements: ["evenement-filter-type", "evenement-filter-mois", "evenement-filter-statut"],
   todos: ["todo-filter-statut", "todo-filter-priorite"],
   rdv: ["rdv-filter-statut"],
-  grille_tarifaire: ["grille-search", "grille-filter-categorie"],
+  grille_tarifaire: ["grille-search"],
   prospects: ["prospect-filter-statut"],
 };
 function clearTableFilters(table) {
   (PAGE_FILTERS[table] || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  if (table === "grille_tarifaire") {
+    grilleCatFilter = "";
+    const wrap = document.getElementById("grille-cat-tabs");
+    if (wrap) wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.cat === ""));
+  }
 }
 function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) {
   modalContext = { table, id, fields, onSaved, onRender, beforeSave };
@@ -1252,7 +1271,7 @@ function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) 
         `<option value="__other__" ${isOther ? "selected" : ""}>Autre…</option></select>` +
         `<input name="${f.key}__txt" placeholder="Préciser…" value="${isOther ? escapeAttr(f.value) : ""}" style="margin-top:6px;${isOther ? "" : "display:none;"}">`;
     } else if (f.type === "radioset") {
-      input = `<div class="inline-checks">` + (f.options || []).map(o => `<label><input type="checkbox" data-radio="${f.key}" name="${f.key}__${o}" ${f.value === o ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
+      input = `<div class="inline-checks">` + (f.options || []).map(o => `<label>${f.colors && f.colors[o] ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${f.colors[o]};"></span>` : ""}<input type="checkbox" data-radio="${f.key}" name="${f.key}__${o}" ${f.value === o ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
     } else if (f.type === "checklist") {
       const selected = (f.value || "").split(",").map(s => s.trim()).filter(Boolean);
       input = `<div class="inline-checks">` + (f.options || []).map(o => `<label><input type="checkbox" name="${f.key}__${escapeAttr(o)}" ${selected.includes(o) ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
