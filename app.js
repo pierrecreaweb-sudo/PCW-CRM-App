@@ -11,7 +11,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---- 2) CONSTANTES ----
-const TYPES_EVENEMENT = ["Site vitrine", "Site e-commerce", "Application web", "Application mobile", "SEO / Référencement", "Campagne Ads", "Maintenance / Refonte", "Autre"];
+const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète", "Autre"];
 const STATUTS_PROSPECT = ["Nouveau", "Contacté", "Qualifié", "Devis envoyé", "Converti", "Perdu"];
 const STATUTS_DEVIS = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
 const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "Partiellement payée", "En retard", "Annulée"];
@@ -20,12 +20,12 @@ const STATUTS_TODO = ["À faire", "En cours", "Terminé"];
 const STATUTS_RDV = ["Prévu", "Confirmé", "Effectué", "Annulé"];
 const PRIORITES = ["Basse", "Normale", "Haute", "Urgente"];
 const SOURCES_PROSPECT = ["Site web", "Téléphone", "Bouche à oreille", "Réseaux sociaux", "Recommandation", "Autre"];
-const CATEGORIES_CONTACT = ["Client", "Prospect", "Fournisseur", "Partenaire", "Autre"];
+const CATEGORIES_CONTACT = ["Client", "Prospect", "Partenaire"];
 const PROVENANCES = ["Bouche à oreille", "Site web", "Réseaux sociaux", "Google / SEO", "Recommandation", "Réseau professionnel", "Contact direct"];
 const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
-const TVA_RATES = [0, 5.5, 8, 10, 20];
-const TVA_DEVIS = [10, 20];
+const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
+const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
   "30% d'acompte à la commande.",
@@ -517,7 +517,6 @@ function openContactDialog(id) {
       { key: "telephone", label: "Téléphone", type: "text", value: row.telephone },
       { key: "adresse", label: "Adresse", type: "textarea", value: row.adresse },
       { key: "provenance", label: "Provenance", type: "select-other", options: PROVENANCES, value: row.provenance, allowEmpty: true },
-      { key: "type_evenement_interet", label: "Service d'intérêt", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement_interet, allowEmpty: true },
       { key: "notes", label: "Notes", type: "textarea", value: row.notes },
     ],
     onSaved: refreshAll,
@@ -612,7 +611,7 @@ function openDevisEditor(id) {
   const d = findDevis(id);
   if (!d) return;
   edState = { id, lignes: Array.isArray(d.lignes) ? JSON.parse(JSON.stringify(d.lignes)) : [] };
-  if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, tva: 20 });
+  if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 });
 
   const e = devisEvent(d);
   const c = devisContact(d);
@@ -626,6 +625,8 @@ function openDevisEditor(id) {
       ${STATUTS_DEVIS.map(s => `<option value="${s}" ${s === d.statut ? "selected" : ""}>${s}</option>`).join("")}</select></div>`;
   document.getElementById("ed-emetteur").innerHTML =
     `<strong>${EMETTEUR.nom}</strong><br>${EMETTEUR.adresse}<br>${EMETTEUR.siret}<br>${EMETTEUR.email}<br>Tél : ${EMETTEUR.telephone}<br>${EMETTEUR.site}`;
+  const logoEl = document.getElementById("ed-logo");
+  if (logoEl) logoEl.src = "logo.png";
 
   // datalist des désignations (depuis la tarification)
   let dl = document.getElementById("ed-desig");
@@ -643,12 +644,9 @@ function renderEditorLines() {
     <tr data-i="${i}">
       <td><input list="ed-desig" data-k="designation" value="${(l.designation || "").replace(/"/g, "&quot;")}"></td>
       <td><input type="number" data-k="qte" min="0" step="1" value="${l.qte != null ? l.qte : 1}" style="width:60px;"></td>
-      <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:80px;"></td>
+      <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:90px;"></td>
       <td><input type="number" data-k="remise" min="0" max="100" step="1" value="${l.remise != null ? l.remise : 0}" style="width:60px;"></td>
-      <td class="ro" data-ro="ht"></td>
-      <td><select data-k="tva">${TVA_DEVIS.map(t => `<option value="${t}" ${Number(l.tva) === t ? "selected" : ""}>${t}%</option>`).join("")}</select></td>
-      <td class="ro" data-ro="tva"></td>
-      <td class="ro" data-ro="ttc"></td>
+      <td class="ro" data-ro="total"></td>
       <td><button class="del" title="Supprimer" onclick="removeEditorLine(${i})">✕</button></td>
     </tr>`).join("");
   recomputeEditor();
@@ -664,33 +662,29 @@ function readEditorToState() {
   });
 }
 function computeLine(l) {
-  const qte = Number(l.qte || 0), pu = Number(l.pu_ttc || 0), remise = Number(l.remise || 0), tva = Number(l.tva || 0);
-  const ttc = round2(pu * qte * (1 - remise / 100));
-  const ht = round2(ttc / (1 + tva / 100));
-  return { ht, tva: round2(ttc - ht), ttc };
+  const qte = Number(l.qte || 0), pu = Number(l.pu_ttc || 0), remise = Number(l.remise || 0);
+  const total = round2(pu * qte * (1 - remise / 100));
+  return { total };
 }
 function recomputeEditor() {
-  let tHT = 0, tTVA = 0, tTTC = 0;
+  let total = 0;
   document.querySelectorAll("#ed-lines tr").forEach(tr => {
     const i = Number(tr.dataset.i);
     const l = edState.lignes[i]; if (!l) return;
     const r = computeLine(l);
-    tr.querySelector('[data-ro="ht"]').textContent = r.ht.toFixed(2) + " €";
-    tr.querySelector('[data-ro="tva"]').textContent = r.tva.toFixed(2) + " €";
-    tr.querySelector('[data-ro="ttc"]').textContent = r.ttc.toFixed(2) + " €";
-    tHT += r.ht; tTVA += r.tva; tTTC += r.ttc;
+    tr.querySelector('[data-ro="total"]').textContent = r.total.toFixed(2) + " €";
+    total += r.total;
   });
   document.getElementById("ed-totaux").innerHTML =
-    `Total HT : <strong>${round2(tHT).toFixed(2)} €</strong><br>` +
-    `Total TVA : <strong>${round2(tTVA).toFixed(2)} €</strong><br>` +
-    `<span class="grand">Total TTC : ${round2(tTTC).toFixed(2)} €</span>`;
+    `<span class="grand">Total : ${round2(total).toFixed(2)} €</span><br>` +
+    `<span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
 }
-function removeEditorLine(i) { readEditorToState(); edState.lignes.splice(i, 1); if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, tva: 20 }); renderEditorLines(); }
-function addEditorLine() { readEditorToState(); edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, tva: 20 }); renderEditorLines(); }
+function removeEditorLine(i) { readEditorToState(); edState.lignes.splice(i, 1); if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 }); renderEditorLines(); }
+function addEditorLine() { readEditorToState(); edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 }); renderEditorLines(); }
 function editorTotals() {
-  let tHT = 0, tTVA = 0, tTTC = 0;
-  edState.lignes.forEach(l => { const r = computeLine(l); tHT += r.ht; tTVA += r.tva; tTTC += r.ttc; });
-  return { ht: round2(tHT), tva: round2(tTVA), ttc: round2(tTTC) };
+  let total = 0;
+  edState.lignes.forEach(l => { total += computeLine(l).total; });
+  return { ttc: round2(total) };
 }
 async function saveDevisEditor(closeAfter) {
   readEditorToState();
@@ -699,7 +693,7 @@ async function saveDevisEditor(closeAfter) {
   const newStatut = document.getElementById("ed-statut") ? document.getElementById("ed-statut").value : d.statut;
   const wasEnvoye = d.statut === "Envoyé";
   await updateRow("devis", edState.id, {
-    lignes: edState.lignes, montant_ht: tot.ht, tva: null, montant_ttc: tot.ttc, statut: newStatut,
+    lignes: edState.lignes, montant_ht: tot.ttc, tva: 0, montant_ttc: tot.ttc, statut: newStatut,
   });
   await refreshCache();
   const updated = findDevis(edState.id);
@@ -782,6 +776,21 @@ async function createDevisReminders(d) {
 }
 
 // ---- PDF devis ----
+let _logoDataUrl = null;
+async function getLogoDataUrl() {
+  if (_logoDataUrl) return _logoDataUrl;
+  try {
+    const resp = await fetch("logo.png");
+    const blob = await resp.blob();
+    _logoDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) { console.error("Logo introuvable pour le PDF", e); }
+  return _logoDataUrl;
+}
 function drawEmetteur(doc) {
   doc.setFontSize(10);
   let y = 16;
@@ -795,7 +804,7 @@ function drawFooter(doc) {
   doc.text(doc.splitTextToSize(legal, 175), 105, h - 12, { align: "center" });
   doc.setTextColor(0); doc.setFontSize(11);
 }
-function generateDevisPDF(id) {
+async function generateDevisPDF(id) {
   const d = findDevis(id);
   if (!d) return;
   if (!window.jspdf) { showToast("Générateur PDF indisponible (hors-ligne)"); return; }
@@ -803,43 +812,42 @@ function generateDevisPDF(id) {
   const lignes = Array.isArray(d.lignes) ? d.lignes : [];
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const logo = await getLogoDataUrl();
+  if (logo) { try { doc.addImage(logo, "PNG", 20, 10, 18, 18); } catch (e2) { console.error(e2); } }
   drawEmetteur(doc);
-  doc.setFontSize(20); doc.text("DEVIS", 20, 22);
+  doc.setFontSize(20); doc.text("DEVIS", 20, 38);
   doc.setFontSize(11);
-  doc.text("N° : " + (d.numero || "—"), 20, 34);
-  doc.text("Date : " + fmtDateFR((d.date_creation || todayStr()).slice(0, 10)), 20, 41);
-  doc.text("Valable jusqu'au : " + fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30)), 20, 48);
+  doc.text("N° : " + (d.numero || "—"), 20, 50);
+  doc.text("Date : " + fmtDateFR((d.date_creation || todayStr()).slice(0, 10)), 20, 57);
+  doc.text("Valable jusqu'au : " + fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30)), 20, 64);
 
-  doc.setFontSize(12); doc.text("Client", 20, 62); doc.setFontSize(11);
-  let y = 69;
+  doc.setFontSize(12); doc.text("Client", 20, 78); doc.setFontSize(11);
+  let y = 85;
   [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse, e ? ("Projet : " + eventLabel(e)) : ""]
     .filter(Boolean).forEach(l => { doc.text(String(l), 20, y); y += 7; });
 
   y += 4;
   // en-têtes tableau
   doc.setFontSize(9); doc.setTextColor(90);
-  doc.text("Désignation", 20, y); doc.text("Qté", 108, y); doc.text("PU TTC", 122, y);
-  doc.text("Rem.", 142, y); doc.text("TVA", 158, y); doc.text("Total TTC", 176, y);
+  doc.text("Désignation", 20, y); doc.text("Qté", 120, y); doc.text("PU (€)", 138, y);
+  doc.text("Rem.", 158, y); doc.text("Total (€)", 176, y);
   doc.setTextColor(0); doc.setFontSize(10); y += 3;
   doc.line(20, y, 195, y); y += 6;
-  let tHT = 0, tTVA = 0, tTTC = 0;
+  let total = 0;
   lignes.forEach(l => {
-    const r = computeLine(l); tHT += r.ht; tTVA += r.tva; tTTC += r.ttc;
-    const desig = doc.splitTextToSize(l.designation || "—", 82);
+    const r = computeLine(l); total += r.total;
+    const desig = doc.splitTextToSize(l.designation || "—", 94);
     doc.text(desig, 20, y);
-    doc.text(String(l.qte ?? ""), 108, y);
-    doc.text(Number(l.pu_ttc || 0).toFixed(2), 122, y);
-    doc.text((l.remise ? l.remise + "%" : "—"), 142, y);
-    doc.text((l.tva || 0) + "%", 158, y);
-    doc.text(r.ttc.toFixed(2) + " €", 176, y);
+    doc.text(String(l.qte ?? ""), 120, y);
+    doc.text(Number(l.pu_ttc || 0).toFixed(2), 138, y);
+    doc.text((l.remise ? l.remise + "%" : "—"), 158, y);
+    doc.text(r.total.toFixed(2) + " €", 176, y);
     y += Math.max(7, desig.length * 5);
     if (y > 250) { doc.addPage(); y = 20; }
   });
   y += 2; doc.line(20, y, 195, y); y += 8;
-  doc.setFontSize(11);
-  doc.text("Total HT : " + round2(tHT).toFixed(2) + " €", 130, y); y += 6;
-  doc.text("Total TVA : " + round2(tTVA).toFixed(2) + " €", 130, y); y += 6;
-  doc.setFontSize(13); doc.text("TOTAL TTC : " + round2(tTTC).toFixed(2) + " €", 130, y); y += 12;
+  doc.setFontSize(13); doc.text("TOTAL : " + round2(total).toFixed(2) + " €", 130, y); y += 7;
+  doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 130, y); doc.setTextColor(0); y += 10;
 
   if (Array.isArray(d.cgv) && d.cgv.length) {
     doc.setFontSize(11); doc.text("Conditions générales de vente :", 20, y); y += 6;
@@ -895,9 +903,7 @@ function factureFields(row) {
     { key: "date_evenement", label: "Date du projet", type: "date", value: row.date_evenement },
     { key: "date_facture", label: "Date de la facture", type: "date", value: row.date_facture || todayStr() },
     { key: "date_echeance", label: "Date d'échéance", type: "date", value: row.date_echeance },
-    { key: "montant_ht", label: "Montant HT (€)", type: "number", value: row.montant_ht },
-    { key: "tva", label: "TVA (%)", type: "select", options: TVA_RATES, value: row.tva != null ? row.tva : 20 },
-    { key: "montant_ttc", label: "Montant TTC (€) — calculé", type: "computed", value: row.montant_ttc },
+    { key: "montant_ttc", label: "Montant (€)", type: "number", value: row.montant_ttc },
     { key: "montant_acompte", label: "Acompte déjà versé (€)", type: "number", value: row.montant_acompte },
     { key: "statut", label: "Statut", type: "select", options: STATUTS_FACTURE, value: row.statut || "Brouillon" },
     { key: "pdf_signe_file", label: "Joindre un PDF (facture signée / preuve)", type: "file", accept: "application/pdf" },
@@ -905,17 +911,12 @@ function factureFields(row) {
   ];
 }
 function factureOnRender(form) {
-  const calc = () => { const ht = Number(form.elements["montant_ht"].value || 0); const tva = Number(form.elements["tva"].value || 0); form.elements["montant_ttc"].value = ht ? round2(ht * (1 + tva / 100)) : ""; };
-  form.elements["montant_ht"].addEventListener("input", calc);
-  form.elements["tva"].addEventListener("change", calc);
   form.elements["devis_id"].addEventListener("change", () => {
     const d = findDevis(Number(form.elements["devis_id"].value)); if (!d) return;
     const c = devisContact(d);
     if (!form.elements["contact_id"].value && c) form.elements["contact_id"].value = c.id;
-    if (!form.elements["montant_ht"].value && d.montant_ht != null) form.elements["montant_ht"].value = d.montant_ht;
-    calc();
+    if (!form.elements["montant_ttc"].value && d.montant_ttc != null) form.elements["montant_ttc"].value = d.montant_ttc;
   });
-  calc();
 }
 function openFactureDialog(id, prefill) {
   const row = id ? (findFacture(id) || {}) : (prefill || {});
@@ -926,32 +927,34 @@ function createFactureFromDevis(devisId) {
   const c = devisContact(d);
   openFactureDialog(null, {
     devis_id: d.id, contact_id: c ? c.id : null, date_evenement: devisDateEvt(d),
-    montant_ht: d.montant_ht, montant_ttc: d.montant_ttc, notes: d.notes,
+    montant_ttc: d.montant_ttc, notes: d.notes,
   });
   showToast("Facture pré-remplie depuis " + (d.numero || "le devis"));
 }
-function generateFacturePDF(id) {
+async function generateFacturePDF(id) {
   const f = findFacture(id); if (!f) return;
   if (!window.jspdf) { showToast("Générateur PDF indisponible (hors-ligne)"); return; }
   const c = findContact(f.contact_id), dev = f.devis_id ? findDevis(f.devis_id) : null;
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
-  const ht = Number(f.montant_ht || 0), tva = Number(f.tva != null ? f.tva : 20);
-  const mtva = round2(ht * tva / 100), ttc = f.montant_ttc != null ? Number(f.montant_ttc) : round2(ht + mtva);
-  const acompte = Number(f.montant_acompte || 0), net = round2(ttc - acompte);
+  const montant = Number(f.montant_ttc || 0);
+  const acompte = Number(f.montant_acompte || 0), net = round2(montant - acompte);
+  const logo = await getLogoDataUrl();
+  if (logo) { try { doc.addImage(logo, "PNG", 20, 10, 18, 18); } catch (e2) { console.error(e2); } }
   drawEmetteur(doc);
-  doc.setFontSize(20); doc.text("FACTURE", 20, 22); doc.setFontSize(11);
-  doc.text("N° : " + (f.numero || "—"), 20, 34);
-  doc.text("Date : " + fmtDateFR(f.date_facture || todayStr()), 20, 41);
-  if (f.date_echeance) doc.text("Échéance : " + fmtDateFR(f.date_echeance), 20, 48);
-  if (dev) doc.text("Réf. devis : " + (dev.numero || ("#" + dev.id)), 20, 55);
-  doc.setFontSize(12); doc.text("Facturé à", 20, 68); doc.setFontSize(11);
-  let y = 75;
+  doc.setFontSize(20); doc.text("FACTURE", 20, 38); doc.setFontSize(11);
+  doc.text("N° : " + (f.numero || "—"), 20, 50);
+  doc.text("Date : " + fmtDateFR(f.date_facture || todayStr()), 20, 57);
+  if (f.date_echeance) doc.text("Échéance : " + fmtDateFR(f.date_echeance), 20, 64);
+  if (dev) doc.text("Réf. devis : " + (dev.numero || ("#" + dev.id)), 20, 71);
+  doc.setFontSize(12); doc.text("Facturé à", 20, 84); doc.setFontSize(11);
+  let y = 91;
   [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse].filter(Boolean).forEach(l => { doc.text(String(l), 20, y); y += 7; });
   y += 6; doc.setFontSize(12); doc.text("Détail", 20, y); y += 9; doc.setFontSize(11);
-  const rows = [["Type de projet", f.type_evenement || "—"], ["Date du projet", fmtDateFR(f.date_evenement) || "—"], ["Montant HT", ht ? ht.toFixed(2) + " €" : "—"], ["TVA (" + tva + "%)", mtva.toFixed(2) + " €"], ["Montant TTC", ttc.toFixed(2) + " €"]];
+  const rows = [["Type de projet", f.type_evenement || "—"], ["Date du projet", fmtDateFR(f.date_evenement) || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
   if (acompte) rows.push(["Acompte déjà versé", "- " + acompte.toFixed(2) + " €"]);
   rows.forEach(([k, v]) => { doc.text(k, 20, y); doc.text(v, 130, y); y += 7; });
-  y += 6; doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
+  y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
+  doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
   if (f.notes) { y += 12; doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); }
   drawFooter(doc);
   doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf");
@@ -1030,7 +1033,7 @@ function openEvenementDialog(id, defaultDate) {
       { key: "contact_id", label: "Contact / client", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
       { key: "provenance", label: "Provenance (reprise du contact)", type: "text", value: row.provenance },
       { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
-      { key: "type_prestation", label: "Formule", type: "select", options: TYPES_PRESTATION, value: row.type_prestation },
+      { key: "type_prestation", label: "Formule(s)", type: "checklist", options: TYPES_PRESTATION, value: row.type_prestation },
       { key: "statut", label: "Statut", type: "select", options: STATUTS_EVENEMENT, value: row.statut || "Premier contact" },
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
       { key: "facture_id", label: "Facture liée", type: "select-raw", optionsHtml: `<option value="">—</option>` + factureOptionsHtml(row.facture_id), value: row.facture_id, numeric: true },
@@ -1083,36 +1086,33 @@ function openRdvDialog(id) {
 // ========================================================================
 function renderGrille() {
   bindSearch("grille-search", renderGrille);
+  ensureFilterOptions("grille-filter-categorie", CATEGORIES_TARIF);
   const search = (document.getElementById("grille-search").value || "").toLowerCase();
+  const fCat = document.getElementById("grille-filter-categorie").value;
   let rows = [...cache.grille_tarifaire];
+  if (fCat) rows = rows.filter(g => (g.categorie || "Prestation") === fCat);
   if (search) rows = rows.filter(g => ((g.nom_presta || "") + " " + (g.details || "")).toLowerCase().includes(search));
+  rows.sort((a, b) => (a.categorie || "Prestation").localeCompare(b.categorie || "Prestation") || (a.nom_presta || "").localeCompare(b.nom_presta || ""));
   const tbody = document.getElementById("grille-tbody");
   tbody.innerHTML = rows.length ? rows.map(g => `
     <tr>
+      <td>${badge(g.categorie || "Prestation", g.categorie === "Option / Supplément" ? "var(--info)" : "var(--accent)")}</td>
       <td>${g.nom_presta || "—"}</td><td>${g.details || "—"}</td>
-      <td>${g.pu_ht != null ? g.pu_ht + " €" : "—"}</td><td>${g.tva != null ? g.tva + " %" : "—"}</td>
-      <td>${g.montant_tva != null ? g.montant_tva + " €" : "—"}</td><td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong></td>
+      <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong></td>
       <td class="row-actions"><button onclick="openGrilleDialog(${g.id})">✎</button><button onclick="confirmDelete('grille_tarifaire', ${g.id}, renderGrille)">🗑</button></td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucune prestation — ajoute ta première ligne</td></tr>`;
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune prestation — ajoute ta première ligne</td></tr>`;
 }
-function openGrilleDialog(id) {
+function openGrilleDialog(id, defaultCategorie) {
   const row = id ? findGrille(id) : {};
   openModal({
     title: id ? "Modifier la prestation" : "Nouvelle prestation", table: "grille_tarifaire", id,
     fields: [
-      { key: "nom_presta", label: "Nom de la prestation", type: "text", required: true, value: row.nom_presta },
+      { key: "categorie", label: "Catégorie", type: "select", options: CATEGORIES_TARIF, value: row.categorie || defaultCategorie || "Prestation" },
+      { key: "nom_presta", label: "Nom de la prestation / option", type: "text", required: true, value: row.nom_presta },
       { key: "details", label: "Détails", type: "textarea", value: row.details },
-      { key: "pu_ht", label: "PU HT (€)", type: "number", value: row.pu_ht },
-      { key: "tva", label: "TVA (%)", type: "select", options: TVA_RATES, value: row.tva != null ? row.tva : 20 },
-      { key: "montant_tva", label: "Montant TVA (€) — calculé", type: "computed", value: row.montant_tva },
-      { key: "pu_ttc", label: "PU TTC (€) — calculé", type: "computed", value: row.pu_ttc },
+      { key: "pu_ttc", label: "Prix (€)", type: "number", value: row.pu_ttc },
     ],
-    onRender: (form) => {
-      const calc = () => { const ht = Number(form.elements["pu_ht"].value || 0); const tva = Number(form.elements["tva"].value || 0); const mtva = round2(ht * tva / 100); form.elements["montant_tva"].value = ht ? mtva : ""; form.elements["pu_ttc"].value = ht ? round2(ht + mtva) : ""; };
-      form.elements["pu_ht"].addEventListener("input", calc);
-      form.elements["tva"].addEventListener("change", calc);
-      calc();
-    },
+    beforeSave: (v) => { v.pu_ht = v.pu_ttc; v.tva = 0; v.montant_tva = 0; },
     onSaved: refreshAll,
   });
 }
@@ -1172,7 +1172,7 @@ const PAGE_FILTERS = {
   evenements: ["evenement-filter-type", "evenement-filter-mois", "evenement-filter-statut"],
   todos: ["todo-filter-statut", "todo-filter-priorite"],
   rdv: ["rdv-filter-statut"],
-  grille_tarifaire: ["grille-search"],
+  grille_tarifaire: ["grille-search", "grille-filter-categorie"],
   prospects: ["prospect-filter-statut"],
 };
 function clearTableFilters(table) {
@@ -1198,6 +1198,9 @@ function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) 
         `<input name="${f.key}__txt" placeholder="Préciser…" value="${isOther ? escapeAttr(f.value) : ""}" style="margin-top:6px;${isOther ? "" : "display:none;"}">`;
     } else if (f.type === "radioset") {
       input = `<div class="inline-checks">` + (f.options || []).map(o => `<label><input type="checkbox" data-radio="${f.key}" name="${f.key}__${o}" ${f.value === o ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
+    } else if (f.type === "checklist") {
+      const selected = (f.value || "").split(",").map(s => s.trim()).filter(Boolean);
+      input = `<div class="inline-checks">` + (f.options || []).map(o => `<label><input type="checkbox" name="${f.key}__${escapeAttr(o)}" ${selected.includes(o) ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
     } else if (f.type === "textarea") {
       input = `<textarea name="${f.key}">${f.value || ""}</textarea>`;
     } else if (f.type === "checkbox") {
@@ -1275,6 +1278,10 @@ async function saveModal() {
       let picked = null; (f.options || []).forEach(o => { const el = form.elements[f.key + "__" + o]; if (el && el.checked) picked = o; });
       values[f.key] = picked; return;
     }
+    if (f.type === "checklist") {
+      const picked = (f.options || []).filter(o => form.elements[f.key + "__" + o] && form.elements[f.key + "__" + o].checked);
+      values[f.key] = picked.join(", "); return;
+    }
     const el = form.elements[f.key]; if (!el) return;
     if (f.type === "checkbox") { values[f.key] = el.checked; return; }
     let val = el.value;
@@ -1342,7 +1349,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-new-contact").addEventListener("click", () => openContactDialog(null));
   document.getElementById("btn-new-evenement").addEventListener("click", () => openEvenementDialog(null));
   document.getElementById("btn-new-rdv").addEventListener("click", () => openRdvDialog(null));
-  document.getElementById("btn-new-grille").addEventListener("click", () => openGrilleDialog(null));
+  document.getElementById("btn-new-grille").addEventListener("click", () => openGrilleDialog(null, "Prestation"));
+  document.getElementById("btn-new-grille-option").addEventListener("click", () => openGrilleDialog(null, "Option / Supplément"));
 
   document.getElementById("modal-cancel").addEventListener("click", closeModal);
   // NB : le bouton "Enregistrer" utilise la propriété onclick (définie dans openModal/
@@ -1363,7 +1371,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.dataset.k === "designation") {
       const tr = e.target.closest("tr"); const i = Number(tr.dataset.i);
       const g = cache.grille_tarifaire.find(x => (x.nom_presta || "").toLowerCase() === e.target.value.toLowerCase());
-      if (g && g.pu_ttc != null) { edState.lignes[i].pu_ttc = g.pu_ttc; if ([10, 20].includes(Number(g.tva))) edState.lignes[i].tva = Number(g.tva); renderEditorLines(); }
+      if (g && g.pu_ttc != null) { edState.lignes[i].pu_ttc = g.pu_ttc; renderEditorLines(); }
     }
   });
 
