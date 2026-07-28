@@ -657,21 +657,30 @@ function openDevisEditor(id) {
   const logoEl = document.getElementById("ed-logo");
   if (logoEl) logoEl.src = "logo.png";
 
-  // datalist des désignations (depuis la tarification)
-  let dl = document.getElementById("ed-desig");
-  if (!dl) { dl = document.createElement("datalist"); dl.id = "ed-desig"; document.body.appendChild(dl); }
-  dl.innerHTML = cache.grille_tarifaire.map(g => `<option value="${(g.nom_presta || "").replace(/"/g, "&quot;")}">`).join("");
-
   renderEditorLines();
   renderCgvPreview(d);
   document.getElementById("devis-editor").classList.add("open");
 }
 
+function grillePickerOptionsHtml() {
+  const prestas = cache.grille_tarifaire.filter(g => (g.categorie || "Prestation") === "Prestation").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
+  const options = cache.grille_tarifaire.filter(g => g.categorie === "Option / Supplément").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
+  const optHtml = list => list.map(g => `<option value="${escapeAttr(g.nom_presta || "")}">${g.nom_presta || ""}${g.pu_ttc != null ? " — " + g.pu_ttc + " €" : ""}</option>`).join("");
+  return `<option value="">— Choisir dans le catalogue —</option>` +
+    (prestas.length ? `<optgroup label="🔵 Prestations">${optHtml(prestas)}</optgroup>` : "") +
+    (options.length ? `<optgroup label="🟣 Options / Suppléments">${optHtml(options)}</optgroup>` : "") +
+    `<option value="__custom__">✎ Texte libre…</option>`;
+}
+
 function renderEditorLines() {
   const tb = document.getElementById("ed-lines");
+  const pickerOptions = grillePickerOptionsHtml();
   tb.innerHTML = edState.lignes.map((l, i) => `
     <tr data-i="${i}">
-      <td><input list="ed-desig" data-k="designation" value="${(l.designation || "").replace(/"/g, "&quot;")}"></td>
+      <td>
+        <select data-k="designation-picker" style="margin-bottom:5px;">${pickerOptions}</select>
+        <input type="text" data-k="designation" placeholder="Désignation" value="${(l.designation || "").replace(/"/g, "&quot;")}">
+      </td>
       <td><input type="number" data-k="qte" min="0" step="1" value="${l.qte != null ? l.qte : 1}" style="width:60px;"></td>
       <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:90px;"></td>
       <td><input type="number" data-k="remise" min="0" max="100" step="1" value="${l.remise != null ? l.remise : 0}" style="width:60px;"></td>
@@ -686,6 +695,7 @@ function readEditorToState() {
     const l = edState.lignes[i]; if (!l) return;
     tr.querySelectorAll("[data-k]").forEach(inp => {
       const k = inp.dataset.k;
+      if (k === "designation-picker") return;
       l[k] = (inp.type === "number") ? (inp.value === "" ? "" : Number(inp.value)) : inp.value;
     });
   });
@@ -1445,7 +1455,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ed-finaliser").addEventListener("click", openCgvPicker);
   document.getElementById("ed-lines").addEventListener("input", () => { readEditorToState(); recomputeEditor(); });
   document.getElementById("ed-lines").addEventListener("change", (e) => {
-    if (e.target.dataset.k === "designation") {
+    if (e.target.dataset.k === "designation-picker") {
+      readEditorToState();
+      const tr = e.target.closest("tr"); const i = Number(tr.dataset.i);
+      const val = e.target.value;
+      if (val === "__custom__") {
+        renderEditorLines();
+        const input = document.querySelector(`#ed-lines tr[data-i="${i}"] input[data-k="designation"]`);
+        if (input) input.focus();
+        return;
+      }
+      if (!val) return;
+      const g = cache.grille_tarifaire.find(x => (x.nom_presta || "") === val);
+      edState.lignes[i].designation = val;
+      if (g && g.pu_ttc != null) edState.lignes[i].pu_ttc = g.pu_ttc;
+      renderEditorLines();
+    } else if (e.target.dataset.k === "designation") {
       const tr = e.target.closest("tr"); const i = Number(tr.dataset.i);
       const g = cache.grille_tarifaire.find(x => (x.nom_presta || "").toLowerCase() === e.target.value.toLowerCase());
       if (g && g.pu_ttc != null) { edState.lignes[i].pu_ttc = g.pu_ttc; renderEditorLines(); }
