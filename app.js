@@ -159,7 +159,7 @@ function devisContact(d) {
   const cid = (e && e.contact_id) || (d && d.contact_id);
   return findContact(cid);
 }
-function devisDateEvt(d) { const e = devisEvent(d); return (e && e.date_evenement) || (d && d.date_evenement) || null; }
+function devisDateEvt(d) { const e = devisEvent(d); return (e && e.date_fin) || (d && d.date_evenement) || null; }
 function devisNbInvites(d) { const e = devisEvent(d); return (e && e.nb_invites != null) ? e.nb_invites : (d && d.nb_invites); }
 
 // ---- 5) SUPABASE CRUD GENERIQUE ----
@@ -398,7 +398,7 @@ function createRecurringInvoiceFor(evenementId) {
   openModal({
     title: "Nouvelle facture récurrente — " + eventLabel(e),
     table: "factures", id: null,
-    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, date_evenement: e.date_evenement, montant_ttc: e.montant_recurrent, date_facture: todayStr() }),
+    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: e.montant_recurrent, date_facture: todayStr() }),
     onRender: factureOnRender,
     onSaved: async () => {
       const next = advanceDateBy(e.prochaine_facturation || todayStr(), e.frequence_facturation);
@@ -471,7 +471,7 @@ function todoLieALabel(t) {
 function eventLabel(e) {
   if (e.titre) return e.titre;
   const c = findContact(e.contact_id);
-  const d = e.date_flexible ? fmtMoisFR(e.mois_seul) : fmtDateFR(e.date_evenement);
+  const d = e.date_flexible ? fmtMoisFR(e.mois_seul) : fmtDateFR(e.date_fin);
   return [d, contactLabel(c)].filter(x => x && x !== "—").join(" · ") || (e.type_evenement || "Projet");
 }
 
@@ -564,7 +564,7 @@ function renderDashboard() {
   const devisEnAttente = cache.devis.filter(d => d.statut === "En attente").length;
   const facturesImpayees = cache.factures.filter(f => ["Envoyée", "En retard"].includes(f.statut)).length;
   const rdvAvenir = cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé").length;
-  const evenementsAvenir = cache.evenements.filter(e => (e.date_evenement || "") >= today).length;
+  const evenementsAvenir = cache.evenements.filter(e => (e.date_fin || "") >= today).length;
   const todosOuvertes = cache.todos.filter(t => t.statut !== "Terminé").length;
 
   const cards = [
@@ -616,8 +616,8 @@ function renderDashboard() {
   const items = [];
   cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé")
     .forEach(r => items.push({ date: r.date_rdv, type: "RDV", detail: (r.heure ? r.heure + " · " : "") + (r.objet || "") + " — " + contactLabel(findContact(r.contact_id)), statut: r.statut, fn: `openRdvDialog(${r.id})` }));
-  cache.evenements.filter(e => (e.date_evenement || "") >= today)
-    .forEach(e => items.push({ date: e.date_evenement, type: "Projet", detail: eventLabel(e), statut: e.statut, fn: `openEvenementDialog(${e.id})` }));
+  cache.evenements.filter(e => (e.date_fin || "") >= today)
+    .forEach(e => items.push({ date: e.date_fin, type: "Projet", detail: eventLabel(e), statut: e.statut, fn: `openEvenementDialog(${e.id})` }));
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance && t.date_echeance >= today)
     .forEach(t => items.push({ date: t.date_echeance, type: "Tâche", detail: t.titre, statut: effectivePriorite(t), fn: `openTodoDialog(${t.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -784,7 +784,7 @@ function renderSuivi() {
   ensureFilterOptions("prospect-filter-statut", STATUTS_EVENEMENT);
   bindProspectViewTabs();
   const filter = document.getElementById("prospect-filter-statut").value;
-  let rows = [...cache.evenements].sort((a, b) => (a.date_evenement || "9999").localeCompare(b.date_evenement || "9999"));
+  let rows = [...cache.evenements].sort((a, b) => (a.date_fin || "9999").localeCompare(b.date_fin || "9999"));
   if (filter) rows = rows.filter(e => e.statut === filter);
 
   if (prospectView === "kanban") { renderKanban(rows); return; }
@@ -794,7 +794,7 @@ function renderSuivi() {
     const dev = cache.devis.find(d => d.evenement_id === e.id);
     const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
     const tache = cache.todos.find(t => t.evenement_id === e.id && t.statut !== "Terminé");
-    const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_evenement);
+    const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_fin);
     return `<tr>
       <td><strong>${e.titre || "—"}</strong></td>
       <td>${contactLabel(findContact(e.contact_id))}</td>
@@ -818,7 +818,7 @@ function openEventRecap(id) {
   const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
   const taches = cache.todos.filter(t => t.evenement_id === e.id);
   const tempsList = cache.temps_passe.filter(t => t.evenement_id === e.id).sort((a, b) => (b.date_travail || "").localeCompare(a.date_travail || ""));
-  const dateTxt = e.date_flexible ? fmtMoisFR(e.mois_seul) + " (flexible)" : fmtDateFR(e.date_evenement);
+  const dateTxt = e.date_flexible ? fmtMoisFR(e.mois_seul) + " (flexible)" : fmtDateFR(e.date_fin);
   const line = (l, v) => `<tr><td style="color:var(--muted);width:42%;">${l}</td><td>${v || "—"}</td></tr>`;
   const html = `
     <table class="data" style="margin-bottom:16px;"><tbody>
@@ -1188,7 +1188,7 @@ async function createDevisReminders(d) {
   const cgv = Array.isArray(d.cgv) ? d.cgv : [];
   if (!cgv.length) return;
   const e = devisEvent(d);
-  const evDate = e ? e.date_evenement : null;
+  const evDate = e ? e.date_fin : null;
   const num = d.numero || ("#" + d.id);
   const evId = e ? e.id : null;
   const toCreate = [];
@@ -1382,7 +1382,6 @@ function factureFields(row) {
     { key: "contact_id", label: "Client / contact", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
     { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">— Aucun —</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
     { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
-    { key: "date_evenement", label: "Date du projet", type: "date", value: row.date_evenement },
     { key: "date_facture", label: "Date de la facture", type: "date", value: row.date_facture || todayStr() },
     { key: "date_echeance", label: "Date d'échéance", type: "date", value: row.date_echeance },
     { key: "montant_ttc", label: "Montant (€)", type: "number", value: row.montant_ttc },
@@ -1407,7 +1406,7 @@ function createFactureFromDevis(devisId) {
   const d = findDevis(devisId); if (!d) return;
   const c = devisContact(d);
   openFactureDialog(null, {
-    devis_id: d.id, contact_id: c ? c.id : null, date_evenement: devisDateEvt(d),
+    devis_id: d.id, contact_id: c ? c.id : null,
     montant_ttc: d.montant_ttc, notes: d.notes,
   });
   showToast("Facture pré-remplie depuis " + (d.numero || "le devis"));
@@ -1471,7 +1470,7 @@ function openContactHistory(contactId) {
   const c = findContact(contactId);
   const items = [];
   cache.evenements.filter(e => e.contact_id === contactId).forEach(e => {
-    items.push({ date: e.date_evenement || e.date_creation || "", icon: "icon-folder", label: "Projet créé : " + eventLabel(e), sub: e.statut, color: "var(--success)", fn: `openEvenementDialog(${e.id})` });
+    items.push({ date: e.date_fin || e.date_creation || "", icon: "icon-folder", label: "Projet créé : " + eventLabel(e), sub: e.statut, color: "var(--success)", fn: `openEvenementDialog(${e.id})` });
   });
   cache.devis.filter(d => { const cc = devisContact(d); return cc && cc.id === contactId; }).forEach(d => {
     items.push({ date: (d.date_creation || "").slice(0, 10), icon: "icon-file-text", label: "Devis " + (d.numero || "") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : ""), sub: d.statut, color: "var(--info)", fn: `openDevisEditor(${d.id})` });
@@ -1516,17 +1515,17 @@ function renderEvenements() {
   const fMois = document.getElementById("evenement-filter-mois").value;
   const fStatut = document.getElementById("evenement-filter-statut").value;
 
-  let rows = [...cache.evenements].sort((a, b) => (a.date_evenement || "9999").localeCompare(b.date_evenement || "9999"));
+  let rows = [...cache.evenements].sort((a, b) => (a.date_fin || "9999").localeCompare(b.date_fin || "9999"));
   if (fType) rows = rows.filter(e => e.type_evenement === fType);
   if (fStatut) rows = rows.filter(e => e.statut === fStatut);
-  if (fMois) rows = rows.filter(e => ((e.date_evenement || e.mois_seul || "") + "").slice(5, 7) === fMois);
+  if (fMois) rows = rows.filter(e => ((e.date_fin || e.mois_seul || "") + "").slice(5, 7) === fMois);
 
   const tbody = document.getElementById("evenement-tbody");
   tbody.innerHTML = rows.length ? rows.map(e => {
     const c = findContact(e.contact_id);
     const dev = cache.devis.find(d => d.evenement_id === e.id);
     const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
-    const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_evenement);
+    const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_fin);
     return `<tr>
       <td><strong>${e.titre || "—"}</strong></td>
       <td>${dateTxt || "—"}</td>
@@ -1593,8 +1592,7 @@ function openEvenementDialog(id, defaultDate) {
     table: "evenements", id,
     fields: [
       { key: "titre", label: "Nom du projet", type: "text", value: row.titre, placeholder: "Ex. Refonte site — Boulangerie Martin" },
-      { key: "date_evenement", label: "Date de début souhaitée", type: "date", value: row.date_evenement || defaultDate },
-      { key: "date_fin", label: "Date de livraison prévue", type: "date", value: row.date_fin },
+      { key: "date_fin", label: "Date de livraison prévue", type: "date", value: row.date_fin || defaultDate },
       { key: "contact_id", label: "Contact / client", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
       { key: "provenance", label: "Provenance (reprise du contact)", type: "text", value: row.provenance },
       { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
@@ -1831,8 +1829,8 @@ function renderCalendrier() {
   document.getElementById("cal-month-lbl").textContent = `${MOIS_FR[month - 1]} ${year}`;
   const eventsByDay = {};
   cache.evenements.forEach(e => {
-    if (!e.date_evenement) return;
-    const [y, m, d] = e.date_evenement.split("-").map(Number);
+    if (!e.date_fin) return;
+    const [y, m, d] = e.date_fin.split("-").map(Number);
     if (y === year && m === month) (eventsByDay[d] = eventsByDay[d] || []).push(e);
   });
   const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7;
@@ -1857,7 +1855,7 @@ function renderCalDay() {
   const lbl = document.getElementById("cal-day-lbl"), tbody = document.getElementById("cal-day-tbody");
   if (!calState.selected) { lbl.textContent = "Projets du jour"; tbody.innerHTML = `<tr class="empty-row"><td colspan="4">Sélectionne un jour</td></tr>`; return; }
   lbl.textContent = "Projets du " + fmtDateFR(calState.selected);
-  const rows = cache.evenements.filter(e => e.date_evenement === calState.selected).sort((a, b) => (a.heure_debut || "").localeCompare(b.heure_debut || ""));
+  const rows = cache.evenements.filter(e => e.date_fin === calState.selected).sort((a, b) => (a.heure_debut || "").localeCompare(b.heure_debut || ""));
   tbody.innerHTML = rows.length ? rows.map(e => `<tr onclick="openEvenementDialog(${e.id})" style="cursor:pointer;"><td>${e.heure_debut || "—"}</td><td>${eventLabel(e)}</td><td>${e.type_evenement || ""}</td><td>${badge(e.statut, STATUT_COLORS[e.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="4">Aucun projet — clique pour en ajouter un</td></tr>`;
 }
 
