@@ -360,6 +360,7 @@ function todoLieALabel(t) {
   return t.categorie || "—";
 }
 function eventLabel(e) {
+  if (e.titre) return e.titre;
   const c = findContact(e.contact_id);
   const d = e.date_flexible ? fmtMoisFR(e.mois_seul) : fmtDateFR(e.date_evenement);
   return [d, contactLabel(c)].filter(x => x && x !== "—").join(" · ") || (e.type_evenement || "Projet");
@@ -560,6 +561,7 @@ function renderSuivi() {
     const tache = cache.todos.find(t => t.evenement_id === e.id && t.statut !== "Terminé");
     const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_evenement);
     return `<tr>
+      <td><strong>${e.titre || "—"}</strong></td>
       <td>${contactLabel(findContact(e.contact_id))}</td>
       <td>${dateTxt || "—"}</td>
       <td>${e.derniere_action || "—"}</td>
@@ -570,7 +572,7 @@ function renderSuivi() {
       <td>${fac ? badge(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
       <td class="row-actions"><button onclick="openEvenementDialog(${e.id})">✎</button></td>
     </tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="9">Aucun dossier — crée un projet</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="10">Aucun dossier — crée un projet</td></tr>`;
 }
 
 function openEventRecap(id) {
@@ -584,6 +586,7 @@ function openEventRecap(id) {
   const line = (l, v) => `<tr><td style="color:var(--muted);width:42%;">${l}</td><td>${v || "—"}</td></tr>`;
   const html = `
     <table class="data" style="margin-bottom:16px;"><tbody>
+      ${line("Nom du projet", e.titre)}
       ${line("Date", dateTxt)}
       ${line("Contact", contactLabel(c))}
       ${line("Téléphone", c && c.telephone)}
@@ -603,7 +606,7 @@ function openEventRecap(id) {
     <div style="font-size:16px;line-height:1.5;white-space:pre-wrap;background:#FAFAF8;border:1px solid var(--border);border-radius:8px;padding:12px;min-height:50px;">${e.notes || "—"}</div>
     <h3 style="font-size:14px;margin:16px 0 8px;">✅ Tâches liées</h3>
     <table class="data"><tbody>${taches.length ? taches.map(t => `<tr><td>${t.titre}</td><td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Aucune</td></tr>`}</tbody></table>`;
-  showInfoModal("Fiche récap projet", html);
+  showInfoModal(e.titre ? `Fiche récap — ${e.titre}` : "Fiche récap projet", html);
 }
 
 // ========================================================================
@@ -1170,6 +1173,7 @@ function renderEvenements() {
     const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
     const dateTxt = e.date_flexible ? (fmtMoisFR(e.mois_seul) + " (flex.)") : fmtDateFR(e.date_evenement);
     return `<tr>
+      <td><strong>${e.titre || "—"}</strong></td>
       <td>${dateTxt || "—"}</td>
       <td>${contactLabel(c)}</td>
       <td>${(c && c.provenance) || "—"}</td>
@@ -1185,7 +1189,7 @@ function renderEvenements() {
         <button onclick="openEvenementDialog(${e.id})">✎</button>
         <button onclick="confirmDelete('evenements', ${e.id}, renderEvenements)">🗑</button>
       </td></tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="11">Aucun projet</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="12">Aucun projet</td></tr>`;
 }
 
 function renderOptionsUI(form, type, checkedCsv) {
@@ -1213,6 +1217,7 @@ function openEvenementDialog(id, defaultDate) {
     title: id ? "Modifier le projet" : "Nouveau projet",
     table: "evenements", id,
     fields: [
+      { key: "titre", label: "Nom du projet", type: "text", value: row.titre, placeholder: "Ex. Refonte site — Boulangerie Martin" },
       { key: "date_evenement", label: "Date de début souhaitée", type: "date", value: row.date_evenement || defaultDate },
       { key: "date_fin", label: "Date de livraison prévue", type: "date", value: row.date_fin },
       { key: "contact_id", label: "Contact / client", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
@@ -1423,7 +1428,7 @@ function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) 
     } else if (f.type === "computed") {
       input = `<input type="number" name="${f.key}" value="${f.value != null ? escapeAttr(f.value) : ""}" readonly style="background:#F3F2EE;color:var(--muted);">`;
     } else {
-      input = `<input type="${f.type}" name="${f.key}" ${f.list ? `list="${f.list}"` : ""} value="${f.value != null ? escapeAttr(f.value) : ""}" ${f.required ? "required" : ""}>`;
+      input = `<input type="${f.type}" name="${f.key}" ${f.list ? `list="${f.list}"` : ""} ${f.placeholder ? `placeholder="${escapeAttr(f.placeholder)}"` : ""} value="${f.value != null ? escapeAttr(f.value) : ""}" ${f.required ? "required" : ""}>`;
     }
     return `<div class="field"><label>${f.label}${f.required ? " *" : ""}</label>${input}</div>`;
   }).join("");
