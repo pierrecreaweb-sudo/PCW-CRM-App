@@ -1643,7 +1643,73 @@ const DOW_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 // ========================================================================
 //  TEMPS PASSÉ
 // ========================================================================
+// ========================================================================
+//  CHRONOMÈTRE (temps passé)
+// ========================================================================
+const CHRONO_KEY = "pcw_chrono_state";
+function getChronoState() {
+  try { return JSON.parse(localStorage.getItem(CHRONO_KEY)); } catch (e) { return null; }
+}
+function setChronoState(state) {
+  if (state) localStorage.setItem(CHRONO_KEY, JSON.stringify(state)); else localStorage.removeItem(CHRONO_KEY);
+}
+function fmtHMS(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const sec = String(s % 60).padStart(2, "0");
+  return `${h}:${m}:${sec}`;
+}
+function tickChrono() {
+  const st = getChronoState();
+  const indicator = document.getElementById("chrono-indicator");
+  const appVisible = document.getElementById("app-screen") && document.getElementById("app-screen").style.display === "block";
+  const running = !!(st && st.running && appVisible);
+  if (indicator) {
+    indicator.style.display = running ? "flex" : "none";
+    if (running) indicator.querySelector(".ci-time").textContent = fmtHMS(Date.now() - st.startTime);
+  }
+  const disp = document.getElementById("chrono-display");
+  if (disp) {
+    const btn = document.getElementById("chrono-toggle-btn");
+    const note = document.getElementById("chrono-running-note");
+    const sel = document.getElementById("chrono-projet");
+    if (running) {
+      disp.textContent = fmtHMS(Date.now() - st.startTime);
+      btn.textContent = "⏹ Arrêter"; btn.classList.add("danger");
+      sel.disabled = true; if (st.evenementId) sel.value = st.evenementId;
+      const e = st.evenementId ? findEvenement(Number(st.evenementId)) : null;
+      note.style.display = "block";
+      note.textContent = "Démarré à " + new Date(st.startTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + (e ? " sur : " + eventLabel(e) : " (aucun projet précisé)");
+    } else {
+      disp.textContent = "00:00:00";
+      btn.textContent = "▶ Démarrer"; btn.classList.remove("danger");
+      sel.disabled = false; note.style.display = "none";
+    }
+  }
+}
+function toggleChrono() {
+  const st = getChronoState();
+  if (st && st.running) {
+    const elapsedMs = Date.now() - st.startTime;
+    const hours = round2(elapsedMs / 3600000);
+    const evId = st.evenementId ? Number(st.evenementId) : null;
+    setChronoState(null);
+    tickChrono();
+    if (hours < 0.01) { showToast("Chrono arrêté — durée trop courte pour être enregistrée"); return; }
+    openTempsDialog(null, evId);
+    setTimeout(() => { const el = document.querySelector('#modal-form [name="duree_heures"]'); if (el) el.value = hours; }, 30);
+  } else {
+    const sel = document.getElementById("chrono-projet");
+    setChronoState({ evenementId: sel ? sel.value : null, startTime: Date.now(), running: true });
+    tickChrono();
+    showToast("Chrono démarré");
+  }
+}
+
 function renderTemps() {
+  ensureFilterOptions("chrono-projet", cache.evenements.map(e => ({ value: e.id, label: eventLabel(e) })));
+  tickChrono();
   ensureFilterOptions("temps-filter-projet", cache.evenements.map(e => ({ value: e.id, label: eventLabel(e) })));
   const fProjet = document.getElementById("temps-filter-projet").value;
   let rows = [...cache.temps_passe].sort((a, b) => (b.date_travail || "").localeCompare(a.date_travail || ""));
@@ -1942,6 +2008,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-new-todo").addEventListener("click", () => openTodoDialog(null));
   document.getElementById("btn-new-temps").addEventListener("click", () => openTempsDialog(null));
+  document.getElementById("chrono-toggle-btn").addEventListener("click", toggleChrono);
+  setInterval(tickChrono, 1000);
+  tickChrono();
   document.getElementById("btn-new-prospect").addEventListener("click", () => openEvenementDialog(null));
   document.getElementById("btn-new-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("btn-export-devis").addEventListener("click", exportDevisCSV);

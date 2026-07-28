@@ -95,6 +95,10 @@
   .kanban-card .kc-title{font-weight:700;margin-bottom:3px;}
   .kanban-card .kc-sub{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
   .kanban-card .kc-badges{display:flex;gap:5px;flex-wrap:wrap;}
+  #chrono-display{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);min-width:118px;}
+  .chrono-indicator{display:flex;align-items:center;gap:8px;margin:20px 30px 0;background:var(--danger);color:#fff;padding:8px 14px;border-radius:20px;font-size:12.5px;font-weight:700;width:fit-content;cursor:pointer;font-variant-numeric:tabular-nums;}
+  .chrono-indicator .ci-dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:ciPulse 1.2s infinite;flex-shrink:0;}
+  @keyframes ciPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
   .toolbar .lbl{color:var(--muted);font-size:12.5px;margin-right:4px;font-weight:600;}
   .shortcut-btn{background:var(--card);border:1px solid var(--border);padding:9px 15px;border-radius:8px;font-size:12.5px;color:var(--text);font-weight:500;transition:.15s;box-shadow:var(--shadow-sm);}
   .shortcut-btn:hover{border-color:var(--accent);color:var(--accent-dark);transform:translateY(-1px);box-shadow:var(--shadow-md);}
@@ -386,6 +390,9 @@
     </div>
 
     <div class="main">
+      <div id="chrono-indicator" class="chrono-indicator" onclick="showPage('temps')" style="display:none;">
+        <span class="ci-dot"></span><span class="ci-time">00:00:00</span> — chrono en cours, cliquer pour ouvrir
+      </div>
       <div class="global-search-wrap">
         <svg class="nav-icon" style="width:15px;height:15px;color:var(--muted);"><use href="#icon-search"></use></svg>
         <input type="text" id="global-search-input" placeholder="Rechercher un contact, un devis, un projet…" autocomplete="off">
@@ -561,11 +568,20 @@
         <!-- TEMPS PASSÉ -->
         <div class="page" id="page-temps">
           <div class="page-title">Temps passé</div>
+          <div class="panel" id="chrono-panel">
+            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-stopwatch"></use></svg>Chronomètre</h3>
+            <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+              <select class="filter" id="chrono-projet" style="min-width:220px;"><option value="">— Aucun projet précis —</option></select>
+              <div id="chrono-display">00:00:00</div>
+              <button class="btn" id="chrono-toggle-btn">▶ Démarrer</button>
+            </div>
+            <div id="chrono-running-note" style="font-size:12px;color:var(--muted);margin-top:10px;display:none;"></div>
+          </div>
           <div class="page-toolbar">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <select class="filter" id="temps-filter-projet"><option value="">Tous les projets</option></select>
             </div>
-            <button class="btn" id="btn-new-temps">＋ Saisir du temps</button>
+            <button class="btn" id="btn-new-temps">＋ Saisir manuellement</button>
           </div>
           <div class="cards-row" id="temps-summary"></div>
           <table class="data">
