@@ -336,6 +336,35 @@ function closeMobileMenu() {
   document.getElementById("sidebar").classList.remove("open");
   document.getElementById("sidebar-overlay").classList.remove("open");
 }
+function wrapTablesForScroll() {
+  document.querySelectorAll("table.data").forEach(t => {
+    if (t.parentElement && t.parentElement.classList.contains("table-scroll")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "table-scroll";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  });
+}
+function initSwipeGestures() {
+  let startX = null, startY = null, tracking = false;
+  document.addEventListener("touchstart", (e) => {
+    if (window.innerWidth > 820 || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    const isOpen = document.getElementById("sidebar").classList.contains("open");
+    tracking = isOpen || startX < 24;
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!tracking || startX === null || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX, dy = t.clientY - startY;
+    if (Math.abs(dy) > Math.abs(dx)) return;
+    const isOpen = document.getElementById("sidebar").classList.contains("open");
+    if (!isOpen && dx > 60) { openMobileMenu(); tracking = false; }
+    else if (isOpen && dx < -60) { closeMobileMenu(); tracking = false; }
+  }, { passive: true });
+  document.addEventListener("touchend", () => { startX = null; startY = null; tracking = false; });
+}
 
 // ========================================================================
 //  RECHERCHE GLOBALE
@@ -2050,6 +2079,8 @@ function toggleTheme() {
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme(localStorage.getItem("pcw_theme") || "light");
   document.getElementById("theme-toggle-btn").addEventListener("click", toggleTheme);
+  wrapTablesForScroll();
+  initSwipeGestures();
   document.getElementById("global-search-input").addEventListener("input", (e) => runGlobalSearch(e.target.value));
   document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".global-search-wrap");
