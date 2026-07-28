@@ -25,6 +25,8 @@ const PROVENANCES = ["Bouche à oreille", "Site web", "Réseaux sociaux", "Googl
 const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
+const MODES_PAIEMENT = ["Paiement unique", "Paiement mensuel"];
+const MODE_PAIEMENT_COLORS = { "Paiement unique": "var(--muted)", "Paiement mensuel": "var(--warning)" };
 const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";
 
 // Options de projet, proposées selon le type de projet sélectionné
@@ -212,7 +214,7 @@ async function seedDefaultTarification() {
   const options = optionsUniques.map(nom => ({ nom_presta: nom, categorie: "Option / Supplément" }));
   const toCreate = [...prestations, ...options];
   for (const item of toCreate) {
-    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: null, tva: 0, montant_tva: 0, pu_ttc: null });
+    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: null, tva: 0, montant_tva: 0, pu_ttc: null, mode_paiement: "Paiement unique" });
   }
   await refreshCache();
   showToast("Tarification pré-remplie — complète les prix quand tu veux");
@@ -640,7 +642,7 @@ function openDevisEditor(id) {
   const d = findDevis(id);
   if (!d) return;
   edState = { id, lignes: Array.isArray(d.lignes) ? JSON.parse(JSON.stringify(d.lignes)) : [] };
-  if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 });
+  if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" });
 
   const e = devisEvent(d);
   const c = devisContact(d);
@@ -665,7 +667,7 @@ function openDevisEditor(id) {
 function grillePickerOptionsHtml() {
   const prestas = cache.grille_tarifaire.filter(g => (g.categorie || "Prestation") === "Prestation").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
   const options = cache.grille_tarifaire.filter(g => g.categorie === "Option / Supplément").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
-  const optHtml = list => list.map(g => `<option value="${escapeAttr(g.nom_presta || "")}">${g.nom_presta || ""}${g.pu_ttc != null ? " — " + g.pu_ttc + " €" : ""}</option>`).join("");
+  const optHtml = list => list.map(g => `<option value="${escapeAttr(g.nom_presta || "")}">${g.nom_presta || ""}${g.pu_ttc != null ? " — " + g.pu_ttc + " €" + (g.mode_paiement === "Paiement mensuel" ? "/mois" : "") : ""}</option>`).join("");
   return `<option value="">— Choisir dans le catalogue —</option>` +
     (prestas.length ? `<optgroup label="🔵 Prestations">${optHtml(prestas)}</optgroup>` : "") +
     (options.length ? `<optgroup label="🟣 Options / Suppléments">${optHtml(options)}</optgroup>` : "") +
@@ -684,6 +686,7 @@ function renderEditorLines() {
       <td><input type="number" data-k="qte" min="0" step="1" value="${l.qte != null ? l.qte : 1}" style="width:60px;"></td>
       <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:90px;"></td>
       <td><input type="number" data-k="remise" min="0" max="100" step="1" value="${l.remise != null ? l.remise : 0}" style="width:60px;"></td>
+      <td><select data-k="mode_paiement" style="width:100px;">${MODES_PAIEMENT.map(m => `<option value="${m}" ${(l.mode_paiement || "Paiement unique") === m ? "selected" : ""}>${m === "Paiement mensuel" ? "Mensuel" : "Unique"}</option>`).join("")}</select></td>
       <td class="ro" data-ro="total"></td>
       <td><button class="del" title="Supprimer" onclick="removeEditorLine(${i})">✕</button></td>
     </tr>`).join("");
@@ -706,24 +709,28 @@ function computeLine(l) {
   return { total };
 }
 function recomputeEditor() {
-  let total = 0;
+  let totalUnique = 0, totalMensuel = 0;
   document.querySelectorAll("#ed-lines tr").forEach(tr => {
     const i = Number(tr.dataset.i);
     const l = edState.lignes[i]; if (!l) return;
     const r = computeLine(l);
     tr.querySelector('[data-ro="total"]').textContent = r.total.toFixed(2) + " €";
-    total += r.total;
+    if ((l.mode_paiement || "Paiement unique") === "Paiement mensuel") totalMensuel += r.total; else totalUnique += r.total;
   });
-  document.getElementById("ed-totaux").innerHTML =
-    `<span class="grand">Total : ${round2(total).toFixed(2)} €</span><br>` +
-    `<span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
+  let html = `<span class="grand">Total unique : ${round2(totalUnique).toFixed(2)} €</span>`;
+  if (totalMensuel > 0) html += `<br><span class="grand" style="color:var(--warning);">Total mensuel : ${round2(totalMensuel).toFixed(2)} € /mois</span>`;
+  html += `<br><span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
+  document.getElementById("ed-totaux").innerHTML = html;
 }
-function removeEditorLine(i) { readEditorToState(); edState.lignes.splice(i, 1); if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 }); renderEditorLines(); }
-function addEditorLine() { readEditorToState(); edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0 }); renderEditorLines(); }
+function removeEditorLine(i) { readEditorToState(); edState.lignes.splice(i, 1); if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }); renderEditorLines(); }
+function addEditorLine() { readEditorToState(); edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }); renderEditorLines(); }
 function editorTotals() {
-  let total = 0;
-  edState.lignes.forEach(l => { total += computeLine(l).total; });
-  return { ttc: round2(total) };
+  let totalUnique = 0, totalMensuel = 0;
+  edState.lignes.forEach(l => {
+    const t = computeLine(l).total;
+    if ((l.mode_paiement || "Paiement unique") === "Paiement mensuel") totalMensuel += t; else totalUnique += t;
+  });
+  return { ttc: round2(totalUnique + totalMensuel), unique: round2(totalUnique), mensuel: round2(totalMensuel) };
 }
 async function saveDevisEditor(closeAfter) {
   readEditorToState();
@@ -868,25 +875,29 @@ async function generateDevisPDF(id, mode) {
   y += 4;
   // en-têtes tableau
   doc.setFontSize(9); doc.setTextColor(90);
-  doc.text("Désignation", 20, y); doc.text("Qté", 120, y); doc.text("PU (€)", 138, y);
-  doc.text("Rem.", 158, y); doc.text("Total (€)", 176, y);
+  doc.text("Désignation", 20, y); doc.text("Qté", 108, y); doc.text("PU (€)", 124, y);
+  doc.text("Rem.", 142, y); doc.text("Paiement", 156, y); doc.text("Total (€)", 178, y);
   doc.setTextColor(0); doc.setFontSize(10); y += 3;
   doc.line(20, y, 195, y); y += 6;
-  let total = 0;
+  let totalUnique = 0, totalMensuel = 0;
   lignes.forEach(l => {
-    const r = computeLine(l); total += r.total;
-    const desig = doc.splitTextToSize(l.designation || "—", 94);
+    const r = computeLine(l);
+    const isMensuel = (l.mode_paiement || "Paiement unique") === "Paiement mensuel";
+    if (isMensuel) totalMensuel += r.total; else totalUnique += r.total;
+    const desig = doc.splitTextToSize(l.designation || "—", 82);
     doc.text(desig, 20, y);
-    doc.text(String(l.qte ?? ""), 120, y);
-    doc.text(Number(l.pu_ttc || 0).toFixed(2), 138, y);
-    doc.text((l.remise ? l.remise + "%" : "—"), 158, y);
-    doc.text(r.total.toFixed(2) + " €", 176, y);
+    doc.text(String(l.qte ?? ""), 108, y);
+    doc.text(Number(l.pu_ttc || 0).toFixed(2), 124, y);
+    doc.text((l.remise ? l.remise + "%" : "—"), 142, y);
+    doc.text(isMensuel ? "Mensuel" : "Unique", 156, y);
+    doc.text(r.total.toFixed(2) + " €", 178, y);
     y += Math.max(7, desig.length * 5);
     if (y > 250) { doc.addPage(); y = 20; }
   });
   y += 2; doc.line(20, y, 195, y); y += 8;
-  doc.setFontSize(13); doc.text("TOTAL : " + round2(total).toFixed(2) + " €", 130, y); y += 7;
-  doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 130, y); doc.setTextColor(0); y += 10;
+  doc.setFontSize(13); doc.text("TOTAL UNIQUE : " + round2(totalUnique).toFixed(2) + " €", 110, y); y += 7;
+  if (totalMensuel > 0) { doc.text("TOTAL MENSUEL : " + round2(totalMensuel).toFixed(2) + " € /mois", 110, y); y += 7; }
+  doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 110, y); doc.setTextColor(0); y += 10;
 
   if (Array.isArray(d.cgv) && d.cgv.length) {
     doc.setFontSize(11); doc.text("Conditions générales de vente :", 20, y); y += 6;
@@ -1174,13 +1185,15 @@ function renderGrille() {
   const tbody = document.getElementById("grille-tbody");
   tbody.innerHTML = rows.length ? rows.map(g => {
     const cat = g.categorie || "Prestation";
+    const mode = g.mode_paiement || "Paiement unique";
     return `<tr>
       <td>${badge(cat, TARIF_CAT_COLORS[cat] || "var(--muted)")}</td>
       <td>${g.nom_presta || "—"}</td>
-      <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong></td>
+      <td>${badge(mode === "Paiement mensuel" ? "Mensuel" : "Unique", MODE_PAIEMENT_COLORS[mode])}</td>
+      <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong>${mode === "Paiement mensuel" ? `<span style="color:var(--muted);font-weight:normal;">/mois</span>` : ""}</td>
       <td class="row-actions"><button onclick="openGrilleDialog(${g.id})">✎</button><button onclick="confirmDelete('grille_tarifaire', ${g.id}, renderGrille)">🗑</button></td>
     </tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="4">Aucune prestation — ajoute ta première ligne</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="5">Aucune prestation — ajoute ta première ligne</td></tr>`;
 }
 function openGrilleDialog(id, defaultCategorie) {
   const row = id ? findGrille(id) : {};
@@ -1189,6 +1202,7 @@ function openGrilleDialog(id, defaultCategorie) {
     fields: [
       { key: "categorie", label: "Catégorie", type: "radioset", options: CATEGORIES_TARIF, colors: TARIF_CAT_COLORS, value: row.categorie || defaultCategorie || "Prestation" },
       { key: "nom_presta", label: "Nom de la prestation / option", type: "text", required: true, value: row.nom_presta },
+      { key: "mode_paiement", label: "Mode de paiement", type: "radioset", options: MODES_PAIEMENT, colors: MODE_PAIEMENT_COLORS, value: row.mode_paiement || "Paiement unique" },
       { key: "pu_ttc", label: "Prix (€)", type: "number", value: row.pu_ttc },
     ],
     beforeSave: (v) => { v.pu_ht = v.pu_ttc; v.tva = 0; v.montant_tva = 0; },
@@ -1468,6 +1482,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!val) return;
       const g = cache.grille_tarifaire.find(x => (x.nom_presta || "") === val);
       edState.lignes[i].designation = val;
+      if (g) edState.lignes[i].mode_paiement = g.mode_paiement || "Paiement unique";
       if (g && g.pu_ttc != null) edState.lignes[i].pu_ttc = g.pu_ttc;
       renderEditorLines();
     } else if (e.target.dataset.k === "designation") {
