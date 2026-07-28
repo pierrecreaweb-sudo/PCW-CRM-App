@@ -70,6 +70,9 @@ const EMETTEUR = {
   email: "pierre.craweb@gmail.com",
   telephone: "06 45 33 43 28",
   site: "pierrecreaweb.fr",
+  iban: "IBAN à compléter",
+  bic: "BIC à compléter",
+  banque: "", // optionnel — nom de la banque, ex. "Revolut"
 };
 
 const STATUT_COLORS = {
@@ -1402,7 +1405,15 @@ async function generateFacturePDF(id, mode) {
   rows.forEach(([k, v]) => { doc.text(k, 20, y); doc.text(v, 130, y); y += 7; });
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
   doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
-  if (f.notes) { y += 12; doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); }
+  y += 14;
+  doc.setDrawColor(220); doc.setFillColor(247, 248, 252);
+  doc.roundedRect(20, y, 175, 30, 2, 2, "FD");
+  doc.setFontSize(10); doc.setTextColor(90); doc.text("Coordonnées bancaires pour le règlement par virement", 26, y + 8);
+  doc.setFontSize(11); doc.setTextColor(0);
+  doc.text("IBAN : " + EMETTEUR.iban, 26, y + 16);
+  doc.text("BIC : " + EMETTEUR.bic + (EMETTEUR.banque ? "   ·   " + EMETTEUR.banque : ""), 26, y + 23);
+  y += 38;
+  if (f.notes) { doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); y += 14; }
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
