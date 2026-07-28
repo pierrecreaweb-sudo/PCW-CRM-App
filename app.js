@@ -1495,6 +1495,21 @@ function renderEvenements() {
   }).join("") : `<tr class="empty-row"><td colspan="12">Aucun projet</td></tr>`;
 }
 
+function syncRecurringFromOptions(form, pickedOptions) {
+  const recFld = form.elements["facturation_recurrente"];
+  const freqFld = form.elements["frequence_facturation"];
+  const montantFld = form.elements["montant_recurrent"];
+  if (!recFld || !freqFld || !montantFld) return;
+  const matches = cache.grille_tarifaire.filter(g => pickedOptions.includes(g.nom_presta) && g.mode_paiement && g.mode_paiement !== "Paiement unique");
+  if (matches.length) {
+    recFld.checked = true;
+    freqFld.value = matches.some(g => g.mode_paiement === "Paiement mensuel") ? "Mensuelle" : "Annuelle";
+    const total = round2(matches.reduce((s, g) => s + Number(g.pu_ttc || 0), 0));
+    montantFld.value = total || "";
+  } else {
+    recFld.checked = false;
+  }
+}
 function renderOptionsUI(form, type, checkedCsv) {
   const container = form.querySelector("#options-ui");
   const hidden = form.elements["options"];
@@ -1506,11 +1521,17 @@ function renderOptionsUI(form, type, checkedCsv) {
     return;
   }
   const checked = (checkedCsv || "").split(",").map(s => s.trim()).filter(Boolean);
-  container.innerHTML = `<div class="inline-checks">` + list.map(o => `<label><input type="checkbox" data-opt="${escapeAttr(o)}" ${checked.includes(o) ? "checked" : ""}>${o}</label>`).join("") + `</div>`;
+  container.innerHTML = `<div class="inline-checks">` + list.map(o => {
+    const g = cache.grille_tarifaire.find(x => x.nom_presta === o);
+    const priceLbl = g && g.pu_ttc != null ? ` <span style="color:var(--muted);font-weight:normal;">(${g.pu_ttc} €${modePaiementSuffix(g.mode_paiement)})</span>` : "";
+    return `<label><input type="checkbox" data-opt="${escapeAttr(o)}" ${checked.includes(o) ? "checked" : ""}>${o}${priceLbl}</label>`;
+  }).join("") + `</div>`;
+  syncRecurringFromOptions(form, checked);
   container.querySelectorAll("[data-opt]").forEach(cb => {
     cb.addEventListener("change", () => {
       const picked = Array.from(container.querySelectorAll("[data-opt]")).filter(x => x.checked).map(x => x.dataset.opt);
       hidden.value = picked.join(", ");
+      syncRecurringFromOptions(form, picked);
     });
   });
 }
