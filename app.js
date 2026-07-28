@@ -29,7 +29,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
 const STATUTS_PROSPECT = ["Nouveau", "Contacté", "Qualifié", "Devis envoyé", "Converti", "Perdu"];
 const STATUTS_DEVIS = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
-const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "Partiellement payée", "En retard", "Annulée"];
+const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "En retard", "Annulée"];
 const STATUTS_EVENEMENT = ["Premier contact", "Devis en cours", "En cours", "Livré", "Annulé"];
 const STATUTS_TODO = ["À faire", "En cours", "Terminé"];
 const STATUTS_RDV = ["Prévu", "Confirmé", "Effectué", "Annulé"];
@@ -58,9 +58,7 @@ function optionsListForType(type) {
 }
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
-  "30% d'acompte à la commande.",
-  "30% : 1 mois avant la livraison prévue.",
-  "Paiement du solde à réception de la facture, envoyée 7 jours avant la livraison.",
+  "Paiement à réception de la facture, envoyée 7 jours avant la livraison.",
 ];
 
 const EMETTEUR = {
@@ -86,7 +84,7 @@ const STATUT_COLORS = {
   "Prévu": "var(--info)", "Effectué": "var(--success)",
   "Client": "var(--success)", "Prospect": "var(--info)", "Partenaire": "var(--accent)",
   "Fournisseur": "var(--warning)", "Autre": "var(--muted)",
-  "Envoyée": "var(--warning)", "Payée": "var(--success)", "Partiellement payée": "var(--info)",
+  "Envoyée": "var(--warning)", "Payée": "var(--success)",
   "En retard": "var(--danger)", "Annulée": "var(--danger)",
   "Basse": "var(--muted)", "Normale": "var(--muted)", "Haute": "var(--warning)", "Urgente": "var(--danger)",
 };
@@ -564,7 +562,7 @@ function renderDashboard() {
   const today = todayStr();
   const prospectsActifs = cache.contacts.filter(c => c.categorie === "Prospect").length;
   const devisEnAttente = cache.devis.filter(d => d.statut === "En attente").length;
-  const facturesImpayees = cache.factures.filter(f => ["Envoyée", "En retard", "Partiellement payée"].includes(f.statut)).length;
+  const facturesImpayees = cache.factures.filter(f => ["Envoyée", "En retard"].includes(f.statut)).length;
   const rdvAvenir = cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé").length;
   const evenementsAvenir = cache.evenements.filter(e => (e.date_evenement || "") >= today).length;
   const todosOuvertes = cache.todos.filter(t => t.statut !== "Terminé").length;
@@ -833,7 +831,6 @@ function openEventRecap(id) {
       ${line("Type de projet", e.type_evenement)}
       ${line("Options", e.options)}
       ${line("Formule", e.type_prestation)}
-      ${line("Budget", e.budget ? e.budget + " €" : "")}
       ${line("Statut", e.statut)}
       ${line("Devis", dev ? (dev.numero + " · " + dev.statut) : "—")}
       ${line("Facture", fac ? (fac.numero + " · " + fac.statut) : "—")}
@@ -960,8 +957,8 @@ function exportDevisCSV() {
   exportCSV("PCW_devis_" + todayStr() + ".csv", ["Numéro", "Date", "Client", "Montant (€)", "Statut"], rows);
 }
 function exportFacturesCSV() {
-  const rows = cache.factures.map(f => [f.numero, fmtDateFR(f.date_facture), contactLabel(findContact(f.contact_id)), f.montant_ttc, f.montant_acompte, f.statut]);
-  exportCSV("PCW_factures_" + todayStr() + ".csv", ["Numéro", "Date", "Client", "Montant (€)", "Acompte (€)", "Statut"], rows);
+  const rows = cache.factures.map(f => [f.numero, fmtDateFR(f.date_facture), contactLabel(findContact(f.contact_id)), f.montant_ttc, f.statut]);
+  exportCSV("PCW_factures_" + todayStr() + ".csv", ["Numéro", "Date", "Client", "Montant (€)", "Statut"], rows);
 }
 
 function renderDevis() {
@@ -1195,15 +1192,8 @@ async function createDevisReminders(d) {
   const num = d.numero || ("#" + d.id);
   const evId = e ? e.id : null;
   const toCreate = [];
-  if (cgv.includes("30% d'acompte à la commande.")) {
-    toCreate.push({ titre: `Acompte de devis ${num}`, priorite: "Haute" });
-    toCreate.push({ titre: `Envoyer facture d'acompte du devis ${num}`, priorite: "Haute" });
-  }
-  if (cgv.includes("30% : 1 mois avant la livraison prévue.")) {
-    toCreate.push({ titre: `Demander 2e acompte 30% (devis ${num})`, priorite: "Haute", date_echeance: addMonthsISO(evDate, -1) });
-  }
-  if (cgv.includes("Paiement du solde à réception de la facture, envoyée 7 jours avant la livraison.")) {
-    toCreate.push({ titre: `Envoyer facture montant final devis ${num}`, priorite: "Haute", date_echeance: addDaysISO(evDate, -7) });
+  if (cgv.includes("Paiement à réception de la facture, envoyée 7 jours avant la livraison.")) {
+    toCreate.push({ titre: `Envoyer facture devis ${num}`, priorite: "Haute", date_echeance: addDaysISO(evDate, -7) });
   }
   for (const t of toCreate) {
     const exists = cache.todos.some(x => x.titre === t.titre && x.evenement_id === evId);
@@ -1379,7 +1369,7 @@ function renderFactures() {
   tbody.innerHTML = rows.length ? rows.map(f => {
     const dev = f.devis_id ? findDevis(f.devis_id) : null;
     const pdfBtn = f.pdf_path ? `<button title="Voir le PDF joint" onclick="downloadAttachment(findFacture(${f.id}).pdf_path)">📎</button>` : "";
-    const relanceBtn = ["Envoyée", "En retard", "Partiellement payée"].includes(f.statut) ? `<a title="Relancer par email" href="${escapeAttr(factureRelanceUrl(f))}"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></a>` : "";
+    const relanceBtn = ["Envoyée", "En retard"].includes(f.statut) ? `<a title="Relancer par email" href="${escapeAttr(factureRelanceUrl(f))}"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></a>` : "";
     return `<tr>
       <td>${f.numero || "—"}</td>
       <td>${contactLabel(findContact(f.contact_id))}</td>
@@ -1407,7 +1397,6 @@ function factureFields(row) {
     { key: "date_facture", label: "Date de la facture", type: "date", value: row.date_facture || todayStr() },
     { key: "date_echeance", label: "Date d'échéance", type: "date", value: row.date_echeance },
     { key: "montant_ttc", label: "Montant (€)", type: "number", value: row.montant_ttc },
-    { key: "montant_acompte", label: "Acompte déjà versé (€)", type: "number", value: row.montant_acompte },
     { key: "statut", label: "Statut", type: "select", options: STATUTS_FACTURE, value: row.statut || "Brouillon" },
     { key: "pdf_signe_file", label: "Joindre un PDF (facture signée / preuve)", type: "file", accept: "application/pdf" },
     { key: "notes", label: "Notes", type: "textarea", value: row.notes },
@@ -1440,7 +1429,6 @@ async function generateFacturePDF(id, mode) {
   const c = findContact(f.contact_id), dev = f.devis_id ? findDevis(f.devis_id) : null;
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
   const montant = Number(f.montant_ttc || 0);
-  const acompte = Number(f.montant_acompte || 0), net = round2(montant - acompte);
   const logo = await getLogoDataUrl();
   drawPdfBand(doc, logo, "FACTURE");
 
@@ -1461,14 +1449,13 @@ async function generateFacturePDF(id, mode) {
 
   let y = boxY + boxH + 12;
   doc.setFontSize(12); doc.text("Détail", 16, y); y += 9; doc.setFontSize(11);
-  const rows = [["Type de projet", f.type_evenement || "—"], ["Date du projet", fmtDateFR(f.date_evenement) || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
-  if (acompte) rows.push(["Acompte déjà versé", "- " + acompte.toFixed(2) + " €"]);
+  const rows = [["Type de projet", f.type_evenement || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
   rows.forEach(([k, v], i) => {
     if (i % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, 7, "F"); }
     doc.text(k, 20, y); doc.text(v, 130, y); y += 7;
   });
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
-  doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
+  doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   y += 14;
   drawInfoBox(doc, 16, y, 179, 30);
   doc.setFontSize(9.5); doc.setTextColor(120); doc.text("COORDONNÉES BANCAIRES POUR LE RÈGLEMENT PAR VIREMENT", 21, y + 8); doc.setTextColor(0);
@@ -1558,7 +1545,6 @@ function renderEvenements() {
       <td>${(c && c.provenance) || "—"}</td>
       <td>${e.type_evenement || "—"}</td>
       <td>${e.type_prestation || "—"}</td>
-      <td>${e.budget ? e.budget + " €" : "—"}</td>
       <td>${badge(e.statut, STATUT_COLORS[e.statut])}</td>
       <td>${dev ? badge(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
       <td>${fac ? badge(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
@@ -1568,7 +1554,7 @@ function renderEvenements() {
         <button onclick="openEvenementDialog(${e.id})">✎</button>
         <button onclick="confirmDelete('evenements', ${e.id}, renderEvenements)">🗑</button>
       </td></tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="12">Aucun projet</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="11">Aucun projet</td></tr>`;
 }
 
 function syncRecurringFromOptions(form, pickedOptions) {
@@ -1628,7 +1614,6 @@ function openEvenementDialog(id, defaultDate) {
       { key: "statut", label: "Statut", type: "select", options: STATUTS_EVENEMENT, value: row.statut || "Premier contact" },
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
       { key: "facture_id", label: "Facture liée", type: "select-raw", optionsHtml: `<option value="">—</option>` + factureOptionsHtml(row.facture_id), value: row.facture_id, numeric: true },
-      { key: "budget", label: "Budget (€)", type: "number", value: row.budget },
       { key: "facturation_recurrente", label: "Facturation récurrente (mensuelle/annuelle)", type: "checkbox", value: row.facturation_recurrente },
       { key: "frequence_facturation", label: "Fréquence", type: "select", options: ["Mensuelle", "Annuelle"], value: row.frequence_facturation || "Mensuelle" },
       { key: "montant_recurrent", label: "Montant à refacturer à chaque échéance (€)", type: "number", value: row.montant_recurrent },
