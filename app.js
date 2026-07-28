@@ -136,6 +136,11 @@ function badge(text, color) {
   if (!text) return "";
   return `<span class="badge" style="background:${color || "var(--muted)"}">${text}</span>`;
 }
+function badgeSubtle(text, color) {
+  if (!text) return "";
+  const c = color || "var(--muted)";
+  return `<span class="badge subtle" style="--badge-c:${c};"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c};margin-right:5px;vertical-align:1px;"></span>${text}</span>`;
+}
 function contactLabel(c) {
   if (!c) return "—";
   return [c.prenom, c.nom].filter(Boolean).join(" ") || c.societe || "Sans nom";
@@ -380,20 +385,69 @@ function renderDashboardGreeting() {
   const dateStr = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   document.getElementById("dash-greeting-sub").textContent = dateStr;
 }
-function renderDashboardChart() {
-  const months = [];
+let dashChartView = "mois";
+function mondayOf(d) {
+  const dt = new Date(d); const day = (dt.getDay() + 6) % 7;
+  dt.setDate(dt.getDate() - day); dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+function isoOf(d) { return d.toISOString().slice(0, 10); }
+function fmtEuroCompact(n) {
+  const v = Math.round(n);
+  if (Math.abs(v) >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1).replace(".", ",") + "k€";
+  return v + "€";
+}
+function computeCABuckets(view) {
   const now = new Date();
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MOIS_FR[d.getMonth()].slice(0, 3) });
+  const buckets = [];
+  if (view === "semaine") {
+    for (let i = 7; i >= 0; i--) {
+      const from = mondayOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7));
+      const to = new Date(from); to.setDate(to.getDate() + 6);
+      buckets.push({ from, to, label: String(from.getDate()).padStart(2, "0") + "/" + String(from.getMonth() + 1).padStart(2, "0") });
+    }
+  } else if (view === "annee") {
+    for (let i = 4; i >= 0; i--) {
+      const y = now.getFullYear() - i;
+      buckets.push({ from: new Date(y, 0, 1), to: new Date(y, 11, 31), label: String(y) });
+    }
+  } else { // mois
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const to = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      buckets.push({ from: d, to, label: MOIS_FR[d.getMonth()].slice(0, 3) + " " + String(d.getFullYear()).slice(2) });
+    }
   }
-  const counts = months.map(m => cache.devis.filter(d => (d.date_creation || "").slice(0, 7) === m.key).length);
-  const max = Math.max(1, ...counts);
+  const paid = cache.factures.filter(f => f.statut === "Payée" && f.date_facture);
+  const values = buckets.map(b => {
+    const from = isoOf(b.from), to = isoOf(b.to);
+    return round2(paid.filter(f => f.date_facture >= from && f.date_facture <= to).reduce((s, f) => s + Number(f.montant_ttc || 0), 0));
+  });
+  return { labels: buckets.map(b => b.label), values };
+}
+function bindDashChartTabs() {
+  const wrap = document.getElementById("dash-chart-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      dashChartView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      renderDashboardChart();
+    });
+  });
+}
+function renderDashboardChart() {
+  bindDashChartTabs();
+  const { labels, values } = computeCABuckets(dashChartView);
+  const max = Math.max(1, ...values);
   const wrap = document.getElementById("dash-chart");
-  wrap.innerHTML = months.map((m, i) => {
-    const h = Math.round((counts[i] / max) * 56) + 4;
-    return `<div class="bar-col"><div style="font-size:11px;font-weight:700;color:var(--accent);">${counts[i] || ""}</div><div class="bar" style="height:${h}px;"></div><div class="bar-lbl">${m.label}</div></div>`;
+  wrap.innerHTML = labels.map((lbl, i) => {
+    const h = Math.round((values[i] / max) * 56) + 4;
+    return `<div class="bar-col"><div style="font-size:10.5px;font-weight:700;color:var(--accent);">${values[i] ? fmtEuroCompact(values[i]) : ""}</div><div class="bar" style="height:${h}px;"></div><div class="bar-lbl">${lbl}</div></div>`;
   }).join("");
+  const total = round2(values.reduce((s, v) => s + v, 0));
+  document.getElementById("dash-chart-total").textContent = `Total sur la période affichée : ${total.toFixed(2)} € — calculé sur les factures au statut « Payée ».`;
 }
 function renderDashboard() {
   renderDashboardGreeting();
@@ -567,9 +621,9 @@ function renderSuivi() {
       <td>${e.derniere_action || "—"}</td>
       <td>${tache ? tache.titre : "—"}</td>
       <td class="row-actions"><button title="Fiche récap" onclick="openEventRecap(${e.id})">📋</button></td>
-      <td>${badge(e.statut, STATUT_COLORS[e.statut])}</td>
-      <td>${dev ? badge(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
-      <td>${fac ? badge(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
+      <td>${badgeSubtle(e.statut, STATUT_COLORS[e.statut])}</td>
+      <td>${dev ? badgeSubtle(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
+      <td>${fac ? badgeSubtle(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
       <td class="row-actions"><button onclick="openEvenementDialog(${e.id})">✎</button></td>
     </tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="10">Aucun dossier — crée un projet</td></tr>`;
@@ -1543,7 +1597,21 @@ function confirmDelete(table, id, afterFn) {
 // ========================================================================
 //  INIT
 // ========================================================================
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("pcw_theme", theme);
+  const use = document.querySelector("#theme-toggle-icon use");
+  const label = document.getElementById("theme-toggle-label");
+  if (use) use.setAttribute("href", theme === "dark" ? "#icon-sun" : "#icon-moon");
+  if (label) label.textContent = theme === "dark" ? "Mode clair" : "Mode sombre";
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  applyTheme(current === "dark" ? "light" : "dark");
+}
 document.addEventListener("DOMContentLoaded", () => {
+  applyTheme(localStorage.getItem("pcw_theme") || "light");
+  document.getElementById("theme-toggle-btn").addEventListener("click", toggleTheme);
   document.getElementById("auth-submit").addEventListener("click", handleAuthSubmit);
   document.getElementById("auth-switch-link").addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
   document.getElementById("auth-forgot-link").addEventListener("click", () => setAuthMode("reset-request"));

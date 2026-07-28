@@ -15,9 +15,20 @@
     --accent:#2F7DF6; --accent-dark:#1D5FD1; --accent-light:#EAF1FE; --card:#FFFFFF; --text:#151A24;
     --muted:#8890A0; --border:#E6E9F1; --success:#3FA772; --warning:#D99A2B;
     --danger:#D9534F; --info:#4F7FE0; --tertiary:#8B5CF6; --tertiary-light:#F1EBFE;
+    --surface-alt:#F7F8FC; --input-bg:#FAFBFD;
     --shadow-sm:0 1px 2px rgba(16,24,40,.05);
     --shadow-md:0 2px 8px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
     --shadow-lg:0 12px 32px rgba(16,24,40,.12),0 2px 6px rgba(16,24,40,.06);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1119; --sidebar:#070A11; --sidebar-active:#161D2C; --sidebar-text:#8D96AC;
+    --accent:#3E8AFF; --accent-dark:#2F7DF6; --accent-light:#132A4D; --card:#151A26; --text:#E7EBF3;
+    --muted:#8890A0; --border:#242C3D; --success:#3FA772; --warning:#D99A2B;
+    --danger:#E0645F; --info:#5E8DF0; --tertiary:#9D7BFA; --tertiary-light:#241B3D;
+    --surface-alt:#1B2231; --input-bg:#101623;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:0 2px 8px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.25);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:"Inter",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
@@ -30,8 +41,8 @@
   .auth-box{background:var(--card);padding:40px 40px 34px;border-radius:16px;width:360px;max-width:90vw;box-shadow:var(--shadow-lg);}
   .auth-box h1{font-size:21px;margin:0 0 4px;color:var(--text);font-weight:700;text-align:center;}
   .auth-box p.sub{color:var(--muted);font-size:13px;margin:0 0 22px;text-align:center;}
-  .auth-box input{width:100%;padding:11px 13px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#FAFBFD;transition:.15s;}
-  .auth-box input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-light);}
+  .auth-box input{width:100%;padding:11px 13px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--input-bg);color:var(--text);transition:.15s;}
+  .auth-box input:focus{outline:none;border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
   .auth-box button.primary{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;box-shadow:var(--shadow-sm);transition:.15s;}
   .auth-box button.primary:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:var(--shadow-md);}
   .auth-switch{text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
@@ -70,7 +81,8 @@
 
   .content{flex:1;padding:22px 30px 44px;overflow-x:auto;}
   .page{display:none;}
-  .page.active{display:block;}
+  .page.active{display:block;animation:pageIn .28s ease;}
+  @keyframes pageIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
   .page-title{font-size:22px;font-weight:800;margin:4px 0 18px;letter-spacing:-.01em;}
   .page-note{font-size:12.5px;color:var(--muted);margin:-10px 0 16px;}
 
@@ -106,17 +118,18 @@
   .cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px;}
   .cat-tab{border:1px solid var(--border);background:var(--card);padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:600;color:var(--muted);transition:.15s;}
   .cat-tab:hover{border-color:var(--accent);color:var(--text);}
-  .cat-tab.active{color:#fff;border-color:transparent;}
+  .cat-tab.active{color:#fff;border-color:transparent;background:var(--accent);}
   .cat-tab.active[data-cat=""]{background:var(--text);}
   .cat-tab.active[data-cat="Prestation"]{background:var(--accent);}
   .cat-tab.active[data-cat="Option / Supplément"]{background:var(--tertiary);}
 
   /* table */
   table.data{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm);}
-  table.data th{background:#F7F8FC;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:12px 14px;}
+  table.data th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:12px 14px;}
   table.data td{padding:12px 14px;font-size:13.5px;border-top:1px solid var(--border);vertical-align:top;}
-  table.data tr:hover td{background:#FAFBFE;}
+  table.data tr:hover td{background:var(--surface-alt);}
   .badge{display:inline-block;padding:4px 10px;border-radius:20px;color:#fff;font-size:11px;font-weight:700;letter-spacing:.01em;}
+  .badge.subtle{color:var(--badge-c,var(--muted));background:var(--badge-bg,var(--surface-alt));font-weight:600;}
   .row-actions{white-space:nowrap;}
   .row-actions button{background:none;border:none;font-size:14px;padding:3px 6px;color:var(--muted);border-radius:6px;transition:.15s;}
   .row-actions button:hover{color:var(--accent);background:var(--accent-light);}
@@ -126,12 +139,13 @@
   /* modal */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,18,32,.55);align-items:center;justify-content:center;z-index:70;padding:20px;backdrop-filter:blur(2px);}
   .modal-overlay.open{display:flex;}
-  .modal-box{background:var(--card);border-radius:16px;width:540px;max-width:100%;max-height:90vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg);}
+  .modal-box{background:var(--card);border-radius:16px;width:540px;max-width:100%;max-height:90vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg);animation:modalIn .18s ease;}
+  @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
   .modal-box h2{margin:0 0 20px;font-size:18px;font-weight:700;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700;}
-  .field input,.field select,.field textarea{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;transition:.15s;background:#FAFBFD;}
-  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-light);}
+  .field input,.field select,.field textarea{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;transition:.15s;background:var(--input-bg);color:var(--text);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
   .field textarea{resize:vertical;min-height:60px;}
   .field .inline-checks{display:flex;gap:16px;flex-wrap:wrap;}
   .field .inline-checks label{font-weight:normal;color:var(--text);display:flex;align-items:center;gap:6px;}
@@ -154,18 +168,18 @@
   .cal-day-panel{margin-top:16px;}
 
   /* devis editor (plein écran) */
-  .editor-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;padding:24px;}
+  .editor-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;padding:36px 24px;}
   .editor-overlay.open{display:block;}
-  .editor-sheet{background:#fff;max-width:900px;margin:0 auto;border:1px solid var(--border);border-radius:16px;padding:28px 32px;box-shadow:var(--shadow-lg);}
-  .editor-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:8px;}
-  .editor-head .em{font-size:12px;color:var(--muted);text-align:right;line-height:1.6;}
-  .lines-table{width:100%;border-collapse:collapse;margin-top:10px;}
-  .lines-table th{background:#F7F8FC;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 6px;text-align:left;}
-  .lines-table td{border-top:1px solid var(--border);padding:5px 6px;}
+  .editor-sheet{background:#fff;max-width:860px;margin:0 auto;border-top:6px solid var(--accent);border-radius:2px;padding:48px 56px 40px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 30px 70px -15px rgba(16,24,40,.35);position:relative;color:#1A1D24;}
+  .editor-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;padding-bottom:22px;margin-bottom:22px;border-bottom:2px solid #EDEFF3;}
+  .editor-head .em{font-size:12px;color:#7A8194;text-align:right;line-height:1.7;}
+  .lines-table{width:100%;border-collapse:collapse;margin-top:6px;}
+  .lines-table th{background:var(--surface-alt);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 6px;text-align:left;}
+  .lines-table td{border-top:1px solid #EDEFF3;padding:8px 6px;}
   .lines-table input,.lines-table select{width:100%;padding:7px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;}
-  .lines-table .ro{background:#F5F6FA;color:var(--muted);font-weight:600;}
+  .lines-table .ro{background:var(--surface-alt);color:var(--muted);font-weight:600;}
   .lines-table .del{color:var(--danger);border:none;background:none;font-size:15px;}
-  .totaux{margin-top:16px;text-align:right;font-size:14px;line-height:1.8;}
+  .totaux{margin-top:18px;padding-top:16px;border-top:2px solid #EDEFF3;text-align:right;font-size:14px;line-height:1.9;}
   .totaux .grand{font-size:19px;font-weight:800;color:var(--accent-dark);}
   .cgv-list label{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
   .cgv-list input{margin-top:3px;}
@@ -253,6 +267,12 @@
     <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="10" r="3.2"/><path d="M12 21c4-4.5 7-8 7-11a7 7 0 0 0-14 0c0 3 3 6.5 7 11z"/>
     </symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4.3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
+    </symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 14.2A8.3 8.3 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2z"/>
+    </symbol>
   </defs>
 </svg>
 
@@ -308,6 +328,7 @@
       <div class="nav-item" data-page="calendrier"><svg class="nav-icon"><use href="#icon-calendar"></use></svg>Calendrier</div>
       <div class="sidebar-footer">
         <div style="color:#C7CAD1;font-size:11.5px;margin-bottom:6px;" id="user-email-lbl"></div>
+        <button id="theme-toggle-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;" id="theme-toggle-icon"><use href="#icon-moon"></use></svg><span id="theme-toggle-label">Mode sombre</span></button>
         <button id="logout-btn" style="display:flex;align-items:center;gap:8px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-logout"></use></svg>Se déconnecter</button>
       </div>
     </div>
@@ -331,8 +352,16 @@
           <div class="dash-greeting-sub" id="dash-greeting-sub"></div>
           <div class="cards-row" id="dash-cards"></div>
           <div class="panel">
-            <h3>Devis créés — 6 derniers mois</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+              <h3 style="margin:0;">Évolution du CA facturé (factures payées)</h3>
+              <div class="cat-tabs" id="dash-chart-tabs" style="margin:0;">
+                <button type="button" class="cat-tab" data-view="semaine">Semaine</button>
+                <button type="button" class="cat-tab active" data-view="mois">Mois</button>
+                <button type="button" class="cat-tab" data-view="annee">Année</button>
+              </div>
+            </div>
             <div class="mini-chart-bars" id="dash-chart"></div>
+            <div id="dash-chart-total" style="margin-top:12px;font-size:12.5px;color:var(--muted);"></div>
           </div>
           <div class="panel">
             <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-check-square"></use></svg>Aperçu des tâches</h3>
@@ -522,7 +551,7 @@
     <div class="editor-head">
       <div>
         <img id="ed-logo" src="logo.png" alt="PCW" style="width:56px;height:56px;border-radius:50%;margin-bottom:8px;">
-        <h2 style="margin:0 0 4px;font-size:22px;">DEVIS</h2>
+        <h2 style="margin:0 0 6px;font-size:26px;letter-spacing:.06em;color:var(--accent-dark);">DEVIS</h2>
         <div id="ed-numero" style="font-size:13px;color:var(--muted);"></div>
         <div id="ed-client" style="font-size:13px;margin-top:8px;"></div>
       </div>
