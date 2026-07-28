@@ -365,7 +365,37 @@ function eventLabel(e) {
   return [d, contactLabel(c)].filter(x => x && x !== "—").join(" · ") || (e.type_evenement || "Projet");
 }
 
+function firstNameFromEmail(email) {
+  if (!email) return "";
+  const local = email.split("@")[0] || "";
+  const first = local.split(/[.\-_0-9]+/).filter(Boolean)[0] || local;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+function renderDashboardGreeting() {
+  const h = new Date().getHours();
+  const salut = h < 6 ? "Bonsoir" : h < 18 ? "Bonjour" : "Bonsoir";
+  const name = currentUser ? firstNameFromEmail(currentUser.email) : "";
+  document.getElementById("dash-greeting").textContent = `${salut}${name ? " " + name : ""} !`;
+  const dateStr = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  document.getElementById("dash-greeting-sub").textContent = dateStr;
+}
+function renderDashboardChart() {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MOIS_FR[d.getMonth()].slice(0, 3) });
+  }
+  const counts = months.map(m => cache.devis.filter(d => (d.date_creation || "").slice(0, 7) === m.key).length);
+  const max = Math.max(1, ...counts);
+  const wrap = document.getElementById("dash-chart");
+  wrap.innerHTML = months.map((m, i) => {
+    const h = Math.round((counts[i] / max) * 56) + 4;
+    return `<div class="bar-col"><div style="font-size:11px;font-weight:700;color:var(--accent);">${counts[i] || ""}</div><div class="bar" style="height:${h}px;"></div><div class="bar-lbl">${m.label}</div></div>`;
+  }).join("");
+}
 function renderDashboard() {
+  renderDashboardGreeting();
   const today = todayStr();
   const prospectsActifs = cache.contacts.filter(c => c.categorie === "Prospect").length;
   const devisEnAttente = cache.devis.filter(d => d.statut === "En attente").length;
@@ -375,21 +405,22 @@ function renderDashboard() {
   const todosOuvertes = cache.todos.filter(t => t.statut !== "Terminé").length;
 
   const cards = [
-    ["🎯", prospectsActifs, "Prospects actifs", () => goToFilter("contacts", "contact-filter-categorie", "Prospect")],
-    ["📄", devisEnAttente, "Devis en attente", () => goToFilter("devis", "devis-filter-statut", "En attente")],
-    ["🧾", facturesImpayees, "Factures impayées", () => goToFilter("factures", "facture-filter-statut", "Envoyée")],
-    ["🤝", rdvAvenir, "RDV à venir", () => showPage("rdv")],
-    ["📁", evenementsAvenir, "Projets à venir", () => showPage("evenements")],
-    ["✅", todosOuvertes, "Tâches en cours", () => showPage("todo")],
+    ["icon-target", "var(--accent)", prospectsActifs, "Prospects actifs", () => goToFilter("contacts", "contact-filter-categorie", "Prospect")],
+    ["icon-file-text", "var(--info)", devisEnAttente, "Devis en attente", () => goToFilter("devis", "devis-filter-statut", "En attente")],
+    ["icon-receipt", "var(--warning)", facturesImpayees, "Factures impayées", () => goToFilter("factures", "facture-filter-statut", "Envoyée")],
+    ["icon-clock", "var(--tertiary)", rdvAvenir, "RDV à venir", () => showPage("rdv")],
+    ["icon-folder", "var(--success)", evenementsAvenir, "Projets à venir", () => showPage("evenements")],
+    ["icon-check-square", "var(--accent-dark)", todosOuvertes, "Tâches en cours", () => showPage("todo")],
   ];
   const wrap = document.getElementById("dash-cards");
   wrap.innerHTML = cards.map((c, i) => `
     <div class="stat-card clickable" data-i="${i}">
-      <div style="font-size:20px;">${c[0]}</div>
-      <div class="num">${c[1]}</div>
-      <div class="label">${c[2]}</div>
+      <div class="stat-icon-wrap" style="background:${c[1]};color:#fff;"><svg><use href="#${c[0]}"></use></svg></div>
+      <div class="num">${c[2]}</div>
+      <div class="label">${c[3]}</div>
     </div>`).join("");
-  wrap.querySelectorAll(".stat-card").forEach(el => el.addEventListener("click", () => cards[Number(el.dataset.i)][3]()));
+  wrap.querySelectorAll(".stat-card").forEach(el => el.addEventListener("click", () => cards[Number(el.dataset.i)][4]()));
+  renderDashboardChart();
 
   // Aperçu des tâches (échéance du jour en rouge)
   const todos = cache.todos.filter(t => t.statut !== "Terminé")
