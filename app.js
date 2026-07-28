@@ -209,17 +209,27 @@ async function handleAuthSubmit() {
 // Pré-remplit la Tarification avec les prestations/options PCW de base,
 // uniquement si l'onglet est encore vide (ne touche jamais à des données
 // déjà saisies). Les prix sont laissés vides — à compléter dans l'appli.
+// Garde la Tarification synchronisée avec le catalogue de base PCW : ajoute
+// uniquement les prestations/options qui n'existent pas encore (comparaison
+// par nom), sans jamais toucher aux lignes déjà présentes ou à leurs prix.
 async function seedDefaultTarification() {
-  if (cache.grille_tarifaire.length) return;
   const prestations = TYPES_EVENEMENT.map(nom => ({ nom_presta: nom, categorie: "Prestation" }));
   const optionsUniques = [...new Set([...OPTIONS_SITE, ...OPTIONS_APP])];
   const options = optionsUniques.map(nom => ({ nom_presta: nom, categorie: "Option / Supplément" }));
-  const toCreate = [...prestations, ...options];
+  const packs = [
+    { nom_presta: "Pack Lancement", categorie: "Prestation", pu_ttc: 790 },
+    { nom_presta: "Pack Croissance", categorie: "Prestation", pu_ttc: 1280 },
+    { nom_presta: "Pack Artisan Connecté", categorie: "Prestation", pu_ttc: 3200 },
+  ];
+  const toCheck = [...prestations, ...options, ...packs];
+  const existingNames = new Set(cache.grille_tarifaire.map(g => (g.nom_presta || "").trim().toLowerCase()));
+  const toCreate = toCheck.filter(item => !existingNames.has(item.nom_presta.trim().toLowerCase()));
+  if (!toCreate.length) return;
   for (const item of toCreate) {
-    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: null, tva: 0, montant_tva: 0, pu_ttc: null, mode_paiement: "Paiement unique" });
+    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: item.pu_ttc != null ? item.pu_ttc : null, tva: 0, montant_tva: 0, pu_ttc: item.pu_ttc != null ? item.pu_ttc : null, mode_paiement: "Paiement unique" });
   }
   await refreshCache();
-  showToast("Tarification pré-remplie — complète les prix quand tu veux");
+  showToast(toCreate.length + " prestation(s)/option(s) ajoutée(s) à la Tarification");
 }
 async function onLoggedIn(user) {
   currentUser = user;
