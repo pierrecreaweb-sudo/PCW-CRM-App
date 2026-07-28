@@ -25,8 +25,10 @@ const PROVENANCES = ["Bouche à oreille", "Site web", "Réseaux sociaux", "Googl
 const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
-const MODES_PAIEMENT = ["Paiement unique", "Paiement mensuel"];
-const MODE_PAIEMENT_COLORS = { "Paiement unique": "var(--muted)", "Paiement mensuel": "var(--warning)" };
+const MODES_PAIEMENT = ["Paiement unique", "Paiement mensuel", "Paiement annuel"];
+const MODE_PAIEMENT_COLORS = { "Paiement unique": "var(--muted)", "Paiement mensuel": "var(--warning)", "Paiement annuel": "var(--info)" };
+function modePaiementShort(m) { return m === "Paiement mensuel" ? "Mensuel" : m === "Paiement annuel" ? "Annuel" : "Unique"; }
+function modePaiementSuffix(m) { return m === "Paiement mensuel" ? "/mois" : m === "Paiement annuel" ? "/an" : ""; }
 const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";
 
 // Options de projet, proposées selon le type de projet sélectionné
@@ -667,7 +669,7 @@ function openDevisEditor(id) {
 function grillePickerOptionsHtml() {
   const prestas = cache.grille_tarifaire.filter(g => (g.categorie || "Prestation") === "Prestation").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
   const options = cache.grille_tarifaire.filter(g => g.categorie === "Option / Supplément").sort((a, b) => (a.nom_presta || "").localeCompare(b.nom_presta || ""));
-  const optHtml = list => list.map(g => `<option value="${escapeAttr(g.nom_presta || "")}">${g.nom_presta || ""}${g.pu_ttc != null ? " — " + g.pu_ttc + " €" + (g.mode_paiement === "Paiement mensuel" ? "/mois" : "") : ""}</option>`).join("");
+  const optHtml = list => list.map(g => `<option value="${escapeAttr(g.nom_presta || "")}">${g.nom_presta || ""}${g.pu_ttc != null ? " — " + g.pu_ttc + " €" + modePaiementSuffix(g.mode_paiement) : ""}</option>`).join("");
   return `<option value="">— Choisir dans le catalogue —</option>` +
     (prestas.length ? `<optgroup label="🔵 Prestations">${optHtml(prestas)}</optgroup>` : "") +
     (options.length ? `<optgroup label="🟣 Options / Suppléments">${optHtml(options)}</optgroup>` : "") +
@@ -686,7 +688,7 @@ function renderEditorLines() {
       <td><input type="number" data-k="qte" min="0" step="1" value="${l.qte != null ? l.qte : 1}" style="width:60px;"></td>
       <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:90px;"></td>
       <td><input type="number" data-k="remise" min="0" max="100" step="1" value="${l.remise != null ? l.remise : 0}" style="width:60px;"></td>
-      <td><select data-k="mode_paiement" style="width:100px;">${MODES_PAIEMENT.map(m => `<option value="${m}" ${(l.mode_paiement || "Paiement unique") === m ? "selected" : ""}>${m === "Paiement mensuel" ? "Mensuel" : "Unique"}</option>`).join("")}</select></td>
+      <td><select data-k="mode_paiement" style="width:100px;">${MODES_PAIEMENT.map(m => `<option value="${m}" ${(l.mode_paiement || "Paiement unique") === m ? "selected" : ""}>${modePaiementShort(m)}</option>`).join("")}</select></td>
       <td class="ro" data-ro="total"></td>
       <td><button class="del" title="Supprimer" onclick="removeEditorLine(${i})">✕</button></td>
     </tr>`).join("");
@@ -709,28 +711,35 @@ function computeLine(l) {
   return { total };
 }
 function recomputeEditor() {
-  let totalUnique = 0, totalMensuel = 0;
+  let totalUnique = 0, totalMensuel = 0, totalAnnuel = 0;
   document.querySelectorAll("#ed-lines tr").forEach(tr => {
     const i = Number(tr.dataset.i);
     const l = edState.lignes[i]; if (!l) return;
     const r = computeLine(l);
     tr.querySelector('[data-ro="total"]').textContent = r.total.toFixed(2) + " €";
-    if ((l.mode_paiement || "Paiement unique") === "Paiement mensuel") totalMensuel += r.total; else totalUnique += r.total;
+    const mode = l.mode_paiement || "Paiement unique";
+    if (mode === "Paiement mensuel") totalMensuel += r.total;
+    else if (mode === "Paiement annuel") totalAnnuel += r.total;
+    else totalUnique += r.total;
   });
   let html = `<span class="grand">Total unique : ${round2(totalUnique).toFixed(2)} €</span>`;
   if (totalMensuel > 0) html += `<br><span class="grand" style="color:var(--warning);">Total mensuel : ${round2(totalMensuel).toFixed(2)} € /mois</span>`;
+  if (totalAnnuel > 0) html += `<br><span class="grand" style="color:var(--info);">Total annuel : ${round2(totalAnnuel).toFixed(2)} € /an</span>`;
   html += `<br><span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
   document.getElementById("ed-totaux").innerHTML = html;
 }
 function removeEditorLine(i) { readEditorToState(); edState.lignes.splice(i, 1); if (!edState.lignes.length) edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }); renderEditorLines(); }
 function addEditorLine() { readEditorToState(); edState.lignes.push({ designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }); renderEditorLines(); }
 function editorTotals() {
-  let totalUnique = 0, totalMensuel = 0;
+  let totalUnique = 0, totalMensuel = 0, totalAnnuel = 0;
   edState.lignes.forEach(l => {
     const t = computeLine(l).total;
-    if ((l.mode_paiement || "Paiement unique") === "Paiement mensuel") totalMensuel += t; else totalUnique += t;
+    const mode = l.mode_paiement || "Paiement unique";
+    if (mode === "Paiement mensuel") totalMensuel += t;
+    else if (mode === "Paiement annuel") totalAnnuel += t;
+    else totalUnique += t;
   });
-  return { ttc: round2(totalUnique + totalMensuel), unique: round2(totalUnique), mensuel: round2(totalMensuel) };
+  return { ttc: round2(totalUnique + totalMensuel + totalAnnuel), unique: round2(totalUnique), mensuel: round2(totalMensuel), annuel: round2(totalAnnuel) };
 }
 async function saveDevisEditor(closeAfter) {
   readEditorToState();
@@ -879,17 +888,19 @@ async function generateDevisPDF(id, mode) {
   doc.text("Rem.", 142, y); doc.text("Paiement", 156, y); doc.text("Total (€)", 178, y);
   doc.setTextColor(0); doc.setFontSize(10); y += 3;
   doc.line(20, y, 195, y); y += 6;
-  let totalUnique = 0, totalMensuel = 0;
+  let totalUnique = 0, totalMensuel = 0, totalAnnuel = 0;
   lignes.forEach(l => {
     const r = computeLine(l);
-    const isMensuel = (l.mode_paiement || "Paiement unique") === "Paiement mensuel";
-    if (isMensuel) totalMensuel += r.total; else totalUnique += r.total;
+    const mode = l.mode_paiement || "Paiement unique";
+    if (mode === "Paiement mensuel") totalMensuel += r.total;
+    else if (mode === "Paiement annuel") totalAnnuel += r.total;
+    else totalUnique += r.total;
     const desig = doc.splitTextToSize(l.designation || "—", 82);
     doc.text(desig, 20, y);
     doc.text(String(l.qte ?? ""), 108, y);
     doc.text(Number(l.pu_ttc || 0).toFixed(2), 124, y);
     doc.text((l.remise ? l.remise + "%" : "—"), 142, y);
-    doc.text(isMensuel ? "Mensuel" : "Unique", 156, y);
+    doc.text(modePaiementShort(mode), 156, y);
     doc.text(r.total.toFixed(2) + " €", 178, y);
     y += Math.max(7, desig.length * 5);
     if (y > 250) { doc.addPage(); y = 20; }
@@ -897,6 +908,7 @@ async function generateDevisPDF(id, mode) {
   y += 2; doc.line(20, y, 195, y); y += 8;
   doc.setFontSize(13); doc.text("TOTAL UNIQUE : " + round2(totalUnique).toFixed(2) + " €", 110, y); y += 7;
   if (totalMensuel > 0) { doc.text("TOTAL MENSUEL : " + round2(totalMensuel).toFixed(2) + " € /mois", 110, y); y += 7; }
+  if (totalAnnuel > 0) { doc.text("TOTAL ANNUEL : " + round2(totalAnnuel).toFixed(2) + " € /an", 110, y); y += 7; }
   doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 110, y); doc.setTextColor(0); y += 10;
 
   if (Array.isArray(d.cgv) && d.cgv.length) {
@@ -1189,8 +1201,8 @@ function renderGrille() {
     return `<tr>
       <td>${badge(cat, TARIF_CAT_COLORS[cat] || "var(--muted)")}</td>
       <td>${g.nom_presta || "—"}</td>
-      <td>${badge(mode === "Paiement mensuel" ? "Mensuel" : "Unique", MODE_PAIEMENT_COLORS[mode])}</td>
-      <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong>${mode === "Paiement mensuel" ? `<span style="color:var(--muted);font-weight:normal;">/mois</span>` : ""}</td>
+      <td>${badge(modePaiementShort(mode), MODE_PAIEMENT_COLORS[mode])}</td>
+      <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong><span style="color:var(--muted);font-weight:normal;">${modePaiementSuffix(mode)}</span></td>
       <td class="row-actions"><button onclick="openGrilleDialog(${g.id})">✎</button><button onclick="confirmDelete('grille_tarifaire', ${g.id}, renderGrille)">🗑</button></td>
     </tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="5">Aucune prestation — ajoute ta première ligne</td></tr>`;
