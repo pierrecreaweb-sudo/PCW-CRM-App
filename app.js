@@ -1230,6 +1230,35 @@ async function getLogoDataUrl() {
   } catch (e) { console.error("Logo introuvable pour le PDF", e); }
   return _logoDataUrl;
 }
+const PDF_BRAND = [47, 125, 246];
+const PDF_COLORS = { success: [63, 167, 114], danger: [217, 83, 79], muted: [136, 144, 160], warning: [217, 154, 43] };
+function lightenRgb(rgb, amt) { return rgb.map(c => Math.round(c + (255 - c) * amt)); }
+function drawPdfBand(doc, logo, title) {
+  doc.setFillColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
+  doc.rect(0, 0, 210, 36, "F");
+  if (logo) { try { doc.addImage(logo, "PNG", 16, 7, 22, 22); } catch (e2) { console.error(e2); } }
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22); doc.setFont(undefined, "bold");
+  doc.text(title, 44, 23);
+  doc.setFont(undefined, "normal"); doc.setFontSize(8.3);
+  let ey = 10;
+  [EMETTEUR.nom, EMETTEUR.adresse, EMETTEUR.siret, EMETTEUR.email, "Tél : " + EMETTEUR.telephone, EMETTEUR.site].forEach(l => { doc.text(l, 194, ey, { align: "right" }); ey += 4.2; });
+  doc.setTextColor(0); doc.setFontSize(11);
+}
+function drawInfoBox(doc, x, y, w, h) {
+  doc.setDrawColor(224, 227, 235); doc.setFillColor(247, 248, 252);
+  doc.roundedRect(x, y, w, h, 2.5, 2.5, "FD");
+  doc.setDrawColor(0);
+}
+function drawStamp(doc, text, rgb) {
+  const light = lightenRgb(rgb, 0.8);
+  doc.setTextColor(light[0], light[1], light[2]);
+  doc.setFontSize(54); doc.setFont(undefined, "bold");
+  doc.text(text, 105, 168, { align: "center", angle: 25 });
+  doc.setTextColor(0); doc.setFontSize(11); doc.setFont(undefined, "normal");
+}
+const DEVIS_STAMPS = { "Accepté": ["ACCEPTÉ", PDF_COLORS.success], "Refusé": ["REFUSÉ", PDF_COLORS.danger], "Expiré": ["EXPIRÉ", PDF_COLORS.muted] };
+const FACTURE_STAMPS = { "Payée": ["PAYÉE", PDF_COLORS.success], "En retard": ["EN RETARD", PDF_COLORS.danger], "Annulée": ["ANNULÉE", PDF_COLORS.muted] };
 function drawEmetteur(doc) {
   doc.setFontSize(10);
   let y = 16;
@@ -1252,54 +1281,59 @@ async function generateDevisPDF(id, mode) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const logo = await getLogoDataUrl();
-  if (logo) { try { doc.addImage(logo, "PNG", 20, 10, 18, 18); } catch (e2) { console.error(e2); } }
-  drawEmetteur(doc);
-  doc.setFontSize(20); doc.text("DEVIS", 20, 38);
-  doc.setFontSize(11);
-  doc.text("N° : " + (d.numero || "—"), 20, 50);
-  doc.text("Date : " + fmtDateFR((d.date_creation || todayStr()).slice(0, 10)), 20, 57);
-  doc.text("Valable jusqu'au : " + fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30)), 20, 64);
+  drawPdfBand(doc, logo, "DEVIS");
 
-  doc.setFontSize(12); doc.text("Client", 20, 78); doc.setFontSize(11);
-  let y = 85;
-  [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse, e ? ("Projet : " + eventLabel(e)) : ""]
-    .filter(Boolean).forEach(l => { doc.text(String(l), 20, y); y += 7; });
+  doc.setFontSize(10); doc.setTextColor(90);
+  doc.text("N° : " + (d.numero || "—") + "     Date : " + fmtDateFR((d.date_creation || todayStr()).slice(0, 10)) + "     Valable jusqu'au : " + fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30)), 16, 45);
+  doc.setTextColor(0);
 
-  y += 4;
-  // en-têtes tableau
-  doc.setFontSize(9); doc.setTextColor(90);
-  doc.text("Désignation", 20, y); doc.text("Qté", 108, y); doc.text("PU (€)", 124, y);
-  doc.text("Rem.", 142, y); doc.text("Paiement", 156, y); doc.text("Total (€)", 178, y);
-  doc.setTextColor(0); doc.setFontSize(10); y += 3;
-  doc.line(20, y, 195, y); y += 6;
-  let totalUnique = 0, totalMensuel = 0, totalAnnuel = 0;
+  const clientLines = [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse, e ? ("Projet : " + eventLabel(e)) : ""].filter(Boolean);
+  const boxY = 51, boxH = clientLines.length * 5.6 + 12;
+  drawInfoBox(doc, 16, boxY, 179, boxH);
+  doc.setFontSize(9.5); doc.setTextColor(120); doc.text("CLIENT", 21, boxY + 8); doc.setTextColor(0);
+  doc.setFontSize(10.5);
+  let cy = boxY + 15;
+  clientLines.forEach(l => { doc.text(String(l), 21, cy); cy += 5.6; });
+
+  let y = boxY + boxH + 10;
+  doc.setFillColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
+  doc.rect(16, y - 5, 179, 8, "F");
+  doc.setFontSize(8.5); doc.setTextColor(255);
+  doc.text("DÉSIGNATION", 20, y); doc.text("QTÉ", 108, y); doc.text("PU (€)", 124, y);
+  doc.text("REM.", 142, y); doc.text("PAIEMENT", 156, y); doc.text("TOTAL (€)", 178, y);
+  doc.setTextColor(0); doc.setFontSize(10); y += 8;
+  let totalUnique = 0, totalMensuel = 0, totalAnnuel = 0, rowIndex = 0;
   lignes.forEach(l => {
     const r = computeLine(l);
-    const mode = l.mode_paiement || "Paiement unique";
-    if (mode === "Paiement mensuel") totalMensuel += r.total;
-    else if (mode === "Paiement annuel") totalAnnuel += r.total;
+    const modeP = l.mode_paiement || "Paiement unique";
+    if (modeP === "Paiement mensuel") totalMensuel += r.total;
+    else if (modeP === "Paiement annuel") totalAnnuel += r.total;
     else totalUnique += r.total;
     const desig = doc.splitTextToSize(l.designation || "—", 82);
+    const rowH = Math.max(7, desig.length * 5);
+    if (rowIndex % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, rowH, "F"); }
     doc.text(desig, 20, y);
     doc.text(String(l.qte ?? ""), 108, y);
     doc.text(Number(l.pu_ttc || 0).toFixed(2), 124, y);
     doc.text((l.remise ? l.remise + "%" : "—"), 142, y);
-    doc.text(modePaiementShort(mode), 156, y);
+    doc.text(modePaiementShort(modeP), 156, y);
     doc.text(r.total.toFixed(2) + " €", 178, y);
-    y += Math.max(7, desig.length * 5);
+    y += rowH; rowIndex++;
     if (y > 250) { doc.addPage(); y = 20; }
   });
-  y += 2; doc.line(20, y, 195, y); y += 8;
-  doc.setFontSize(13); doc.text("TOTAL UNIQUE : " + round2(totalUnique).toFixed(2) + " €", 110, y); y += 7;
-  if (totalMensuel > 0) { doc.text("TOTAL MENSUEL : " + round2(totalMensuel).toFixed(2) + " € /mois", 110, y); y += 7; }
-  if (totalAnnuel > 0) { doc.text("TOTAL ANNUEL : " + round2(totalAnnuel).toFixed(2) + " € /an", 110, y); y += 7; }
-  doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 110, y); doc.setTextColor(0); y += 10;
+  y += 3; doc.setDrawColor(210); doc.line(16, y, 195, y); doc.setDrawColor(0); y += 9;
+  doc.setFontSize(13); doc.text("TOTAL UNIQUE : " + round2(totalUnique).toFixed(2) + " €", 108, y); y += 7;
+  if (totalMensuel > 0) { doc.text("TOTAL MENSUEL : " + round2(totalMensuel).toFixed(2) + " € /mois", 108, y); y += 7; }
+  if (totalAnnuel > 0) { doc.text("TOTAL ANNUEL : " + round2(totalAnnuel).toFixed(2) + " € /an", 108, y); y += 7; }
+  doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 108, y); doc.setTextColor(0); y += 10;
 
   if (Array.isArray(d.cgv) && d.cgv.length) {
     doc.setFontSize(11); doc.text("Conditions générales de vente :", 20, y); y += 6;
     doc.setFontSize(10);
     d.cgv.forEach((c2, i) => { const t = doc.splitTextToSize((i + 1) + ". " + c2, 175); doc.text(t, 20, y); y += t.length * 5 + 1; if (y > 255) { doc.addPage(); y = 20; } });
   }
+  const stamp = DEVIS_STAMPS[d.statut];
+  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((d.numero || "devis").replace(/\s+/g, "_") + ".pdf"); }
@@ -1389,31 +1423,43 @@ async function generateFacturePDF(id, mode) {
   const montant = Number(f.montant_ttc || 0);
   const acompte = Number(f.montant_acompte || 0), net = round2(montant - acompte);
   const logo = await getLogoDataUrl();
-  if (logo) { try { doc.addImage(logo, "PNG", 20, 10, 18, 18); } catch (e2) { console.error(e2); } }
-  drawEmetteur(doc);
-  doc.setFontSize(20); doc.text("FACTURE", 20, 38); doc.setFontSize(11);
-  doc.text("N° : " + (f.numero || "—"), 20, 50);
-  doc.text("Date : " + fmtDateFR(f.date_facture || todayStr()), 20, 57);
-  if (f.date_echeance) doc.text("Échéance : " + fmtDateFR(f.date_echeance), 20, 64);
-  if (dev) doc.text("Réf. devis : " + (dev.numero || ("#" + dev.id)), 20, 71);
-  doc.setFontSize(12); doc.text("Facturé à", 20, 84); doc.setFontSize(11);
-  let y = 91;
-  [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse].filter(Boolean).forEach(l => { doc.text(String(l), 20, y); y += 7; });
-  y += 6; doc.setFontSize(12); doc.text("Détail", 20, y); y += 9; doc.setFontSize(11);
+  drawPdfBand(doc, logo, "FACTURE");
+
+  doc.setFontSize(10); doc.setTextColor(90);
+  let infoLine = "N° : " + (f.numero || "—") + "     Date : " + fmtDateFR(f.date_facture || todayStr());
+  if (f.date_echeance) infoLine += "     Échéance : " + fmtDateFR(f.date_echeance);
+  if (dev) infoLine += "     Réf. devis : " + (dev.numero || ("#" + dev.id));
+  doc.text(infoLine, 16, 45);
+  doc.setTextColor(0);
+
+  const clientLines = [contactLabel(c), c && c.societe, c && c.email, c && c.telephone, c && c.adresse].filter(Boolean);
+  const boxY = 51, boxH = clientLines.length * 5.6 + 12;
+  drawInfoBox(doc, 16, boxY, 179, boxH);
+  doc.setFontSize(9.5); doc.setTextColor(120); doc.text("FACTURÉ À", 21, boxY + 8); doc.setTextColor(0);
+  doc.setFontSize(10.5);
+  let cy = boxY + 15;
+  clientLines.forEach(l => { doc.text(String(l), 21, cy); cy += 5.6; });
+
+  let y = boxY + boxH + 12;
+  doc.setFontSize(12); doc.text("Détail", 16, y); y += 9; doc.setFontSize(11);
   const rows = [["Type de projet", f.type_evenement || "—"], ["Date du projet", fmtDateFR(f.date_evenement) || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
   if (acompte) rows.push(["Acompte déjà versé", "- " + acompte.toFixed(2) + " €"]);
-  rows.forEach(([k, v]) => { doc.text(k, 20, y); doc.text(v, 130, y); y += 7; });
+  rows.forEach(([k, v], i) => {
+    if (i % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, 7, "F"); }
+    doc.text(k, 20, y); doc.text(v, 130, y); y += 7;
+  });
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
   doc.setFontSize(13); doc.text("NET À PAYER : " + net.toFixed(2) + " €", 20, y);
   y += 14;
-  doc.setDrawColor(220); doc.setFillColor(247, 248, 252);
-  doc.roundedRect(20, y, 175, 30, 2, 2, "FD");
-  doc.setFontSize(10); doc.setTextColor(90); doc.text("Coordonnées bancaires pour le règlement par virement", 26, y + 8);
-  doc.setFontSize(11); doc.setTextColor(0);
-  doc.text("IBAN : " + EMETTEUR.iban, 26, y + 16);
-  doc.text("BIC : " + EMETTEUR.bic + (EMETTEUR.banque ? "   ·   " + EMETTEUR.banque : ""), 26, y + 23);
+  drawInfoBox(doc, 16, y, 179, 30);
+  doc.setFontSize(9.5); doc.setTextColor(120); doc.text("COORDONNÉES BANCAIRES POUR LE RÈGLEMENT PAR VIREMENT", 21, y + 8); doc.setTextColor(0);
+  doc.setFontSize(11);
+  doc.text("IBAN : " + EMETTEUR.iban, 21, y + 17);
+  doc.text("BIC : " + EMETTEUR.bic + (EMETTEUR.banque ? "   ·   " + EMETTEUR.banque : ""), 21, y + 24);
   y += 38;
   if (f.notes) { doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); y += 14; }
+  const stamp = FACTURE_STAMPS[f.statut];
+  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
