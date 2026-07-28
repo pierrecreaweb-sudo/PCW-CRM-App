@@ -33,7 +33,8 @@
   *{box-sizing:border-box;}
   body{margin:0;font-family:"Inter",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
   button{font-family:inherit;cursor:pointer;}
-  input,select,textarea{font-family:inherit;}
+  input,select,textarea{font-family:inherit;color:var(--text);}
+  select{background:var(--card);}
   ::selection{background:var(--accent-light);color:var(--accent-dark);}
 
   /* ---------- AUTH SCREEN ---------- */
@@ -97,10 +98,12 @@
   .stat-icon-wrap svg{width:18px;height:18px;}
   .dash-greeting{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:4px 0 2px;}
   .dash-greeting-sub{font-size:12.5px;color:var(--muted);margin:0 0 18px;text-transform:capitalize;}
-  .mini-chart-bars{display:flex;align-items:flex-end;gap:8px;height:64px;margin-top:6px;}
-  .mini-chart-bars .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;}
-  .mini-chart-bars .bar{width:100%;max-width:26px;background:var(--accent);border-radius:4px 4px 0 0;min-height:3px;transition:.2s;}
-  .mini-chart-bars .bar-lbl{font-size:10px;color:var(--muted);text-transform:capitalize;}
+  .mini-chart-bars{margin-top:16px;}
+  .mc-row{display:grid;gap:8px;}
+  .mc-vals{font-size:10.5px;font-weight:700;color:var(--accent);text-align:center;margin-bottom:5px;line-height:1.3;}
+  .mc-bars-row{align-items:end;height:64px;margin-bottom:8px;}
+  .mc-bars-row .bar{width:100%;max-width:30px;margin:0 auto;background:var(--accent);border-radius:4px 4px 0 0;min-height:3px;transition:.2s;}
+  .mc-lbls{font-size:10px;color:var(--muted);text-align:center;text-transform:capitalize;}
   .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:20px;box-shadow:var(--shadow-sm);}
   .panel h3{margin:0 0 14px;font-size:14px;font-weight:700;}
 
@@ -111,7 +114,7 @@
   .btn.secondary{background:var(--card);color:var(--text);border:1px solid var(--border);font-weight:600;box-shadow:none;}
   .btn.secondary:hover{border-color:var(--accent);color:var(--accent-dark);transform:none;box-shadow:var(--shadow-sm);}
   .btn.danger{background:var(--danger);}
-  select.filter,input.filter{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--card);transition:.15s;}
+  select.filter,input.filter{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--card);color:var(--text);transition:.15s;}
   select.filter:focus,input.filter:focus{outline:none;border-color:var(--accent);}
 
   /* quick category tabs (tarification) */
@@ -176,7 +179,7 @@
   .lines-table{width:100%;border-collapse:collapse;margin-top:6px;}
   .lines-table th{background:var(--surface-alt);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 6px;text-align:left;}
   .lines-table td{border-top:1px solid #EDEFF3;padding:8px 6px;}
-  .lines-table input,.lines-table select{width:100%;padding:7px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;}
+  .lines-table input,.lines-table select{width:100%;padding:7px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:#1A1D24;background:#fff;}
   .lines-table .ro{background:var(--surface-alt);color:var(--muted);font-weight:600;}
   .lines-table .del{color:var(--danger);border:none;background:none;font-size:15px;}
   .totaux{margin-top:18px;padding-top:16px;border-top:2px solid #EDEFF3;text-align:right;font-size:14px;line-height:1.9;}
@@ -224,7 +227,10 @@
     .sidebar-overlay.open{display:block;}
 
     table.data{font-size:12px;}
-    .content{padding:16px;}
+    .panel{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;}
+    .panel table.data{min-width:480px;}
+    .content{padding:16px;overflow-x:hidden;}
+    .cards-row{overflow-x:visible;}
   }
 </style>
 </head>
@@ -352,18 +358,6 @@
           <div class="dash-greeting-sub" id="dash-greeting-sub"></div>
           <div class="cards-row" id="dash-cards"></div>
           <div class="panel">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-              <h3 style="margin:0;">Évolution du CA facturé (factures payées)</h3>
-              <div class="cat-tabs" id="dash-chart-tabs" style="margin:0;">
-                <button type="button" class="cat-tab" data-view="semaine">Semaine</button>
-                <button type="button" class="cat-tab active" data-view="mois">Mois</button>
-                <button type="button" class="cat-tab" data-view="annee">Année</button>
-              </div>
-            </div>
-            <div class="mini-chart-bars" id="dash-chart"></div>
-            <div id="dash-chart-total" style="margin-top:12px;font-size:12.5px;color:var(--muted);"></div>
-          </div>
-          <div class="panel">
             <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-check-square"></use></svg>Aperçu des tâches</h3>
             <table class="data"><thead><tr><th>Titre</th><th>Lié à</th><th>Priorité</th><th>Échéance</th><th>Statut</th></tr></thead>
             <tbody id="dash-todos"></tbody></table>
@@ -372,6 +366,18 @@
             <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-pin"></use></svg>À venir (RDV, projets & échéances)</h3>
             <table class="data"><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th>Statut</th></tr></thead>
             <tbody id="dash-dates"></tbody></table>
+          </div>
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+              <h3 style="margin:0;">Évolution du CA facturé (factures payées)</h3>
+              <div class="cat-tabs" id="dash-chart-tabs" style="margin:0;">
+                <button type="button" class="cat-tab" data-view="semaine">Semaine</button>
+                <button type="button" class="cat-tab active" data-view="mois">Mois</button>
+                <button type="button" class="cat-tab" data-view="annee">Année</button>
+              </div>
+            </div>
+            <div class="mini-chart-bars" id="dash-chart"></div>
+            <div id="dash-chart-total" style="margin-top:14px;font-size:12.5px;color:var(--muted);"></div>
           </div>
         </div>
 

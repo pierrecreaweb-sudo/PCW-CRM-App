@@ -442,10 +442,14 @@ function renderDashboardChart() {
   const { labels, values } = computeCABuckets(dashChartView);
   const max = Math.max(1, ...values);
   const wrap = document.getElementById("dash-chart");
-  wrap.innerHTML = labels.map((lbl, i) => {
-    const h = Math.round((values[i] / max) * 56) + 4;
-    return `<div class="bar-col"><div style="font-size:10.5px;font-weight:700;color:var(--accent);">${values[i] ? fmtEuroCompact(values[i]) : ""}</div><div class="bar" style="height:${h}px;"></div><div class="bar-lbl">${lbl}</div></div>`;
-  }).join("");
+  const gridStyle = `grid-template-columns:repeat(${labels.length},1fr);`;
+  const valsRow = values.map(v => `<div>${v ? fmtEuroCompact(v) : ""}</div>`).join("");
+  const barsRow = values.map(v => `<div class="bar" style="height:${Math.round((v / max) * 54) + 4}px;"></div>`).join("");
+  const lblsRow = labels.map(l => `<div>${l}</div>`).join("");
+  wrap.innerHTML =
+    `<div class="mc-row mc-vals" style="${gridStyle}">${valsRow}</div>` +
+    `<div class="mc-row mc-bars-row" style="${gridStyle}">${barsRow}</div>` +
+    `<div class="mc-row mc-lbls" style="${gridStyle}">${lblsRow}</div>`;
   const total = round2(values.reduce((s, v) => s + v, 0));
   document.getElementById("dash-chart-total").textContent = `Total sur la période affichée : ${total.toFixed(2)} € — calculé sur les factures au statut « Payée ».`;
 }
@@ -812,7 +816,7 @@ function openDevisEditor(id) {
     `<strong>Client :</strong> ${contactLabel(c)}${c && c.telephone ? " · " + c.telephone : ""}${c && c.email ? " · " + c.email : ""}<br>` +
     `<strong>Projet :</strong> ${e ? eventLabel(e) : "—"}` +
     `<div style="margin-top:8px;"><label style="font-size:12px;color:var(--muted);">Statut : </label>
-      <select id="ed-statut" style="padding:5px 8px;border:1px solid var(--border);border-radius:5px;">
+      <select id="ed-statut" style="padding:5px 8px;border:1px solid var(--border);border-radius:5px;color:#1A1D24;background:#fff;">
       ${STATUTS_DEVIS.map(s => `<option value="${s}" ${s === d.statut ? "selected" : ""}>${s}</option>`).join("")}</select></div>`;
   document.getElementById("ed-emetteur").innerHTML =
     `<strong>${EMETTEUR.nom}</strong><br>${EMETTEUR.adresse}<br>${EMETTEUR.siret}<br>${EMETTEUR.email}<br>Tél : ${EMETTEUR.telephone}<br>${EMETTEUR.site}`;
