@@ -1224,13 +1224,19 @@ const PDF_BRAND = [47, 125, 246];
 const PDF_COLORS = { success: [63, 167, 114], danger: [217, 83, 79], muted: [136, 144, 160], warning: [217, 154, 43] };
 function lightenRgb(rgb, amt) { return rgb.map(c => Math.round(c + (255 - c) * amt)); }
 function drawRoundedImage(doc, img, x, y, w, h, r) {
-  try {
-    doc.saveGraphicsState();
-    doc.roundedRect(x, y, w, h, r, r, null);
-    doc.clip();
-    doc.addImage(img, "PNG", x, y, w, h);
-    doc.restoreGraphicsState();
-  } catch (e2) { console.error(e2); try { doc.addImage(img, "PNG", x, y, w, h); } catch (e3) { console.error(e3); } }
+  // Simple et fiable : pas de clip ni de graphics state (source du bug d'affichage).
+  try { doc.addImage(img, "PNG", x, y, w, h); } catch (e2) { console.error(e2); }
+}
+function drawStamp(doc, text, rgb) {
+  // Dessiné en tout premier (avant le contenu) : le contenu peint ensuite
+  // par-dessus recouvre naturellement le tampon aux endroits chargés,
+  // qui ne reste visible que dans les zones vides — sans dépendre d'API
+  // de transparence PDF qui posaient problème sur certains rendus.
+  const light = lightenRgb(rgb, 0.84);
+  doc.setTextColor(light[0], light[1], light[2]);
+  doc.setFontSize(54); doc.setFont(undefined, "bold");
+  doc.text(text, 105, 168, { align: "center", angle: 25 });
+  doc.setTextColor(0); doc.setFontSize(11); doc.setFont(undefined, "normal");
 }
 function drawPdfBand(doc, logo, title) {
   doc.setFillColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
@@ -1248,23 +1254,6 @@ function drawInfoBox(doc, x, y, w, h) {
   doc.setDrawColor(224, 227, 235); doc.setFillColor(247, 248, 252);
   doc.roundedRect(x, y, w, h, 2.5, 2.5, "FD");
   doc.setDrawColor(0);
-}
-function drawStamp(doc, text, rgb) {
-  try {
-    doc.saveGraphicsState();
-    if (doc.GState) doc.setGState(new doc.GState({ opacity: 0.14 }));
-    doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-    doc.setFontSize(54); doc.setFont(undefined, "bold");
-    doc.text(text, 105, 168, { align: "center", angle: 25 });
-    doc.restoreGraphicsState();
-  } catch (e2) {
-    console.error(e2);
-    const light = lightenRgb(rgb, 0.85);
-    doc.setTextColor(light[0], light[1], light[2]);
-    doc.setFontSize(54); doc.setFont(undefined, "bold");
-    doc.text(text, 105, 168, { align: "center", angle: 25 });
-  }
-  doc.setTextColor(0); doc.setFontSize(11); doc.setFont(undefined, "normal");
 }
 const DEVIS_STAMPS = { "Accepté": ["ACCEPTÉ", PDF_COLORS.success], "Refusé": ["REFUSÉ", PDF_COLORS.danger], "Expiré": ["EXPIRÉ", PDF_COLORS.muted] };
 const FACTURE_STAMPS = { "Payée": ["PAYÉE", PDF_COLORS.success], "En retard": ["EN RETARD", PDF_COLORS.danger], "Annulée": ["ANNULÉE", PDF_COLORS.muted] };
@@ -1291,6 +1280,8 @@ async function generateDevisPDF(id, mode) {
   const doc = new jsPDF();
   const logo = await getLogoDataUrl();
   drawPdfBand(doc, logo, "DEVIS");
+  const stamp = DEVIS_STAMPS[d.statut];
+  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
 
   doc.setFontSize(10); doc.setTextColor(90);
   doc.text("N° : " + (d.numero || "—") + "     Date : " + fmtDateFR((d.date_creation || todayStr()).slice(0, 10)) + "     Valable jusqu'au : " + fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30)), 16, 45);
@@ -1341,8 +1332,6 @@ async function generateDevisPDF(id, mode) {
     doc.setFontSize(10);
     d.cgv.forEach((c2, i) => { const t = doc.splitTextToSize((i + 1) + ". " + c2, 175); doc.text(t, 20, y); y += t.length * 5 + 1; if (y > 255) { doc.addPage(); y = 20; } });
   }
-  const stamp = DEVIS_STAMPS[d.statut];
-  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((d.numero || "devis").replace(/\s+/g, "_") + ".pdf"); }
@@ -1431,6 +1420,8 @@ async function generateFacturePDF(id, mode) {
   const montant = Number(f.montant_ttc || 0);
   const logo = await getLogoDataUrl();
   drawPdfBand(doc, logo, "FACTURE");
+  const stamp = FACTURE_STAMPS[f.statut];
+  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
 
   doc.setFontSize(10); doc.setTextColor(90);
   let infoLine = "N° : " + (f.numero || "—") + "     Date : " + fmtDateFR(f.date_facture || todayStr());
@@ -1464,8 +1455,6 @@ async function generateFacturePDF(id, mode) {
   doc.text("BIC : " + EMETTEUR.bic + (EMETTEUR.banque ? "   ·   " + EMETTEUR.banque : ""), 21, y + 24);
   y += 38;
   if (f.notes) { doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); y += 14; }
-  const stamp = FACTURE_STAMPS[f.statut];
-  if (stamp) drawStamp(doc, stamp[0], stamp[1]);
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
