@@ -90,7 +90,7 @@ const STATUT_COLORS = {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -185,7 +185,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -194,8 +194,9 @@ async function refreshCache() {
     fetchAll("grille_tarifaire", "nom_presta", true),
     fetchAll("rdv"),
     fetchAll("factures"),
+    fetchAll("temps_passe"),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps };
 }
 
 // ========================================================================
@@ -301,6 +302,7 @@ async function onLoggedIn(user) {
   document.getElementById("user-email-lbl").textContent = user.email;
   await refreshCache();
   await autoExpireDevis();
+  await autoMarkLateFactures();
   await seedDefaultTarification();
   showPage("dashboard");
 }
@@ -333,6 +335,44 @@ function closeMobileMenu() {
   document.getElementById("sidebar").classList.remove("open");
   document.getElementById("sidebar-overlay").classList.remove("open");
 }
+
+// ========================================================================
+//  RECHERCHE GLOBALE
+// ========================================================================
+function runGlobalSearch(qRaw) {
+  const box = document.getElementById("global-search-results");
+  const q = (qRaw || "").trim().toLowerCase();
+  if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
+  const results = [];
+  cache.contacts.forEach(c => {
+    const hay = [c.nom, c.prenom, c.societe, c.email, c.telephone].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Contact", label: contactLabel(c), sub: c.email || c.telephone || "", fn: () => { showPage("contacts"); setTimeout(() => openContactDialog(c.id), 150); } });
+  });
+  cache.evenements.forEach(e => {
+    const hay = [e.titre, e.type_evenement, contactLabel(findContact(e.contact_id))].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Projet", label: eventLabel(e), sub: e.type_evenement || "", fn: () => { showPage("evenements"); setTimeout(() => openEvenementDialog(e.id), 150); } });
+  });
+  cache.devis.forEach(d => {
+    const hay = [d.numero, contactLabel(devisContact(d))].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Devis", label: (d.numero || "Devis") + " — " + contactLabel(devisContact(d)), sub: d.statut || "", fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
+  });
+  cache.factures.forEach(f => {
+    const hay = [f.numero, contactLabel(findContact(f.contact_id))].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Facture", label: (f.numero || "Facture") + " — " + contactLabel(findContact(f.contact_id)), sub: f.statut || "", fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+  });
+  box.classList.add("open");
+  if (!results.length) { box.innerHTML = `<div class="gsr-empty">Aucun résultat pour « ${qRaw} »</div>`; return; }
+  box.innerHTML = results.slice(0, 15).map((r, i) => `
+    <div class="gsr-item" data-i="${i}">
+      <span>${r.label}${r.sub ? `<br><span style="color:var(--muted);font-size:11.5px;">${r.sub}</span>` : ""}</span>
+      <span class="gsr-type">${r.type}</span>
+    </div>`).join("");
+  box.querySelectorAll(".gsr-item").forEach(el => el.addEventListener("click", () => {
+    results[Number(el.dataset.i)].fn();
+    document.getElementById("global-search-input").value = "";
+    box.classList.remove("open");
+  }));
+}
 function renderPage(key) {
   if (key === "dashboard") renderDashboard();
   else if (key === "todo") renderTodo();
@@ -344,8 +384,71 @@ function renderPage(key) {
   else if (key === "rdv") renderRdv();
   else if (key === "calendrier") renderCalendrier();
   else if (key === "tarification") renderGrille();
+  else if (key === "temps") renderTemps();
+  else if (key === "stats") renderStats();
+}
+function advanceDateBy(dateStr, freq) {
+  const d = new Date(dateStr);
+  if (freq === "Annuelle") d.setFullYear(d.getFullYear() + 1); else d.setMonth(d.getMonth() + 1);
+  return isoOf(d);
+}
+function createRecurringInvoiceFor(evenementId) {
+  const e = findEvenement(evenementId); if (!e) return;
+  openModal({
+    title: "Nouvelle facture récurrente — " + eventLabel(e),
+    table: "factures", id: null,
+    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, date_evenement: e.date_evenement, montant_ttc: e.montant_recurrent, date_facture: todayStr() }),
+    onRender: factureOnRender,
+    onSaved: async () => {
+      const next = advanceDateBy(e.prochaine_facturation || todayStr(), e.frequence_facturation);
+      await updateRow("evenements", e.id, { prochaine_facturation: next });
+      await refreshAll();
+      showToast("Facture créée · prochaine échéance : " + fmtDateFR(next));
+    },
+  });
 }
 async function refreshAll() { await refreshCache(); renderPage(currentPage); }
+
+// ========================================================================
+//  STATISTIQUES
+// ========================================================================
+function renderStats() {
+  const devisEmis = cache.devis.filter(d => d.statut !== "En attente");
+  const devisAcceptes = cache.devis.filter(d => d.statut === "Accepté");
+  const tauxConversion = devisEmis.length ? round2((devisAcceptes.length / devisEmis.length) * 100) : 0;
+  const panierMoyen = devisAcceptes.length ? round2(devisAcceptes.reduce((s, d) => s + Number(d.montant_ttc || 0), 0) / devisAcceptes.length) : 0;
+  const facturesPayees = cache.factures.filter(f => f.statut === "Payée");
+  const caTotal = round2(facturesPayees.reduce((s, f) => s + Number(f.montant_ttc || 0), 0));
+  const enCours = cache.evenements.filter(e => !["Livré", "Annulé"].includes(e.statut)).length;
+
+  document.getElementById("stats-cards").innerHTML = `
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-target"></use></svg></div><div class="num">${tauxConversion}%</div><div class="label">Taux de conversion devis → accepté</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-file-text"></use></svg></div><div class="num">${panierMoyen} €</div><div class="label">Panier moyen (devis acceptés)</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--warning);color:#fff;"><svg><use href="#icon-receipt"></use></svg></div><div class="num">${caTotal} €</div><div class="label">CA total encaissé (payé)</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-folder"></use></svg></div><div class="num">${enCours}</div><div class="label">Projets en cours</div></div>`;
+
+  // Répartition par type de projet
+  const byType = {};
+  facturesPayees.forEach(f => {
+    const type = f.type_evenement || "Non renseigné";
+    if (!byType[type]) byType[type] = { ca: 0, n: 0 };
+    byType[type].ca += Number(f.montant_ttc || 0);
+    byType[type].n += 1;
+  });
+  const typeRows = Object.entries(byType).sort((a, b) => b[1].ca - a[1].ca);
+  document.getElementById("stats-types-tbody").innerHTML = typeRows.length ? typeRows.map(([type, v]) => `<tr><td>${type}</td><td><strong>${round2(v.ca)} €</strong></td><td>${v.n}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="3">Aucune facture payée pour l'instant</td></tr>`;
+
+  // Top 5 clients
+  const byClient = {};
+  facturesPayees.forEach(f => {
+    const key = f.contact_id || "?";
+    if (!byClient[key]) byClient[key] = { ca: 0, n: 0, contact_id: f.contact_id };
+    byClient[key].ca += Number(f.montant_ttc || 0);
+    byClient[key].n += 1;
+  });
+  const clientRows = Object.values(byClient).sort((a, b) => b.ca - a.ca).slice(0, 5);
+  document.getElementById("stats-clients-tbody").innerHTML = clientRows.length ? clientRows.map(v => `<tr><td>${contactLabel(findContact(v.contact_id))}</td><td><strong>${round2(v.ca)} €</strong></td><td>${v.n}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="3">Aucune facture payée pour l'instant</td></tr>`;
+}
 function goToFilter(page, selectId, value) {
   showPage(page);
   const sel = document.getElementById(selectId);
@@ -481,6 +584,20 @@ function renderDashboard() {
   wrap.querySelectorAll(".stat-card").forEach(el => el.addEventListener("click", () => cards[Number(el.dataset.i)][4]()));
   renderDashboardChart();
 
+  const recurring = cache.evenements.filter(e => e.facturation_recurrente && e.prochaine_facturation && e.prochaine_facturation <= addDaysISO(today, 7));
+  const recPanel = document.getElementById("dash-recurring-panel");
+  if (recurring.length) {
+    recPanel.style.display = "block";
+    document.getElementById("dash-recurring-tbody").innerHTML = recurring.sort((a, b) => (a.prochaine_facturation || "").localeCompare(b.prochaine_facturation || "")).map(e => `
+      <tr>
+        <td>${eventLabel(e)}</td>
+        <td>${contactLabel(findContact(e.contact_id))}</td>
+        <td class="${e.prochaine_facturation <= today ? "due-today" : ""}">${fmtDateFR(e.prochaine_facturation)}</td>
+        <td>${e.montant_recurrent ? e.montant_recurrent + " €" : "—"}</td>
+        <td><button class="btn secondary" style="padding:5px 10px;font-size:11.5px;" onclick="createRecurringInvoiceFor(${e.id})">＋ Créer la facture</button></td>
+      </tr>`).join("");
+  } else { recPanel.style.display = "none"; }
+
   // Aperçu des tâches (échéance du jour en rouge)
   const todos = cache.todos.filter(t => t.statut !== "Terminé")
     .sort((a, b) => (a.date_echeance || "9999").localeCompare(b.date_echeance || "9999")).slice(0, 8);
@@ -606,11 +723,70 @@ function openTodoDialog(id) {
 // ========================================================================
 //  SUIVI CLIENTS  (une ligne par évènement/dossier)
 // ========================================================================
+let prospectView = "tableau";
+function bindProspectViewTabs() {
+  const wrap = document.getElementById("prospect-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      prospectView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("prospect-table-view").style.display = prospectView === "tableau" ? "table" : "none";
+      document.getElementById("prospect-kanban-view").style.display = prospectView === "kanban" ? "flex" : "none";
+      renderSuivi();
+    });
+  });
+}
+function renderKanban(rows) {
+  const wrap = document.getElementById("prospect-kanban-view");
+  wrap.innerHTML = STATUTS_EVENEMENT.map(statut => {
+    const items = rows.filter(e => e.statut === statut);
+    const cards = items.map(e => {
+      const dev = cache.devis.find(d => d.evenement_id === e.id);
+      const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
+      return `<div class="kanban-card" draggable="true" data-id="${e.id}" onclick="openEventRecap(${e.id})">
+        <div class="kc-title">${e.titre || eventLabel(e)}</div>
+        <div class="kc-sub">${contactLabel(findContact(e.contact_id))}</div>
+        <div class="kc-badges">${dev ? badgeSubtle(dev.statut, STATUT_COLORS[dev.statut]) : ""}${fac ? badgeSubtle(fac.statut, STATUT_COLORS[fac.statut]) : ""}</div>
+      </div>`;
+    }).join("");
+    return `<div class="kanban-col" data-statut="${statut}">
+      <h4>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards}</div>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll(".kanban-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", card.dataset.id); });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("click", (e) => { if (card.classList.contains("dragging")) e.preventDefault(); });
+  });
+  wrap.querySelectorAll(".kanban-col").forEach(col => {
+    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault(); col.classList.remove("drag-over");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      const newStatut = col.dataset.statut;
+      const ev = findEvenement(id);
+      if (ev && ev.statut !== newStatut) {
+        await updateRow("evenements", id, { statut: newStatut });
+        await refreshCache();
+        showToast("Statut mis à jour : " + newStatut);
+        renderSuivi();
+      }
+    });
+  });
+}
 function renderSuivi() {
   ensureFilterOptions("prospect-filter-statut", STATUTS_EVENEMENT);
+  bindProspectViewTabs();
   const filter = document.getElementById("prospect-filter-statut").value;
   let rows = [...cache.evenements].sort((a, b) => (a.date_evenement || "9999").localeCompare(b.date_evenement || "9999"));
   if (filter) rows = rows.filter(e => e.statut === filter);
+
+  if (prospectView === "kanban") { renderKanban(rows); return; }
 
   const tbody = document.getElementById("prospect-tbody");
   tbody.innerHTML = rows.length ? rows.map(e => {
@@ -640,6 +816,7 @@ function openEventRecap(id) {
   const dev = cache.devis.find(d => d.evenement_id === e.id);
   const fac = cache.factures.find(f => (e.facture_id && f.id === e.facture_id) || (dev && f.devis_id === dev.id));
   const taches = cache.todos.filter(t => t.evenement_id === e.id);
+  const tempsList = cache.temps_passe.filter(t => t.evenement_id === e.id).sort((a, b) => (b.date_travail || "").localeCompare(a.date_travail || ""));
   const dateTxt = e.date_flexible ? fmtMoisFR(e.mois_seul) + " (flexible)" : fmtDateFR(e.date_evenement);
   const line = (l, v) => `<tr><td style="color:var(--muted);width:42%;">${l}</td><td>${v || "—"}</td></tr>`;
   const html = `
@@ -663,7 +840,10 @@ function openEventRecap(id) {
     <h3 style="font-size:14px;margin:0 0 8px;">📝 Notes</h3>
     <div style="font-size:16px;line-height:1.5;white-space:pre-wrap;background:#FAFAF8;border:1px solid var(--border);border-radius:8px;padding:12px;min-height:50px;">${e.notes || "—"}</div>
     <h3 style="font-size:14px;margin:16px 0 8px;">✅ Tâches liées</h3>
-    <table class="data"><tbody>${taches.length ? taches.map(t => `<tr><td>${t.titre}</td><td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Aucune</td></tr>`}</tbody></table>`;
+    <table class="data" style="margin-bottom:16px;"><tbody>${taches.length ? taches.map(t => `<tr><td>${t.titre}</td><td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Aucune</td></tr>`}</tbody></table>
+    <h3 style="font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">⏱ Temps passé (${round2(tempsList.reduce((s, t) => s + Number(t.duree_heures || 0), 0))} h)
+      <button class="btn secondary" style="padding:6px 10px;font-size:11.5px;" onclick="closeModal();openTempsDialog(null, ${e.id});">＋ Ajouter</button></h3>
+    <table class="data"><tbody>${tempsList.length ? tempsList.map(t => `<tr><td>${fmtDateFR(t.date_travail)}</td><td>${t.duree_heures} h</td><td>${t.description || "—"}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="3">Aucune saisie</td></tr>`}</tbody></table>`;
   showInfoModal(e.titre ? `Fiche récap — ${e.titre}` : "Fiche récap projet", html);
 }
 
@@ -732,6 +912,23 @@ async function autoExpireDevis() {
   await refreshCache();
   return expiring;
 }
+async function autoMarkLateFactures() {
+  const today = todayStr();
+  const late = cache.factures.filter(f => f.statut === "Envoyée" && f.date_echeance && f.date_echeance < today);
+  if (!late.length) return [];
+  for (const f of late) await updateRow("factures", f.id, { statut: "En retard" });
+  await refreshCache();
+  return late;
+}
+function factureRelanceUrl(f) {
+  const c = findContact(f.contact_id);
+  const email = c && c.email ? c.email : "";
+  const nom = contactLabel(c);
+  const montant = f.montant_ttc != null ? f.montant_ttc + " €" : "";
+  const subject = `Relance — Facture ${f.numero || ""} — PCW`;
+  const body = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
 function nextDevisNumero() {
   let max = 0;
   cache.devis.forEach(d => { const m = (d.numero || "").match(/\d+/g); if (m) { const n = parseInt(m[m.length - 1], 10); if (n > max) max = n; } });
@@ -740,6 +937,28 @@ function nextDevisNumero() {
 function lastDevisNumero() {
   if (!cache.devis.length) return null;
   return [...cache.devis].sort((a, b) => (b.date_creation || "").localeCompare(a.date_creation || ""))[0].numero;
+}
+
+function exportCSV(filename, headers, rows) {
+  const esc = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers.map(esc).join(";"), ...rows.map(r => r.map(esc).join(";"))];
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportDevisCSV() {
+  const rows = cache.devis.map(d => [d.numero, fmtDateFR((d.date_creation || "").slice(0, 10)), contactLabel(devisContact(d)), d.montant_ttc, d.statut]);
+  exportCSV("PCW_devis_" + todayStr() + ".csv", ["Numéro", "Date", "Client", "Montant (€)", "Statut"], rows);
+}
+function exportFacturesCSV() {
+  const rows = cache.factures.map(f => [f.numero, fmtDateFR(f.date_facture), contactLabel(findContact(f.contact_id)), f.montant_ttc, f.montant_acompte, f.statut]);
+  exportCSV("PCW_factures_" + todayStr() + ".csv", ["Numéro", "Date", "Client", "Montant (€)", "Acompte (€)", "Statut"], rows);
 }
 
 function renderDevis() {
@@ -1104,6 +1323,7 @@ function renderFactures() {
   tbody.innerHTML = rows.length ? rows.map(f => {
     const dev = f.devis_id ? findDevis(f.devis_id) : null;
     const pdfBtn = f.pdf_path ? `<button title="Voir le PDF joint" onclick="downloadAttachment(findFacture(${f.id}).pdf_path)">📎</button>` : "";
+    const relanceBtn = ["Envoyée", "En retard", "Partiellement payée"].includes(f.statut) ? `<a title="Relancer par email" href="${escapeAttr(factureRelanceUrl(f))}"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></a>` : "";
     return `<tr>
       <td>${f.numero || "—"}</td>
       <td>${contactLabel(findContact(f.contact_id))}</td>
@@ -1115,6 +1335,7 @@ function renderFactures() {
         <button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button>
         <button title="Télécharger la facture (PDF)" onclick="generateFacturePDF(${f.id})">⬇</button>
         ${pdfBtn}
+        ${relanceBtn}
         <button onclick="openFactureDialog(${f.id})">✎</button>
         <button onclick="confirmDelete('factures', ${f.id}, renderFactures)">🗑</button>
       </td></tr>`;
@@ -1196,16 +1417,40 @@ async function downloadAttachment(pdf_path) {
 
 function openContactHistory(contactId) {
   const c = findContact(contactId);
-  const devs = cache.devis.filter(d => { const cc = devisContact(d); return cc && cc.id === contactId; });
-  const facs = cache.factures.filter(f => f.contact_id === contactId);
-  const devHtml = devs.length ? devs.map(d => `<tr><td>${d.numero || "—"}</td><td>${fmtDateFR(devisDateEvt(d))}</td><td>${d.montant_ttc ? d.montant_ttc + " €" : "—"}</td><td>${badge(d.statut, STATUT_COLORS[d.statut])}</td><td class="row-actions"><button title="Visualiser" onclick="generateDevisPDF(${d.id}, 'preview')">👁</button><button title="Télécharger" onclick="generateDevisPDF(${d.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucun devis</td></tr>`;
-  const facHtml = facs.length ? facs.map(f => `<tr><td>${f.numero || "—"}</td><td>${fmtDateFR(f.date_facture)}</td><td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td><td>${badge(f.statut, STATUT_COLORS[f.statut])}</td><td class="row-actions"><button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button><button title="Télécharger" onclick="generateFacturePDF(${f.id})">⬇</button></td></tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune facture</td></tr>`;
-  showInfoModal("Historique client", `
-    <p style="margin:0 0 14px;color:var(--muted);font-size:13px;">Contact : <strong>${contactLabel(c)}</strong></p>
-    <h3 style="font-size:14px;margin:0 0 8px;">📄 Devis</h3>
-    <table class="data" style="margin-bottom:18px;"><thead><tr><th>N°</th><th>Date évt</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>${devHtml}</tbody></table>
-    <h3 style="font-size:14px;margin:0 0 8px;">🧾 Factures</h3>
-    <table class="data"><thead><tr><th>N°</th><th>Date</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>${facHtml}</tbody></table>`);
+  const items = [];
+  cache.evenements.filter(e => e.contact_id === contactId).forEach(e => {
+    items.push({ date: e.date_evenement || e.date_creation || "", icon: "icon-folder", label: "Projet créé : " + eventLabel(e), sub: e.statut, color: "var(--success)", fn: `openEvenementDialog(${e.id})` });
+  });
+  cache.devis.filter(d => { const cc = devisContact(d); return cc && cc.id === contactId; }).forEach(d => {
+    items.push({ date: (d.date_creation || "").slice(0, 10), icon: "icon-file-text", label: "Devis " + (d.numero || "") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : ""), sub: d.statut, color: "var(--info)", fn: `openDevisEditor(${d.id})` });
+  });
+  cache.factures.filter(f => f.contact_id === contactId).forEach(f => {
+    items.push({ date: f.date_facture || "", icon: "icon-receipt", label: "Facture " + (f.numero || "") + (f.montant_ttc ? " — " + f.montant_ttc + " €" : ""), sub: f.statut, color: "var(--warning)", fn: `openFactureDialog(${f.id})` });
+  });
+  cache.rdv.filter(r => r.contact_id === contactId).forEach(r => {
+    items.push({ date: r.date_rdv || "", icon: "icon-clock", label: "RDV" + (r.objet ? " — " + r.objet : ""), sub: r.statut, color: "var(--tertiary)", fn: `openRdvDialog(${r.id})` });
+  });
+  cache.todos.filter(t => t.contact_id === contactId).forEach(t => {
+    items.push({ date: t.date_echeance || t.date_creation || "", icon: "icon-check-square", label: "Tâche : " + t.titre, sub: t.statut, color: "var(--accent-dark)", fn: `openTodoDialog(${t.id})` });
+  });
+  items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const totalPaye = cache.factures.filter(f => f.contact_id === contactId && f.statut === "Payée").reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const summary = `<div class="page-note" style="margin:0 0 16px;">
+    <strong>${contactLabel(c)}</strong>${c && c.email ? " · " + c.email : ""}${c && c.telephone ? " · " + c.telephone : ""}
+    ${totalPaye ? `<br>💶 Total facturé payé : <strong>${round2(totalPaye).toFixed(2)} €</strong>` : ""}
+  </div>`;
+
+  const timeline = items.length ? `<div style="border-left:2px solid var(--border);margin-left:6px;">` + items.map(it => `
+    <div onclick="${it.fn}" style="position:relative;padding:0 0 18px 22px;cursor:pointer;">
+      <div style="position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:${it.color};border:2px solid var(--card);"></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:2px;">${fmtDateFR(it.date) || "Date inconnue"}</div>
+      <div style="font-size:13.5px;font-weight:600;">${it.label}</div>
+      ${it.sub ? badge(it.sub, STATUT_COLORS[it.sub] || "var(--muted)") : ""}
+    </div>`).join("") + `</div>`
+    : `<div class="gsr-empty">Aucun historique pour ce contact pour l'instant.</div>`;
+
+  showInfoModal("Historique client", summary + timeline);
 }
 
 // ========================================================================
@@ -1287,6 +1532,10 @@ function openEvenementDialog(id, defaultDate) {
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
       { key: "facture_id", label: "Facture liée", type: "select-raw", optionsHtml: `<option value="">—</option>` + factureOptionsHtml(row.facture_id), value: row.facture_id, numeric: true },
       { key: "budget", label: "Budget (€)", type: "number", value: row.budget },
+      { key: "facturation_recurrente", label: "Facturation récurrente (mensuelle/annuelle)", type: "checkbox", value: row.facturation_recurrente },
+      { key: "frequence_facturation", label: "Fréquence", type: "select", options: ["Mensuelle", "Annuelle"], value: row.frequence_facturation || "Mensuelle" },
+      { key: "montant_recurrent", label: "Montant à refacturer à chaque échéance (€)", type: "number", value: row.montant_recurrent },
+      { key: "prochaine_facturation", label: "Prochaine date de facturation", type: "date", value: row.prochaine_facturation },
       { key: "derniere_action", label: "Dernière action", type: "text", value: row.derniere_action },
       { key: "prochain_rdv", label: "Prochain RDV", type: "date", value: row.prochain_rdv },
       { key: "notes", label: "Notes", type: "textarea", value: row.notes },
@@ -1391,6 +1640,55 @@ function openGrilleDialog(id, defaultCategorie) {
 // ========================================================================
 const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+// ========================================================================
+//  TEMPS PASSÉ
+// ========================================================================
+function renderTemps() {
+  ensureFilterOptions("temps-filter-projet", cache.evenements.map(e => ({ value: e.id, label: eventLabel(e) })));
+  const fProjet = document.getElementById("temps-filter-projet").value;
+  let rows = [...cache.temps_passe].sort((a, b) => (b.date_travail || "").localeCompare(a.date_travail || ""));
+  if (fProjet) rows = rows.filter(t => String(t.evenement_id) === String(fProjet));
+
+  const totalH = round2(rows.reduce((s, t) => s + Number(t.duree_heures || 0), 0));
+  document.getElementById("temps-summary").innerHTML = `
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-stopwatch"></use></svg></div><div class="num">${totalH} h</div><div class="label">Total ${fProjet ? "sur ce projet" : "toutes saisies"}</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-list"></use></svg></div><div class="num">${rows.length}</div><div class="label">Saisie(s)</div></div>`;
+
+  const tbody = document.getElementById("temps-tbody");
+  tbody.innerHTML = rows.length ? rows.map(t => {
+    const e = t.evenement_id ? findEvenement(t.evenement_id) : null;
+    const c = t.contact_id ? findContact(t.contact_id) : (e ? findContact(e.contact_id) : null);
+    return `<tr>
+      <td>${fmtDateFR(t.date_travail) || "—"}</td>
+      <td>${e ? eventLabel(e) : "—"}</td>
+      <td>${c ? contactLabel(c) : "—"}</td>
+      <td><strong>${t.duree_heures != null ? t.duree_heures + " h" : "—"}</strong></td>
+      <td>${t.description || "—"}</td>
+      <td class="row-actions"><button onclick="openTempsDialog(${t.id})">✎</button><button onclick="confirmDelete('temps_passe', ${t.id}, renderTemps)">🗑</button></td>
+    </tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="6">Aucune saisie de temps</td></tr>`;
+}
+function openTempsDialog(id, defaultEvenementId) {
+  const row = id ? cache.temps_passe.find(t => t.id === id) : {};
+  openModal({
+    title: id ? "Modifier la saisie" : "Saisir du temps", table: "temps_passe", id,
+    fields: [
+      { key: "date_travail", label: "Date", type: "date", value: row.date_travail || todayStr() },
+      { key: "evenement_id", label: "Projet", type: "select-raw", optionsHtml: `<option value="">—</option>` + evenementOptionsHtml(row.evenement_id || defaultEvenementId), value: row.evenement_id || defaultEvenementId, numeric: true },
+      { key: "duree_heures", label: "Durée (heures, ex. 1.5)", type: "number", required: true, value: row.duree_heures },
+      { key: "description", label: "Description", type: "textarea", value: row.description },
+    ],
+    onRender: (form) => {
+      form.elements["evenement_id"].addEventListener("change", () => {
+        const e = findEvenement(Number(form.elements["evenement_id"].value));
+        row.contact_id = e ? e.contact_id : null;
+      });
+    },
+    beforeSave: (v) => { const e = v.evenement_id ? findEvenement(Number(v.evenement_id)) : null; v.contact_id = e ? e.contact_id : null; },
+    onSaved: refreshAll,
+  });
+}
+
 function renderCalendrier() {
   const { year, month } = calState;
   document.getElementById("cal-month-lbl").textContent = `${MOIS_FR[month - 1]} ${year}`;
@@ -1443,6 +1741,7 @@ const PAGE_FILTERS = {
   rdv: ["rdv-filter-statut"],
   grille_tarifaire: ["grille-search"],
   prospects: ["prospect-filter-statut"],
+  temps_passe: ["temps-filter-projet"],
 };
 function clearTableFilters(table) {
   (PAGE_FILTERS[table] || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
@@ -1616,6 +1915,11 @@ function toggleTheme() {
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme(localStorage.getItem("pcw_theme") || "light");
   document.getElementById("theme-toggle-btn").addEventListener("click", toggleTheme);
+  document.getElementById("global-search-input").addEventListener("input", (e) => runGlobalSearch(e.target.value));
+  document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".global-search-wrap");
+    if (wrap && !wrap.contains(e.target)) document.getElementById("global-search-results").classList.remove("open");
+  });
   document.getElementById("auth-submit").addEventListener("click", handleAuthSubmit);
   document.getElementById("auth-switch-link").addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
   document.getElementById("auth-forgot-link").addEventListener("click", () => setAuthMode("reset-request"));
@@ -1637,9 +1941,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("sc-todo").addEventListener("click", () => openTodoDialog(null));
 
   document.getElementById("btn-new-todo").addEventListener("click", () => openTodoDialog(null));
+  document.getElementById("btn-new-temps").addEventListener("click", () => openTempsDialog(null));
   document.getElementById("btn-new-prospect").addEventListener("click", () => openEvenementDialog(null));
   document.getElementById("btn-new-devis").addEventListener("click", () => openDevisDialog(null));
+  document.getElementById("btn-export-devis").addEventListener("click", exportDevisCSV);
   document.getElementById("btn-new-facture").addEventListener("click", () => openFactureDialog(null));
+  document.getElementById("btn-export-factures").addEventListener("click", exportFacturesCSV);
   document.getElementById("btn-new-contact").addEventListener("click", () => openContactDialog(null));
   document.getElementById("btn-new-evenement").addEventListener("click", () => openEvenementDialog(null));
   document.getElementById("btn-new-rdv").addEventListener("click", () => openRdvDialog(null));
