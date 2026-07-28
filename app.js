@@ -8,7 +8,22 @@
 // (voir README.md, section 1 et 2).
 const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Stockage personnalisé : si "Rester connecté" est coché, la session est
+// gardée dans localStorage (persiste après fermeture du navigateur/appli) ;
+// sinon elle va dans sessionStorage (effacée à la fermeture).
+const REMEMBER_KEY = "pcw_remember_me";
+const authStorage = {
+  getItem: (key) => localStorage.getItem(key) || sessionStorage.getItem(key),
+  setItem: (key, value) => {
+    const remember = localStorage.getItem(REMEMBER_KEY) !== "0";
+    if (remember) { localStorage.setItem(key, value); sessionStorage.removeItem(key); }
+    else { sessionStorage.setItem(key, value); localStorage.removeItem(key); }
+  },
+  removeItem: (key) => { localStorage.removeItem(key); sessionStorage.removeItem(key); },
+};
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { storage: authStorage, persistSession: true, autoRefreshToken: true },
+});
 
 // ---- 2) CONSTANTES ----
 const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
@@ -186,15 +201,58 @@ function setAuthMode(mode) {
   authMode = mode;
   const t = document.getElementById("auth-title"), s = document.getElementById("auth-sub");
   const sub = document.getElementById("auth-submit"), st = document.getElementById("auth-switch-text"), sl = document.getElementById("auth-switch-link");
+  const emailEl = document.getElementById("auth-email"), pwEl = document.getElementById("auth-password"), pw2El = document.getElementById("auth-password2");
+  const optionsRow = document.getElementById("auth-options-row"), switchRow = document.getElementById("auth-switch-text").closest(".auth-switch");
+  const backRow = document.getElementById("auth-back-login-row");
   document.getElementById("auth-error").style.display = "none";
-  if (mode === "login") { t.textContent = "Connexion"; s.textContent = "PCW — Gestion Client — accède à ton compte"; sub.textContent = "Se connecter"; st.textContent = "Pas encore de compte ?"; sl.textContent = "Créer un compte"; }
-  else { t.textContent = "Créer un compte"; s.textContent = "PCW — Gestion Client — synchronise tes données"; sub.textContent = "Créer mon compte"; st.textContent = "Déjà un compte ?"; sl.textContent = "Se connecter"; }
+  document.getElementById("auth-success").style.display = "none";
+  pw2El.style.display = "none"; pw2El.value = "";
+  pwEl.style.display = ""; emailEl.style.display = "";
+  optionsRow.style.display = "flex"; switchRow.style.display = "block"; backRow.style.display = "none";
+
+  if (mode === "login") {
+    t.textContent = "Connexion"; s.textContent = "PCW — Gestion Client — accède à ton compte";
+    sub.textContent = "Se connecter"; st.textContent = "Pas encore de compte ?"; sl.textContent = "Créer un compte";
+  } else if (mode === "signup") {
+    t.textContent = "Créer un compte"; s.textContent = "PCW — Gestion Client — synchronise tes données";
+    sub.textContent = "Créer mon compte"; st.textContent = "Déjà un compte ?"; sl.textContent = "Se connecter";
+  } else if (mode === "reset-request") {
+    t.textContent = "Mot de passe oublié"; s.textContent = "Reçois un lien pour choisir un nouveau mot de passe";
+    sub.textContent = "Envoyer le lien"; pwEl.style.display = "none"; optionsRow.style.display = "none";
+    switchRow.style.display = "none"; backRow.style.display = "block";
+  } else if (mode === "reset-confirm") {
+    t.textContent = "Nouveau mot de passe"; s.textContent = "Choisis un nouveau mot de passe pour ton compte";
+    sub.textContent = "Réinitialiser le mot de passe"; emailEl.style.display = "none"; pw2El.style.display = "";
+    optionsRow.style.display = "none"; switchRow.style.display = "none"; backRow.style.display = "none";
+    pwEl.placeholder = "Nouveau mot de passe"; pw2El.placeholder = "Confirmer le nouveau mot de passe";
+  }
 }
-function authError(msg) { const el = document.getElementById("auth-error"); el.textContent = msg; el.style.display = "block"; }
+function authError(msg) { const el = document.getElementById("auth-error"); el.textContent = msg; el.style.display = "block"; document.getElementById("auth-success").style.display = "none"; }
+function authSuccess(msg) { const el = document.getElementById("auth-success"); el.textContent = msg; el.style.display = "block"; document.getElementById("auth-error").style.display = "none"; }
 async function handleAuthSubmit() {
   const email = document.getElementById("auth-email").value.trim();
   const password = document.getElementById("auth-password").value;
+
+  if (authMode === "reset-request") {
+    if (!email) { authError("Renseigne ton adresse email."); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split("#")[0].split("?")[0] });
+    if (error) { authError(error.message); return; }
+    authSuccess("Email envoyé ! Vérifie ta boîte mail (et tes spams) et clique sur le lien reçu.");
+    return;
+  }
+  if (authMode === "reset-confirm") {
+    const password2 = document.getElementById("auth-password2").value;
+    if (!password || password.length < 6) { authError("Le mot de passe doit faire au moins 6 caractères."); return; }
+    if (password !== password2) { authError("Les deux mots de passe ne correspondent pas."); return; }
+    const { data, error } = await sb.auth.updateUser({ password });
+    if (error) { authError(error.message); return; }
+    showToast("Mot de passe mis à jour");
+    if (data.user) onLoggedIn(data.user);
+    return;
+  }
+
   if (!email || !password) { authError("Renseigne un email et un mot de passe."); return; }
+  localStorage.setItem(REMEMBER_KEY, document.getElementById("auth-remember").checked ? "1" : "0");
   if (authMode === "login") {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) { authError(error.message); return; }
@@ -248,6 +306,8 @@ async function handleLogout() {
   document.getElementById("auth-screen").style.display = "flex";
   document.getElementById("auth-email").value = "";
   document.getElementById("auth-password").value = "";
+  document.getElementById("auth-password2").value = "";
+  setAuthMode("login");
 }
 
 // ========================================================================
@@ -1450,7 +1510,11 @@ function confirmDelete(table, id, afterFn) {
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("auth-submit").addEventListener("click", handleAuthSubmit);
   document.getElementById("auth-switch-link").addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
+  document.getElementById("auth-forgot-link").addEventListener("click", () => setAuthMode("reset-request"));
+  document.getElementById("auth-back-login-link").addEventListener("click", () => setAuthMode("login"));
   document.getElementById("auth-password").addEventListener("keydown", e => { if (e.key === "Enter") handleAuthSubmit(); });
+  document.getElementById("auth-password2").addEventListener("keydown", e => { if (e.key === "Enter") handleAuthSubmit(); });
+  document.getElementById("auth-email").addEventListener("keydown", e => { if (e.key === "Enter" && authMode === "reset-request") handleAuthSubmit(); });
   document.getElementById("logout-btn").addEventListener("click", handleLogout);
   document.getElementById("menu-toggle-btn").addEventListener("click", openMobileMenu);
   document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
@@ -1525,6 +1589,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.ctrlKey && e.key === "t") { e.preventDefault(); openTodoDialog(null); }
   });
 
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") {
+      document.getElementById("app-screen").style.display = "none";
+      document.getElementById("auth-screen").style.display = "flex";
+      setAuthMode("reset-confirm");
+    }
+  });
   sb.auth.getSession().then(({ data }) => { if (data.session) onLoggedIn(data.session.user); });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 });

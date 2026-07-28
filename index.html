@@ -38,6 +38,12 @@
   .auth-switch a{color:var(--accent);cursor:pointer;text-decoration:none;font-weight:600;}
   .auth-switch a:hover{text-decoration:underline;}
   .auth-error{background:#FDECEB;color:var(--danger);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
+  .auth-success{background:#E9F7EF;color:var(--success);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
+  .auth-options{display:flex;align-items:center;justify-content:space-between;margin:-4px 0 14px;flex-wrap:wrap;gap:6px;}
+  .auth-options label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;}
+  .auth-options input[type="checkbox"]{width:auto;margin:0;}
+  .auth-options a{font-size:12px;color:var(--accent);cursor:pointer;text-decoration:none;font-weight:600;}
+  .auth-options a:hover{text-decoration:underline;}
   .auth-logo{font-size:34px;text-align:center;margin-bottom:6px;}
 
   /* ---------- APP LAYOUT ---------- */
@@ -205,12 +211,21 @@
     <h1 id="auth-title">Connexion</h1>
     <p class="sub" id="auth-sub">PCW — Gestion Client — accède à ton compte</p>
     <div class="auth-error" id="auth-error"></div>
+    <div class="auth-success" id="auth-success"></div>
     <input type="email" id="auth-email" placeholder="Adresse email" autocomplete="username">
     <input type="password" id="auth-password" placeholder="Mot de passe" autocomplete="current-password">
+    <input type="password" id="auth-password2" placeholder="Confirmer le mot de passe" autocomplete="new-password" style="display:none;">
+    <div class="auth-options" id="auth-options-row">
+      <label><input type="checkbox" id="auth-remember" checked> Rester connecté</label>
+      <a id="auth-forgot-link">Mot de passe oublié ?</a>
+    </div>
     <button class="primary" id="auth-submit">Se connecter</button>
     <div class="auth-switch">
       <span id="auth-switch-text">Pas encore de compte ?</span>
       <a id="auth-switch-link">Créer un compte</a>
+    </div>
+    <div class="auth-switch" id="auth-back-login-row" style="display:none;">
+      <a id="auth-back-login-link">← Retour à la connexion</a>
     </div>
   </div>
 </div>
