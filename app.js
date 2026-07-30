@@ -328,6 +328,11 @@ function showPage(key) {
   renderPage(key);
   closeMobileMenu();
 }
+function toggleDesktopSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const collapsed = sidebar.classList.toggle("collapsed");
+  localStorage.setItem("pcw_sidebar_collapsed", collapsed ? "1" : "0");
+}
 function openMobileMenu() {
   document.getElementById("sidebar").classList.add("open");
   document.getElementById("sidebar-overlay").classList.add("open");
@@ -2202,6 +2207,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Priorité absolue : la navigation doit toujours fonctionner, même si
   // une autre fonctionnalité plus bas plante à l'initialisation.
   document.getElementById("menu-toggle-btn").addEventListener("click", openMobileMenu);
+  document.getElementById("sidebar-collapse-btn").addEventListener("click", toggleDesktopSidebar);
+  if (localStorage.getItem("pcw_sidebar_collapsed") === "1") document.getElementById("sidebar").classList.add("collapsed");
   document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
   document.querySelectorAll(".nav-item").forEach(el => el.addEventListener("click", () => showPage(el.dataset.page)));
 
