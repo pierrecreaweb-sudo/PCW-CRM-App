@@ -369,6 +369,89 @@ function initSwipeGestures() {
 // ========================================================================
 //  RECHERCHE GLOBALE
 // ========================================================================
+// ========================================================================
+//  NOTIFICATIONS (rappels et échéances)
+// ========================================================================
+function computeNotifications() {
+  const today = todayStr();
+  const items = [];
+
+  cache.factures.filter(f => f.statut === "En retard").forEach(f => {
+    items.push({ urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
+      label: "Facture en retard : " + (f.numero || ""),
+      sub: contactLabel(findContact(f.contact_id)) + (f.date_echeance ? " · échue le " + fmtDateFR(f.date_echeance) : ""),
+      fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+  });
+  cache.factures.filter(f => f.statut === "Envoyée" && f.date_echeance && f.date_echeance >= today && f.date_echeance <= addDaysISO(today, 3)).forEach(f => {
+    items.push({ urgent: f.date_echeance === today, color: "var(--warning)", icon: "icon-receipt", date: f.date_echeance,
+      label: "Facture bientôt échue : " + (f.numero || ""),
+      sub: contactLabel(findContact(f.contact_id)) + " · échéance le " + fmtDateFR(f.date_echeance),
+      fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+  });
+  cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
+    const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
+    if (val && val >= today && val <= addDaysISO(today, 5)) {
+      items.push({ urgent: val <= addDaysISO(today, 1), color: "var(--info)", icon: "icon-file-text", date: val,
+        label: "Devis bientôt expiré : " + (d.numero || ""),
+        sub: contactLabel(devisContact(d)) + " · valable jusqu'au " + fmtDateFR(val),
+        fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
+    }
+  });
+  cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance).forEach(t => {
+    if (t.date_echeance < today) {
+      items.push({ urgent: true, color: "var(--danger)", icon: "icon-check-square", date: t.date_echeance,
+        label: "Tâche en retard : " + t.titre, sub: "Échéance dépassée le " + fmtDateFR(t.date_echeance),
+        fn: () => { showPage("todo"); setTimeout(() => openTodoDialog(t.id), 150); } });
+    } else if (t.date_echeance === today) {
+      items.push({ urgent: true, color: "var(--warning)", icon: "icon-check-square", date: t.date_echeance,
+        label: "Tâche à faire aujourd'hui : " + t.titre, sub: todoLieALabel(t),
+        fn: () => { showPage("todo"); setTimeout(() => openTodoDialog(t.id), 150); } });
+    }
+  });
+  cache.rdv.filter(r => r.statut !== "Annulé" && r.date_rdv && r.date_rdv >= today && r.date_rdv <= addDaysISO(today, 1)).forEach(r => {
+    const isToday = r.date_rdv === today;
+    items.push({ urgent: isToday, color: "var(--tertiary)", icon: "icon-clock", date: r.date_rdv,
+      label: (isToday ? "RDV aujourd'hui" : "RDV demain") + (r.objet ? " : " + r.objet : ""),
+      sub: contactLabel(findContact(r.contact_id)) + (r.heure ? " · " + r.heure : ""),
+      fn: () => { showPage("rdv"); setTimeout(() => openRdvDialog(r.id), 150); } });
+  });
+  cache.evenements.filter(e => e.facturation_recurrente && e.prochaine_facturation && e.prochaine_facturation <= addDaysISO(today, 7)).forEach(e => {
+    items.push({ urgent: e.prochaine_facturation <= today, color: "var(--success)", icon: "icon-repeat", date: e.prochaine_facturation,
+      label: "Facturation récurrente à renouveler : " + eventLabel(e),
+      sub: "Échéance le " + fmtDateFR(e.prochaine_facturation),
+      fn: () => { showPage("dashboard"); } });
+  });
+
+  items.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
+  return items;
+}
+function updateNotifBadge() {
+  const badge = document.getElementById("notif-badge");
+  if (!badge) return;
+  const items = computeNotifications();
+  const urgentCount = items.filter(i => i.urgent).length;
+  const count = urgentCount || items.length;
+  if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 99 ? "99+" : count; }
+  else { badge.style.display = "none"; }
+}
+function toggleNotifPanel() {
+  const panel = document.getElementById("notif-panel");
+  const isOpen = panel.classList.contains("open");
+  if (isOpen) { panel.classList.remove("open"); return; }
+  const items = computeNotifications();
+  panel.innerHTML = `<div class="notif-panel-header">Notifications${items.length ? " (" + items.length + ")" : ""}</div>` +
+    (items.length ? items.map((it, i) => `
+      <div class="notif-item" data-i="${i}">
+        <div class="ni-icon" style="background:${it.color};"><svg><use href="#${it.icon}"></use></svg></div>
+        <div><div class="ni-label">${it.label}</div><div class="ni-sub">${it.sub || ""}</div></div>
+      </div>`).join("") : `<div class="notif-empty">Rien à signaler pour l'instant 👍</div>`);
+  panel.querySelectorAll(".notif-item").forEach(el => el.addEventListener("click", () => {
+    items[Number(el.dataset.i)].fn();
+    panel.classList.remove("open");
+  }));
+  panel.classList.add("open");
+}
+
 function runGlobalSearch(qRaw) {
   const box = document.getElementById("global-search-results");
   const q = (qRaw || "").trim().toLowerCase();
@@ -404,6 +487,7 @@ function runGlobalSearch(qRaw) {
   }));
 }
 function renderPage(key) {
+  updateNotifBadge();
   if (key === "dashboard") renderDashboard();
   else if (key === "todo") renderTodo();
   else if (key === "prospects") renderSuivi();
@@ -2082,9 +2166,12 @@ document.addEventListener("DOMContentLoaded", () => {
   wrapTablesForScroll();
   initSwipeGestures();
   document.getElementById("global-search-input").addEventListener("input", (e) => runGlobalSearch(e.target.value));
+  document.getElementById("notif-bell-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPanel(); });
   document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".global-search-wrap");
     if (wrap && !wrap.contains(e.target)) document.getElementById("global-search-results").classList.remove("open");
+    const notifWrap = document.getElementById("notif-wrap");
+    if (notifWrap && !notifWrap.contains(e.target)) document.getElementById("notif-panel").classList.remove("open");
   });
   document.getElementById("auth-submit").addEventListener("click", handleAuthSubmit);
   document.getElementById("auth-switch-link").addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
