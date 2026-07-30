@@ -377,13 +377,13 @@ function computeNotifications() {
   const items = [];
 
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
-    items.push({ urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
+    items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
       label: "Facture en retard : " + (f.numero || ""),
       sub: contactLabel(findContact(f.contact_id)) + (f.date_echeance ? " · échue le " + fmtDateFR(f.date_echeance) : ""),
       fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
   });
   cache.factures.filter(f => f.statut === "Envoyée" && f.date_echeance && f.date_echeance >= today && f.date_echeance <= addDaysISO(today, 3)).forEach(f => {
-    items.push({ urgent: f.date_echeance === today, color: "var(--warning)", icon: "icon-receipt", date: f.date_echeance,
+    items.push({ id: "facture-bientot-" + f.id + "-" + f.date_echeance, urgent: f.date_echeance === today, color: "var(--warning)", icon: "icon-receipt", date: f.date_echeance,
       label: "Facture bientôt échue : " + (f.numero || ""),
       sub: contactLabel(findContact(f.contact_id)) + " · échéance le " + fmtDateFR(f.date_echeance),
       fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
@@ -391,7 +391,7 @@ function computeNotifications() {
   cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
     const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
     if (val && val >= today && val <= addDaysISO(today, 5)) {
-      items.push({ urgent: val <= addDaysISO(today, 1), color: "var(--info)", icon: "icon-file-text", date: val,
+      items.push({ id: "devis-expire-" + d.id + "-" + val, urgent: val <= addDaysISO(today, 1), color: "var(--info)", icon: "icon-file-text", date: val,
         label: "Devis bientôt expiré : " + (d.numero || ""),
         sub: contactLabel(devisContact(d)) + " · valable jusqu'au " + fmtDateFR(val),
         fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
@@ -399,31 +399,33 @@ function computeNotifications() {
   });
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance).forEach(t => {
     if (t.date_echeance < today) {
-      items.push({ urgent: true, color: "var(--danger)", icon: "icon-check-square", date: t.date_echeance,
+      items.push({ id: "todo-retard-" + t.id + "-" + t.date_echeance, urgent: true, color: "var(--danger)", icon: "icon-check-square", date: t.date_echeance,
         label: "Tâche en retard : " + t.titre, sub: "Échéance dépassée le " + fmtDateFR(t.date_echeance),
         fn: () => { showPage("todo"); setTimeout(() => openTodoDialog(t.id), 150); } });
     } else if (t.date_echeance === today) {
-      items.push({ urgent: true, color: "var(--warning)", icon: "icon-check-square", date: t.date_echeance,
+      items.push({ id: "todo-jour-" + t.id + "-" + t.date_echeance, urgent: true, color: "var(--warning)", icon: "icon-check-square", date: t.date_echeance,
         label: "Tâche à faire aujourd'hui : " + t.titre, sub: todoLieALabel(t),
         fn: () => { showPage("todo"); setTimeout(() => openTodoDialog(t.id), 150); } });
     }
   });
   cache.rdv.filter(r => r.statut !== "Annulé" && r.date_rdv && r.date_rdv >= today && r.date_rdv <= addDaysISO(today, 1)).forEach(r => {
     const isToday = r.date_rdv === today;
-    items.push({ urgent: isToday, color: "var(--tertiary)", icon: "icon-clock", date: r.date_rdv,
+    items.push({ id: "rdv-" + r.id + "-" + r.date_rdv, urgent: isToday, color: "var(--tertiary)", icon: "icon-clock", date: r.date_rdv,
       label: (isToday ? "RDV aujourd'hui" : "RDV demain") + (r.objet ? " : " + r.objet : ""),
       sub: contactLabel(findContact(r.contact_id)) + (r.heure ? " · " + r.heure : ""),
       fn: () => { showPage("rdv"); setTimeout(() => openRdvDialog(r.id), 150); } });
   });
   cache.evenements.filter(e => e.facturation_recurrente && e.prochaine_facturation && e.prochaine_facturation <= addDaysISO(today, 7)).forEach(e => {
-    items.push({ urgent: e.prochaine_facturation <= today, color: "var(--success)", icon: "icon-repeat", date: e.prochaine_facturation,
+    items.push({ id: "recurrent-" + e.id + "-" + e.prochaine_facturation, urgent: e.prochaine_facturation <= today, color: "var(--success)", icon: "icon-repeat", date: e.prochaine_facturation,
       label: "Facturation récurrente à renouveler : " + eventLabel(e),
       sub: "Échéance le " + fmtDateFR(e.prochaine_facturation),
       fn: () => { showPage("dashboard"); } });
   });
 
-  items.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
-  return items;
+  const dismissed = getDismissedNotifs();
+  const filtered = items.filter(it => !dismissed.includes(it.id));
+  filtered.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
+  return filtered;
 }
 function updateNotifBadge() {
   const badge = document.getElementById("notif-badge");
@@ -434,21 +436,54 @@ function updateNotifBadge() {
   if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 99 ? "99+" : count; }
   else { badge.style.display = "none"; }
 }
+const DISMISSED_NOTIFS_KEY = "pcw_dismissed_notifs";
+function getDismissedNotifs() {
+  try { return JSON.parse(localStorage.getItem(DISMISSED_NOTIFS_KEY)) || []; } catch (e) { return []; }
+}
+function dismissNotif(id) {
+  const list = getDismissedNotifs();
+  if (!list.includes(id)) { list.push(id); localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list)); }
+}
+function clearAllNotifs() {
+  const ids = computeNotifications().map(it => it.id);
+  const list = getDismissedNotifs();
+  ids.forEach(id => { if (!list.includes(id)) list.push(id); });
+  localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list));
+  updateNotifBadge();
+  renderNotifPanelContent();
+}
+function renderNotifPanelContent() {
+  const panel = document.getElementById("notif-panel");
+  const items = computeNotifications();
+  panel.innerHTML = `<div class="notif-panel-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Notifications${items.length ? " (" + items.length + ")" : ""}</span>
+      ${items.length ? `<a href="#" id="notif-clear-all" style="font-weight:600;color:var(--accent);text-transform:none;letter-spacing:0;font-size:11.5px;">Tout effacer</a>` : ""}
+    </div>` +
+    (items.length ? items.map((it, i) => `
+      <div class="notif-item" data-i="${i}">
+        <div class="ni-icon" style="background:${it.color};"><svg><use href="#${it.icon}"></use></svg></div>
+        <div style="flex:1;min-width:0;"><div class="ni-label">${it.label}</div><div class="ni-sub">${it.sub || ""}</div></div>
+        <button class="notif-dismiss" data-dismiss-i="${i}" title="Supprimer cette notification">✕</button>
+      </div>`).join("") : `<div class="notif-empty">Rien à signaler pour l'instant 👍</div>`);
+  panel.querySelectorAll(".notif-item").forEach(el => el.addEventListener("click", (e) => {
+    if (e.target.closest(".notif-dismiss")) return;
+    items[Number(el.dataset.i)].fn();
+    panel.classList.remove("open");
+  }));
+  panel.querySelectorAll(".notif-dismiss").forEach(btn => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dismissNotif(items[Number(btn.dataset.dismissI)].id);
+    updateNotifBadge();
+    renderNotifPanelContent();
+  }));
+  const clearAll = document.getElementById("notif-clear-all");
+  if (clearAll) clearAll.addEventListener("click", (e) => { e.preventDefault(); clearAllNotifs(); });
+}
 function toggleNotifPanel() {
   const panel = document.getElementById("notif-panel");
   const isOpen = panel.classList.contains("open");
   if (isOpen) { panel.classList.remove("open"); return; }
-  const items = computeNotifications();
-  panel.innerHTML = `<div class="notif-panel-header">Notifications${items.length ? " (" + items.length + ")" : ""}</div>` +
-    (items.length ? items.map((it, i) => `
-      <div class="notif-item" data-i="${i}">
-        <div class="ni-icon" style="background:${it.color};"><svg><use href="#${it.icon}"></use></svg></div>
-        <div><div class="ni-label">${it.label}</div><div class="ni-sub">${it.sub || ""}</div></div>
-      </div>`).join("") : `<div class="notif-empty">Rien à signaler pour l'instant 👍</div>`);
-  panel.querySelectorAll(".notif-item").forEach(el => el.addEventListener("click", () => {
-    items[Number(el.dataset.i)].fn();
-    panel.classList.remove("open");
-  }));
+  renderNotifPanelContent();
   panel.classList.add("open");
 }
 
