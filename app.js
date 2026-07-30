@@ -2199,10 +2199,18 @@ function toggleTheme() {
   applyTheme(current === "dark" ? "light" : "dark");
 }
 document.addEventListener("DOMContentLoaded", () => {
-  applyTheme(localStorage.getItem("pcw_theme") || "light");
+  // Priorité absolue : la navigation doit toujours fonctionner, même si
+  // une autre fonctionnalité plus bas plante à l'initialisation.
+  document.getElementById("menu-toggle-btn").addEventListener("click", openMobileMenu);
+  document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
+  document.querySelectorAll(".nav-item").forEach(el => el.addEventListener("click", () => showPage(el.dataset.page)));
+
+  try {
+
+  try { applyTheme(localStorage.getItem("pcw_theme") || "light"); } catch (e) { console.error("applyTheme", e); }
   document.getElementById("theme-toggle-btn").addEventListener("click", toggleTheme);
-  wrapTablesForScroll();
-  initSwipeGestures();
+  try { wrapTablesForScroll(); } catch (e) { console.error("wrapTablesForScroll", e); }
+  try { initSwipeGestures(); } catch (e) { console.error("initSwipeGestures", e); }
   document.getElementById("global-search-input").addEventListener("input", (e) => runGlobalSearch(e.target.value));
   document.getElementById("notif-bell-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPanel(); });
   document.addEventListener("click", (e) => {
@@ -2219,10 +2227,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("auth-password2").addEventListener("keydown", e => { if (e.key === "Enter") handleAuthSubmit(); });
   document.getElementById("auth-email").addEventListener("keydown", e => { if (e.key === "Enter" && authMode === "reset-request") handleAuthSubmit(); });
   document.getElementById("logout-btn").addEventListener("click", handleLogout);
-  document.getElementById("menu-toggle-btn").addEventListener("click", openMobileMenu);
-  document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
-
-  document.querySelectorAll(".nav-item").forEach(el => el.addEventListener("click", () => showPage(el.dataset.page)));
 
   document.getElementById("sc-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("sc-facture").addEventListener("click", () => openFactureDialog(null));
@@ -2307,4 +2311,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   sb.auth.getSession().then(({ data }) => { if (data.session) onLoggedIn(data.session.user); });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  } catch (e) { console.error("Erreur d'initialisation (non bloquante pour la navigation)", e); }
 });
