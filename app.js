@@ -64,7 +64,7 @@ const CGV_OPTIONS = [
 const EMETTEUR = {
   nom: "P.C.W - Pierre Créa Web",
   adresse: "150 Route d'Agen, 82170 Grisolles",
-  siret: "SIRET à compléter", // ⚠️ obligatoire sur les FACTURES avant tout envoi à un client
+  siret: "SIRET 108 153 982 00013",
   email: "pierre.craweb@gmail.com",
   telephone: "06 45 33 43 28",
   site: "pierrecreaweb.fr",
