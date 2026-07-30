@@ -68,9 +68,9 @@ const EMETTEUR = {
   email: "pierre.craweb@gmail.com",
   telephone: "06 45 33 43 28",
   site: "pierrecreaweb.fr",
-  iban: "IBAN à compléter",
-  bic: "BIC à compléter",
-  banque: "", // optionnel — nom de la banque, ex. "Revolut"
+  iban: "FR76 2823 3000 0163 7808 4990 503",
+  bic: "REVOFRP2",
+  banque: "Revolut",
 };
 
 const STATUT_COLORS = {
