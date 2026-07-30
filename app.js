@@ -1178,7 +1178,8 @@ function openDevisEditor(id) {
   const e = devisEvent(d);
   const c = devisContact(d);
   document.getElementById("ed-numero").innerHTML =
-    `N° <strong>${d.numero || "—"}</strong> · Date ${fmtDateFR((d.date_creation || todayStr()).slice(0, 10))} · Valable jusqu'au ${fmtDateFR(d.date_validite || addDaysISO(todayStr(), 30))}`;
+    `N° <strong>${d.numero || "—"}</strong> · Date ${fmtDateFR((d.date_creation || todayStr()).slice(0, 10))} · Valable jusqu'au
+      <input type="date" id="ed-validite" value="${d.date_validite || addDaysISO(todayStr(), 30)}" style="padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:13px;color:#1A1D24;background:#fff;">`;
   document.getElementById("ed-client").innerHTML =
     `<strong>Client :</strong> ${contactLabel(c)}${c && c.telephone ? " · " + c.telephone : ""}${c && c.email ? " · " + c.email : ""}<br>` +
     `<strong>Projet :</strong> ${e ? eventLabel(e) : "—"}` +
@@ -1275,9 +1276,11 @@ async function saveDevisEditor(closeAfter) {
   const d = findDevis(edState.id); if (!d) return;
   const tot = editorTotals();
   const newStatut = document.getElementById("ed-statut") ? document.getElementById("ed-statut").value : d.statut;
+  const validiteEl = document.getElementById("ed-validite");
+  const newValidite = validiteEl && validiteEl.value ? validiteEl.value : d.date_validite;
   const wasEnvoye = d.statut === "Envoyé";
   await updateRow("devis", edState.id, {
-    lignes: edState.lignes, montant_ht: tot.ttc, tva: 0, montant_ttc: tot.ttc, statut: newStatut,
+    lignes: edState.lignes, montant_ht: tot.ttc, tva: 0, montant_ttc: tot.ttc, statut: newStatut, date_validite: newValidite,
   });
   await refreshCache();
   const updated = findDevis(edState.id);
