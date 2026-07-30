@@ -1368,7 +1368,7 @@ async function getLogoDataUrl() {
   } catch (e) { console.error("Logo introuvable pour le PDF", e); }
   return _logoDataUrl;
 }
-const PDF_BRAND = [47, 125, 246];
+const PDF_BRAND = [44, 150, 216]; // #2C96D8 — aligné sur la nouvelle palette de l'app
 const PDF_COLORS = { success: [63, 167, 114], danger: [217, 83, 79], muted: [136, 144, 160], warning: [217, 154, 43] };
 function lightenRgb(rgb, amt) { return rgb.map(c => Math.round(c + (255 - c) * amt)); }
 function drawRoundedImage(doc, img, x, y, w, h, r) {
