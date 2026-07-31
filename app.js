@@ -40,6 +40,10 @@ const PROVENANCES = ["Bouche à oreille", "Site web", "Réseaux sociaux", "Googl
 const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
+const TYPES_DEPENSE = ["Dépense", "Recette"];
+const CATEGORIES_DEPENSE = ["Abonnement logiciel", "Hébergement / Nom de domaine", "Matériel informatique", "Marketing / Publicité", "Frais bancaires", "Sous-traitance", "Fournitures de bureau", "Formation", "Déplacement", "Assurance", "Impôts / Cotisations", "Autre recette", "Autre dépense"];
+const RECURRENCE_DEPENSE = ["Aucune", "Mensuelle", "Annuelle"];
+const DEPENSE_TYPE_COLORS = { "Dépense": "var(--danger)", "Recette": "var(--success)" };
 const MODES_PAIEMENT = ["Paiement unique", "Paiement mensuel", "Paiement annuel"];
 const MODE_PAIEMENT_COLORS = { "Paiement unique": "var(--muted)", "Paiement mensuel": "var(--warning)", "Paiement annuel": "var(--info)" };
 function modePaiementShort(m) { return m === "Paiement mensuel" ? "Mensuel" : m === "Paiement annuel" ? "Annuel" : "Unique"; }
@@ -91,7 +95,7 @@ const STATUT_COLORS = {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -186,7 +190,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -196,8 +200,9 @@ async function refreshCache() {
     fetchAll("rdv"),
     fetchAll("factures"),
     fetchAll("temps_passe"),
+    fetchAll("depenses"),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses };
 }
 
 // ========================================================================
@@ -426,6 +431,12 @@ function computeNotifications() {
       sub: "Échéance le " + fmtDateFR(e.prochaine_facturation),
       fn: () => { showPage("dashboard"); } });
   });
+  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance <= addDaysISO(today, 7)).forEach(d => {
+    items.push({ id: "abonnement-" + d.id + "-" + d.prochaine_echeance, urgent: d.prochaine_echeance <= today, color: "var(--tertiary)", icon: "icon-wallet", date: d.prochaine_echeance,
+      label: "Abonnement à renouveler : " + (d.libelle || ""),
+      sub: (d.montant ? d.montant + " € · " : "") + "Échéance le " + fmtDateFR(d.prochaine_echeance),
+      fn: () => { showPage("depenses"); setTimeout(() => openDepenseDialog(d.id), 150); } });
+  });
 
   const dismissed = getDismissedNotifs();
   const filtered = items.filter(it => !dismissed.includes(it.id));
@@ -539,6 +550,7 @@ function renderPage(key) {
   else if (key === "calendrier") renderCalendrier();
   else if (key === "tarification") renderGrille();
   else if (key === "temps") renderTemps();
+  else if (key === "depenses") renderDepenses();
   else if (key === "stats") renderStats();
 }
 function advanceDateBy(dateStr, freq) {
@@ -566,6 +578,89 @@ async function refreshAll() { await refreshCache(); renderPage(currentPage); }
 // ========================================================================
 //  STATISTIQUES
 // ========================================================================
+// ========================================================================
+//  DÉPENSES & RECETTES
+// ========================================================================
+function advanceRecurrenceDate(dateStr, recurrence) {
+  const d = new Date(dateStr);
+  if (recurrence === "Annuelle") d.setFullYear(d.getFullYear() + 1); else d.setMonth(d.getMonth() + 1);
+  return isoOf(d);
+}
+function renderDepenses() {
+  bindSearch("depense-search", renderDepenses);
+  ensureFilterOptions("depense-filter-type", TYPES_DEPENSE);
+  ensureFilterOptions("depense-filter-categorie", CATEGORIES_DEPENSE);
+  const search = (document.getElementById("depense-search").value || "").toLowerCase();
+  const fType = document.getElementById("depense-filter-type").value;
+  const fCat = document.getElementById("depense-filter-categorie").value;
+  let rows = [...cache.depenses].sort((a, b) => (b.date_operation || "").localeCompare(a.date_operation || ""));
+  if (fType) rows = rows.filter(d => d.type === fType);
+  if (fCat) rows = rows.filter(d => d.categorie === fCat);
+  if (search) rows = rows.filter(d => ((d.libelle || "") + " " + (d.fournisseur || "")).toLowerCase().includes(search));
+
+  const today = todayStr();
+  const monthKey = today.slice(0, 7);
+  const depensesMois = cache.depenses.filter(d => d.type === "Dépense" && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
+  const recettesMois = cache.depenses.filter(d => d.type === "Recette" && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
+  const abonnementsMensuels = cache.depenses.filter(d => d.type === "Dépense" && d.recurrence === "Mensuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
+  const solde = round2(recettesMois - depensesMois);
+
+  document.getElementById("depense-summary").innerHTML = `
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--danger);color:#fff;"><svg><use href="#icon-arrow-up-right"></use></svg></div><div class="num">${round2(depensesMois)} €</div><div class="label">Dépenses ce mois-ci</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-arrow-down-left"></use></svg></div><div class="num">${round2(recettesMois)} €</div><div class="label">Recettes ce mois-ci (hors factures)</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:${solde >= 0 ? "var(--success)" : "var(--danger)"};color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${solde >= 0 ? "+" : ""}${solde} €</div><div class="label">Solde net du mois</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div><div class="num">${round2(abonnementsMensuels)} €</div><div class="label">Total abonnements mensuels</div></div>`;
+
+  const tbody = document.getElementById("depense-tbody");
+  tbody.innerHTML = rows.length ? rows.map(d => `
+    <tr>
+      <td>${fmtDateFR(d.date_operation) || "—"}</td>
+      <td><strong>${d.libelle || "—"}</strong>${d.fournisseur ? `<br><span style="color:var(--muted);font-size:11.5px;">${d.fournisseur}</span>` : ""}</td>
+      <td>${d.categorie || "—"}</td>
+      <td>${badge(d.type, DEPENSE_TYPE_COLORS[d.type])}</td>
+      <td><strong style="color:${d.type === "Dépense" ? "var(--danger)" : "var(--success)"};">${d.type === "Dépense" ? "-" : "+"}${d.montant != null ? d.montant : 0} €</strong></td>
+      <td>${d.recurrence && d.recurrence !== "Aucune" ? badgeSubtle(d.recurrence, "var(--tertiary)") : "—"}</td>
+      <td>${d.recurrence && d.recurrence !== "Aucune" ? (fmtDateFR(d.prochaine_echeance) || "—") : "—"}</td>
+      <td class="row-actions"><button onclick="openDepenseDialog(${d.id})">✎</button><button onclick="confirmDelete('depenses', ${d.id}, renderDepenses)">🗑</button></td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="8">Aucune opération — ajoute ta première dépense ou recette</td></tr>`;
+}
+function openDepenseDialog(id) {
+  const row = id ? cache.depenses.find(d => d.id === id) : {};
+  openModal({
+    title: id ? "Modifier l'opération" : "Nouvelle opération", table: "depenses", id,
+    fields: [
+      { key: "type", label: "Type", type: "radioset", options: TYPES_DEPENSE, colors: DEPENSE_TYPE_COLORS, value: row.type || "Dépense" },
+      { key: "libelle", label: "Libellé", type: "text", required: true, value: row.libelle, placeholder: "Ex. Abonnement Canva Pro" },
+      { key: "categorie", label: "Catégorie", type: "select-other", options: CATEGORIES_DEPENSE, value: row.categorie, allowEmpty: true },
+      { key: "fournisseur", label: "Fournisseur / Organisme", type: "text", value: row.fournisseur },
+      { key: "montant", label: "Montant (€)", type: "number", required: true, value: row.montant },
+      { key: "date_operation", label: "Date de l'opération", type: "date", value: row.date_operation || todayStr() },
+      { key: "recurrence", label: "Récurrence (abonnement)", type: "select", options: RECURRENCE_DEPENSE, value: row.recurrence || "Aucune" },
+      { key: "prochaine_echeance", label: "Prochaine échéance (si récurrent)", type: "date", value: row.prochaine_echeance },
+      { key: "notes", label: "Notes", type: "textarea", value: row.notes },
+    ],
+    onRender: (form) => {
+      form.elements["recurrence"].addEventListener("change", () => {
+        if (form.elements["recurrence"].value !== "Aucune" && !form.elements["prochaine_echeance"].value) {
+          form.elements["prochaine_echeance"].value = advanceRecurrenceDate(form.elements["date_operation"].value || todayStr(), form.elements["recurrence"].value);
+        }
+      });
+    },
+    onSaved: refreshAll,
+  });
+}
+function renewDepense(id) {
+  const d = cache.depenses.find(x => x.id === id); if (!d) return;
+  const next = advanceRecurrenceDate(d.prochaine_echeance || todayStr(), d.recurrence);
+  updateRow("depenses", id, { prochaine_echeance: next }).then(async () => {
+    await refreshCache(); showToast("Échéance avancée au " + fmtDateFR(next)); renderPage(currentPage);
+  });
+}
+function exportDepensesCSV() {
+  const rows = cache.depenses.map(d => [d.date_operation, d.type, d.libelle, d.categorie, d.fournisseur, d.montant, d.recurrence]);
+  exportCSV("depenses_" + todayStr() + ".csv", ["Date", "Type", "Libellé", "Catégorie", "Fournisseur", "Montant (€)", "Récurrence"], rows);
+}
+
 function renderStats() {
   const devisEmis = cache.devis.filter(d => d.statut !== "En attente");
   const devisAcceptes = cache.devis.filter(d => d.statut === "Accepté");
@@ -1082,6 +1177,15 @@ function factureRelanceUrl(f) {
   const body = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
+function relancerFacture(id) {
+  const f = findFacture(id); if (!f) return;
+  const c = findContact(f.contact_id);
+  if (!c || !c.email) {
+    showToast("Impossible d'envoyer la relance : aucun email renseigné sur ce contact");
+    return;
+  }
+  window.location.href = factureRelanceUrl(f);
+}
 function nextDevisNumero() {
   let max = 0;
   cache.devis.forEach(d => { const m = (d.numero || "").match(/\d+/g); if (m) { const n = parseInt(m[m.length - 1], 10); if (n > max) max = n; } });
@@ -1514,7 +1618,7 @@ function renderFactures() {
   tbody.innerHTML = rows.length ? rows.map(f => {
     const dev = f.devis_id ? findDevis(f.devis_id) : null;
     const pdfBtn = f.pdf_path ? `<button title="Voir le PDF joint" onclick="downloadAttachment(findFacture(${f.id}).pdf_path)">📎</button>` : "";
-    const relanceBtn = ["Envoyée", "En retard"].includes(f.statut) ? `<a title="Relancer par email" href="${escapeAttr(factureRelanceUrl(f))}"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></a>` : "";
+    const relanceBtn = ["Envoyée", "En retard"].includes(f.statut) ? `<button title="Relancer par email" onclick="relancerFacture(${f.id})"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></button>` : "";
     return `<tr>
       <td>${f.numero || "—"}</td>
       <td>${contactLabel(findContact(f.contact_id))}</td>
@@ -2016,14 +2120,35 @@ function openTempsDialog(id, defaultEvenementId) {
   });
 }
 
+const CAL_TYPE_COLORS = { "Projet": "var(--success)", "RDV": "var(--tertiary)", "Devis": "var(--info)", "Facture": "var(--warning)", "Abonnement": "var(--accent-dark)", "Tâche": "var(--danger)" };
+function collectCalendarItems() {
+  const items = [];
+  cache.evenements.filter(e => e.date_fin).forEach(e => items.push({ date: e.date_fin, type: "Projet", label: eventLabel(e), fn: `openEvenementDialog(${e.id})` }));
+  cache.rdv.filter(r => r.date_rdv).forEach(r => items.push({ date: r.date_rdv, type: "RDV", label: (r.heure ? r.heure + " · " : "") + (r.objet || "RDV") + " — " + contactLabel(findContact(r.contact_id)), fn: `openRdvDialog(${r.id})` }));
+  cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
+    const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
+    if (val) items.push({ date: val, type: "Devis", label: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), fn: `openDevisEditor(${d.id})` });
+  });
+  cache.factures.filter(f => f.date_echeance && !["Payée", "Annulée"].includes(f.statut)).forEach(f => {
+    items.push({ date: f.date_echeance, type: "Facture", label: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), fn: `openFactureDialog(${f.id})` });
+  });
+  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance).forEach(d => {
+    items.push({ date: d.prochaine_echeance, type: "Abonnement", label: (d.libelle || "—") + (d.montant ? " — " + d.montant + " €" : ""), fn: `openDepenseDialog(${d.id})` });
+  });
+  cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance).forEach(t => {
+    items.push({ date: t.date_echeance, type: "Tâche", label: t.titre, fn: `openTodoDialog(${t.id})` });
+  });
+  return items;
+}
 function renderCalendrier() {
   const { year, month } = calState;
   document.getElementById("cal-month-lbl").textContent = `${MOIS_FR[month - 1]} ${year}`;
+  const allItems = collectCalendarItems();
   const eventsByDay = {};
-  cache.evenements.forEach(e => {
-    if (!e.date_fin) return;
-    const [y, m, d] = e.date_fin.split("-").map(Number);
-    if (y === year && m === month) (eventsByDay[d] = eventsByDay[d] || []).push(e);
+  allItems.forEach(it => {
+    if (!it.date) return;
+    const [y, m, d] = it.date.split("-").map(Number);
+    if (y === year && m === month) (eventsByDay[d] = eventsByDay[d] || []).push(it);
   });
   const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -2034,7 +2159,7 @@ function renderCalendrier() {
     const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const isToday = iso === todayIso, isSelected = iso === calState.selected;
     const n = eventsByDay[day] ? eventsByDay[day].length : 0;
-    html += `<div class="cal-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" onclick="selectCalDay('${iso}')"><div>${day}</div>${n ? `<div class="evt-dot">● ${n} projet${n > 1 ? "s" : ""}</div>` : ""}</div>`;
+    html += `<div class="cal-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" onclick="selectCalDay('${iso}')"><div>${day}</div>${n ? `<div class="evt-dot">● ${n} échéance${n > 1 ? "s" : ""}</div>` : ""}</div>`;
   }
   document.getElementById("cal-grid").innerHTML = html;
   if (!calState.selected || !calState.selected.startsWith(`${year}-${String(month).padStart(2, "0")}`)) {
@@ -2045,10 +2170,10 @@ function renderCalendrier() {
 function selectCalDay(iso) { calState.selected = iso; renderCalendrier(); }
 function renderCalDay() {
   const lbl = document.getElementById("cal-day-lbl"), tbody = document.getElementById("cal-day-tbody");
-  if (!calState.selected) { lbl.textContent = "Projets du jour"; tbody.innerHTML = `<tr class="empty-row"><td colspan="4">Sélectionne un jour</td></tr>`; return; }
-  lbl.textContent = "Projets du " + fmtDateFR(calState.selected);
-  const rows = cache.evenements.filter(e => e.date_fin === calState.selected).sort((a, b) => (a.heure_debut || "").localeCompare(b.heure_debut || ""));
-  tbody.innerHTML = rows.length ? rows.map(e => `<tr onclick="openEvenementDialog(${e.id})" style="cursor:pointer;"><td>${e.heure_debut || "—"}</td><td>${eventLabel(e)}</td><td>${e.type_evenement || ""}</td><td>${badge(e.statut, STATUT_COLORS[e.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="4">Aucun projet — clique pour en ajouter un</td></tr>`;
+  if (!calState.selected) { lbl.textContent = "Échéances du jour"; tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Sélectionne un jour</td></tr>`; return; }
+  lbl.textContent = "Échéances du " + fmtDateFR(calState.selected);
+  const rows = collectCalendarItems().filter(it => it.date === calState.selected);
+  tbody.innerHTML = rows.length ? rows.map(it => `<tr onclick="${it.fn}" style="cursor:pointer;"><td>${badge(it.type, CAL_TYPE_COLORS[it.type] || "var(--muted)")}</td><td>${it.label}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Rien à cette date — clique sur un jour marqué d'un point</td></tr>`;
 }
 
 // ========================================================================
@@ -2069,6 +2194,7 @@ const PAGE_FILTERS = {
   grille_tarifaire: ["grille-search"],
   prospects: ["prospect-filter-statut"],
   temps_passe: ["temps-filter-projet"],
+  depenses: ["depense-search", "depense-filter-type", "depense-filter-categorie"],
 };
 function clearTableFilters(table) {
   (PAGE_FILTERS[table] || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
@@ -2280,6 +2406,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-new-todo").addEventListener("click", () => openTodoDialog(null));
   document.getElementById("btn-new-temps").addEventListener("click", () => openTempsDialog(null));
+  document.getElementById("btn-new-depense").addEventListener("click", () => openDepenseDialog(null));
+  document.getElementById("btn-export-depenses").addEventListener("click", exportDepensesCSV);
   document.getElementById("chrono-toggle-btn").addEventListener("click", toggleChrono);
   setInterval(tickChrono, 1000);
   tickChrono();
