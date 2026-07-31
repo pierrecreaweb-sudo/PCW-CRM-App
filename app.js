@@ -1556,7 +1556,14 @@ function factureOnRender(form) {
 }
 function openFactureDialog(id, prefill) {
   const row = id ? (findFacture(id) || {}) : (prefill || {});
-  openModal({ title: id ? "Modifier la facture" : "Nouvelle facture", table: "factures", id, fields: factureFields(row), onRender: factureOnRender, onSaved: refreshAll });
+  openModal({
+    title: id ? "Modifier la facture" : "Nouvelle facture", table: "factures", id, fields: factureFields(row), onRender: factureOnRender,
+    beforeSave: (v) => {
+      const linked = v.devis_id ? findDevis(Number(v.devis_id)) : null;
+      v.lignes = (linked && Array.isArray(linked.lignes) && linked.lignes.length) ? linked.lignes : (row.lignes || null);
+    },
+    onSaved: refreshAll,
+  });
 }
 function createFactureFromDevis(devisId) {
   const d = findDevis(devisId); if (!d) return;
@@ -1564,8 +1571,9 @@ function createFactureFromDevis(devisId) {
   openFactureDialog(null, {
     devis_id: d.id, contact_id: c ? c.id : null,
     montant_ttc: d.montant_ttc, notes: d.notes,
+    lignes: Array.isArray(d.lignes) ? JSON.parse(JSON.stringify(d.lignes)) : null,
   });
-  showToast("Facture pré-remplie depuis " + (d.numero || "le devis"));
+  showToast("Facture pré-remplie depuis " + (d.numero || "le devis") + (Array.isArray(d.lignes) && d.lignes.length ? " — détail des lignes repris" : ""));
 }
 async function generateFacturePDF(id, mode) {
   const f = findFacture(id); if (!f) return;
@@ -1594,12 +1602,40 @@ async function generateFacturePDF(id, mode) {
   clientLines.forEach(l => { doc.text(String(l), 21, cy); cy += 5.6; });
 
   let y = boxY + boxH + 12;
+  const lignes = Array.isArray(f.lignes) ? f.lignes : [];
   doc.setFontSize(12); doc.text("Détail", 16, y); y += 9; doc.setFontSize(11);
-  const rows = [["Type de projet", f.type_evenement || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
-  rows.forEach(([k, v], i) => {
-    if (i % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, 7, "F"); }
-    doc.text(k, 20, y); doc.text(v, 130, y); y += 7;
-  });
+
+  if (lignes.length) {
+    doc.setFillColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
+    doc.rect(16, y - 5, 179, 8, "F");
+    doc.setFontSize(8.5); doc.setTextColor(255);
+    doc.text("DÉSIGNATION", 20, y); doc.text("QTÉ", 108, y); doc.text("PU (€)", 124, y);
+    doc.text("REM.", 142, y); doc.text("PAIEMENT", 156, y); doc.text("TOTAL (€)", 178, y);
+    doc.setTextColor(0); doc.setFontSize(10); y += 8;
+    let rowIndex = 0;
+    lignes.forEach(l => {
+      const r = computeLine(l);
+      const modeP = l.mode_paiement || "Paiement unique";
+      const desig = doc.splitTextToSize(l.designation || "—", 82);
+      const rowH = Math.max(7, desig.length * 5);
+      if (rowIndex % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, rowH, "F"); }
+      doc.text(desig, 20, y);
+      doc.text(String(l.qte ?? ""), 108, y);
+      doc.text(Number(l.pu_ttc || 0).toFixed(2), 124, y);
+      doc.text((l.remise ? l.remise + "%" : "—"), 142, y);
+      doc.text(modePaiementShort(modeP), 156, y);
+      doc.text(r.total.toFixed(2) + " €", 178, y);
+      y += rowH; rowIndex++;
+      if (y > 250) { doc.addPage(); y = 20; }
+    });
+    y += 2; doc.setDrawColor(210); doc.line(16, y, 195, y); doc.setDrawColor(0); y += 9;
+  } else {
+    const rows = [["Type de projet", f.type_evenement || "—"], ["Montant", montant ? montant.toFixed(2) + " €" : "—"]];
+    rows.forEach(([k, v], i) => {
+      if (i % 2 === 0) { doc.setFillColor(247, 248, 252); doc.rect(16, y - 5, 179, 7, "F"); }
+      doc.text(k, 20, y); doc.text(v, 130, y); y += 7;
+    });
+  }
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
   doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   y += 14;
