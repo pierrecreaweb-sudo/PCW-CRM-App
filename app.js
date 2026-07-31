@@ -65,7 +65,7 @@ const EMETTEUR = {
   nom: "P.C.W - Pierre Créa Web",
   adresse: "150 Route d'Agen, 82170 Grisolles",
   siret: "SIRET 108 153 982 00013",
-  email: "pierre.craweb@gmail.com",
+  email: "pierre.creaweb@gmail.com",
   telephone: "06 45 33 43 28",
   site: "pierrecreaweb.fr",
   iban: "FR76 2823 3000 0163 7808 4990 503",
