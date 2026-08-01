@@ -63,6 +63,7 @@ function optionsListForType(type) {
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
   "Paiement à réception de la facture, envoyée 7 jours avant la livraison.",
+  "La propriété des livrables et les droits d'utilisation ne sont transférés au client qu'après paiement intégral de la facture.",
 ];
 
 const EMETTEUR = {
@@ -1743,6 +1744,15 @@ async function generateFacturePDF(id, mode) {
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
   doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   y += 14;
+  if (f.statut !== "Payée") {
+    doc.setFontSize(9); doc.setTextColor(90);
+    const mentions = [
+      "Le solde de la prestation est exigible à la livraison du projet.",
+      "La propriété des livrables et les droits d'utilisation ne sont transférés au client qu'après paiement intégral de la facture.",
+    ];
+    mentions.forEach(m => { const t = doc.splitTextToSize(m, 175); doc.text(t, 20, y); y += t.length * 4.5 + 2; });
+    doc.setTextColor(0); y += 6;
+  }
   drawInfoBox(doc, 16, y, 179, 30);
   doc.setFontSize(9.5); doc.setTextColor(120); doc.text("COORDONNÉES BANCAIRES POUR LE RÈGLEMENT PAR VIREMENT", 21, y + 8); doc.setTextColor(0);
   doc.setFontSize(11);
