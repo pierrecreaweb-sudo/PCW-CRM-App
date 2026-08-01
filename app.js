@@ -60,10 +60,12 @@ function optionsListForType(type) {
   if (TYPES_APP.includes(type)) return OPTIONS_APP;
   return null;
 }
+const CGV_CLAUSE_MAINTENANCE = "Le prestataire assure la gestion technique pendant toute la durée du contrat de maintenance. En cas de résiliation, le client peut récupérer l'ensemble de ses données et les accès à son site après règlement de toutes les sommes dues.";
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
   "Paiement à réception de la facture, envoyée 7 jours avant la livraison.",
   "La propriété des livrables et les droits d'utilisation ne sont transférés au client qu'après paiement intégral de la facture.",
+  CGV_CLAUSE_MAINTENANCE,
 ];
 
 const EMETTEUR = {
@@ -1412,7 +1414,15 @@ function renderCgvPreview(d) {
 function openCgvPicker() {
   readEditorToState();
   const d = findDevis(edState.id);
-  const already = (d && Array.isArray(d.cgv)) ? d.cgv.slice() : [];
+  let already = (d && Array.isArray(d.cgv)) ? d.cgv.slice() : [];
+  // Suggestion automatique (une seule fois, avant toute finalisation) si le
+  // projet lié comporte une option de maintenance.
+  if (!d || !Array.isArray(d.cgv)) {
+    const e = devisEvent(d);
+    const opts = (e && e.options) ? e.options.split(",").map(s => s.trim()) : [];
+    const hasMaintenance = opts.includes("Maintenance & mise à jour") || opts.includes("Maintenance & évolutions");
+    if (hasMaintenance && !already.includes(CGV_CLAUSE_MAINTENANCE)) already.push(CGV_CLAUSE_MAINTENANCE);
+  }
   const html = `<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Coche les conditions dans l'ordre où elles doivent apparaître sur le devis.</p>
     <div class="cgv-list" id="cgv-list">${CGV_OPTIONS.map((c, i) => {
       const pos = already.indexOf(c);
