@@ -491,7 +491,7 @@
             <tbody id="dash-todos"></tbody></table>
           </div>
           <div class="panel">
-            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-pin"></use></svg>À venir (RDV, projets & échéances)</h3>
+            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-pin"></use></svg>À venir (RDV, projets, devis, factures & échéances)</h3>
             <table class="data"><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th>Statut</th></tr></thead>
             <tbody id="dash-dates"></tbody></table>
           </div>
@@ -556,12 +556,19 @@
               <input class="filter" id="contact-search" placeholder="Rechercher un contact…">
               <select class="filter" id="contact-filter-categorie"><option value="">Toutes catégories</option></select>
             </div>
-            <button class="btn" id="btn-new-contact">＋ Nouveau contact</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="cat-tabs" id="contact-view-tabs" style="margin:0;">
+                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+              </div>
+              <button class="btn" id="btn-new-contact">＋ Nouveau contact</button>
+            </div>
           </div>
-          <table class="data">
+          <table class="data" id="contact-table-view">
             <thead><tr><th>Nom</th><th>Catégorie</th><th>Société</th><th>Email</th><th>Téléphone</th><th>Provenance</th><th></th></tr></thead>
             <tbody id="contact-tbody"></tbody>
           </table>
+          <div id="contact-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- DEVIS -->

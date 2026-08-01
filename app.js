@@ -873,7 +873,7 @@ function renderDashboard() {
       <td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="5">Aucune tâche en cours</td></tr>`;
 
-  // À venir : RDV + évènements + tâches datées, triés par date
+  // À venir : RDV + projets + tâches + devis + factures + abonnements, triés par date
   const items = [];
   cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé")
     .forEach(r => items.push({ date: r.date_rdv, type: "RDV", detail: (r.heure ? r.heure + " · " : "") + (r.objet || "") + " — " + contactLabel(findContact(r.contact_id)), statut: r.statut, fn: `openRdvDialog(${r.id})` }));
@@ -881,8 +881,16 @@ function renderDashboard() {
     .forEach(e => items.push({ date: e.date_fin, type: "Projet", detail: eventLabel(e), statut: e.statut, fn: `openEvenementDialog(${e.id})` }));
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance && t.date_echeance >= today)
     .forEach(t => items.push({ date: t.date_echeance, type: "Tâche", detail: t.titre, statut: effectivePriorite(t), fn: `openTodoDialog(${t.id})` }));
+  cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
+    const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
+    if (val && val >= today) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, fn: `openDevisEditor(${d.id})` });
+  });
+  cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && !["Payée", "Annulée"].includes(f.statut))
+    .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, fn: `openFactureDialog(${f.id})` }));
+  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance >= today)
+    .forEach(d => items.push({ date: d.prochaine_echeance, type: "Abonnement", detail: (d.libelle || "—") + (d.montant ? " — " + d.montant + " €" : ""), statut: d.recurrence, fn: `openDepenseDialog(${d.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-  const top = items.slice(0, 12);
+  const top = items.slice(0, 15);
   document.getElementById("dash-dates").innerHTML = top.length ? top.map(it => {
     const cls = daysUntil(it.date) <= 0 ? "due-today" : "";
     return `<tr onclick="${it.fn}" style="cursor:pointer;">
@@ -1111,14 +1119,69 @@ function openEventRecap(id) {
 // ========================================================================
 //  CONTACTS
 // ========================================================================
+let contactView = "tableau";
+function bindContactViewTabs() {
+  const wrap = document.getElementById("contact-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      contactView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("contact-table-view").style.display = contactView === "tableau" ? "table" : "none";
+      document.getElementById("contact-kanban-view").style.display = contactView === "kanban" ? "flex" : "none";
+      renderContacts();
+    });
+  });
+}
+function renderContactKanban(rows) {
+  const wrap = document.getElementById("contact-kanban-view");
+  wrap.innerHTML = CATEGORIES_CONTACT.map(cat => {
+    const items = rows.filter(c => c.categorie === cat);
+    const cards = items.map(c => `<div class="kanban-card" draggable="true" data-id="${c.id}" onclick="openContactDialog(${c.id})">
+        <div class="kc-title">${contactLabel(c)}</div>
+        <div class="kc-sub">${c.societe || c.email || c.telephone || ""}</div>
+        ${c.provenance ? `<div class="kc-badges">${badgeSubtle(c.provenance, "var(--muted)")}</div>` : ""}
+      </div>`).join("");
+    return `<div class="kanban-col" data-cat="${cat}">
+      <h4>${cat} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards}</div>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll(".kanban-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", card.dataset.id); });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("click", (e) => { if (card.classList.contains("dragging")) e.preventDefault(); });
+  });
+  wrap.querySelectorAll(".kanban-col").forEach(col => {
+    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault(); col.classList.remove("drag-over");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      const newCat = col.dataset.cat;
+      const c = findContact(id);
+      if (c && c.categorie !== newCat) {
+        await updateRow("contacts", id, { categorie: newCat });
+        await refreshCache();
+        showToast("Catégorie mise à jour : " + newCat);
+        renderContacts();
+      }
+    });
+  });
+}
 function renderContacts() {
   ensureFilterOptions("contact-filter-categorie", CATEGORIES_CONTACT);
   bindSearch("contact-search", renderContacts);
+  bindContactViewTabs();
   const search = (document.getElementById("contact-search").value || "").toLowerCase();
   const fCat = document.getElementById("contact-filter-categorie").value;
   let rows = [...cache.contacts];
   if (fCat) rows = rows.filter(c => c.categorie === fCat);
   if (search) rows = rows.filter(c => (contactLabel(c) + " " + (c.societe || "") + " " + (c.email || "")).toLowerCase().includes(search));
+
+  if (contactView === "kanban") { renderContactKanban(rows); return; }
 
   const tbody = document.getElementById("contact-tbody");
   tbody.innerHTML = rows.length ? rows.map(c => `
