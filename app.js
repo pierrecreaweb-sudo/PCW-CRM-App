@@ -87,7 +87,7 @@ const STATUT_COLORS = {
   "Livré": "var(--success)", "Terminé": "var(--muted)", "Annulé": "var(--danger)",
   "À faire": "var(--info)", "En cours": "var(--warning)",
   "Prévu": "var(--info)", "Effectué": "var(--success)",
-  "Client": "var(--success)", "Prospect": "var(--info)", "Partenaire": "var(--accent)",
+  "Client": "var(--success)", "Prospect": "var(--info)", "Partenaire": "var(--danger)",
   "Fournisseur": "var(--warning)", "Autre": "var(--muted)",
   "Envoyée": "var(--warning)", "Payée": "var(--success)",
   "En retard": "var(--danger)", "Annulée": "var(--danger)",
@@ -1138,13 +1138,14 @@ function renderContactKanban(rows) {
   const wrap = document.getElementById("contact-kanban-view");
   wrap.innerHTML = CATEGORIES_CONTACT.map(cat => {
     const items = rows.filter(c => c.categorie === cat);
-    const cards = items.map(c => `<div class="kanban-card" draggable="true" data-id="${c.id}" onclick="openContactDialog(${c.id})">
+    const color = STATUT_COLORS[cat] || "var(--muted)";
+    const cards = items.map(c => `<div class="kanban-card" draggable="true" data-id="${c.id}" onclick="openContactDialog(${c.id})" style="border-left:3px solid ${color};">
         <div class="kc-title">${contactLabel(c)}</div>
         <div class="kc-sub">${c.societe || c.email || c.telephone || ""}</div>
         ${c.provenance ? `<div class="kc-badges">${badgeSubtle(c.provenance, "var(--muted)")}</div>` : ""}
       </div>`).join("");
-    return `<div class="kanban-col" data-cat="${cat}">
-      <h4>${cat} <span>${items.length}</span></h4>
+    return `<div class="kanban-col" data-cat="${cat}" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${cat} <span>${items.length}</span></h4>
       <div class="kanban-col-body">${cards}</div>
     </div>`;
   }).join("");
