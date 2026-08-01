@@ -40,10 +40,8 @@ const PROVENANCES = ["Bouche à oreille", "Site web", "Réseaux sociaux", "Googl
 const TYPES_PRESTATION = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const FORMULES = ["Prestation ponctuelle", "Forfait clé en main", "Abonnement mensuel"];
 const CATEGORIES_TARIF = ["Prestation", "Option / Supplément"];
-const TYPES_DEPENSE = ["Dépense", "Recette"];
-const CATEGORIES_DEPENSE = ["Abonnement logiciel", "Hébergement / Nom de domaine", "Matériel informatique", "Marketing / Publicité", "Frais bancaires", "Sous-traitance", "Fournitures de bureau", "Formation", "Déplacement", "Assurance", "Impôts / Cotisations", "Autre recette", "Autre dépense"];
+const CATEGORIES_DEPENSE = ["Abonnement logiciel", "Hébergement / Nom de domaine", "Matériel informatique", "Marketing / Publicité", "Frais bancaires", "Sous-traitance", "Fournitures de bureau", "Formation", "Déplacement", "Assurance", "Impôts / Cotisations"];
 const RECURRENCE_DEPENSE = ["Aucune", "Mensuelle", "Annuelle"];
-const DEPENSE_TYPE_COLORS = { "Dépense": "var(--danger)", "Recette": "var(--success)" };
 const MODES_PAIEMENT = ["Paiement unique", "Paiement mensuel", "Paiement annuel"];
 const MODE_PAIEMENT_COLORS = { "Paiement unique": "var(--muted)", "Paiement mensuel": "var(--warning)", "Paiement annuel": "var(--info)" };
 function modePaiementShort(m) { return m === "Paiement mensuel" ? "Mensuel" : m === "Paiement annuel" ? "Annuel" : "Unique"; }
@@ -589,30 +587,43 @@ function advanceRecurrenceDate(dateStr, recurrence) {
   if (recurrence === "Annuelle") d.setFullYear(d.getFullYear() + 1); else d.setMonth(d.getMonth() + 1);
   return isoOf(d);
 }
+let depenseRecurFilter = "";
+function bindDepenseRecurTabs() {
+  const wrap = document.getElementById("depense-recur-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      depenseRecurFilter = btn.dataset.recur;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      renderDepenses();
+    });
+  });
+}
 function renderDepenses() {
   bindSearch("depense-search", renderDepenses);
-  ensureFilterOptions("depense-filter-type", TYPES_DEPENSE);
+  bindDepenseRecurTabs();
   ensureFilterOptions("depense-filter-categorie", CATEGORIES_DEPENSE);
   const search = (document.getElementById("depense-search").value || "").toLowerCase();
-  const fType = document.getElementById("depense-filter-type").value;
   const fCat = document.getElementById("depense-filter-categorie").value;
   let rows = [...cache.depenses].sort((a, b) => (b.date_operation || "").localeCompare(a.date_operation || ""));
-  if (fType) rows = rows.filter(d => d.type === fType);
+  if (depenseRecurFilter === "abonnements") rows = rows.filter(d => d.recurrence && d.recurrence !== "Aucune");
+  if (depenseRecurFilter === "ponctuelles") rows = rows.filter(d => !d.recurrence || d.recurrence === "Aucune");
   if (fCat) rows = rows.filter(d => d.categorie === fCat);
   if (search) rows = rows.filter(d => ((d.libelle || "") + " " + (d.fournisseur || "")).toLowerCase().includes(search));
 
   const today = todayStr();
   const monthKey = today.slice(0, 7);
-  const depensesMois = cache.depenses.filter(d => d.type === "Dépense" && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
-  const recettesMois = cache.depenses.filter(d => d.type === "Recette" && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
-  const abonnementsMensuels = cache.depenses.filter(d => d.type === "Dépense" && d.recurrence === "Mensuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
-  const solde = round2(recettesMois - depensesMois);
+  const abonnementsActifs = cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune");
+  const totalMensuel = abonnementsActifs.filter(d => d.recurrence === "Mensuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
+  const totalAnnuel = abonnementsActifs.filter(d => d.recurrence === "Annuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
+  const ponctuellesMois = cache.depenses.filter(d => (!d.recurrence || d.recurrence === "Aucune") && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
 
   document.getElementById("depense-summary").innerHTML = `
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--danger);color:#fff;"><svg><use href="#icon-arrow-up-right"></use></svg></div><div class="num">${round2(depensesMois)} €</div><div class="label">Dépenses ce mois-ci</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-arrow-down-left"></use></svg></div><div class="num">${round2(recettesMois)} €</div><div class="label">Recettes ce mois-ci (hors factures)</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:${solde >= 0 ? "var(--success)" : "var(--danger)"};color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${solde >= 0 ? "+" : ""}${solde} €</div><div class="label">Solde net du mois</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div><div class="num">${round2(abonnementsMensuels)} €</div><div class="label">Total abonnements mensuels</div></div>`;
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div><div class="num">${abonnementsActifs.length}</div><div class="label">Abonnements actifs</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${round2(totalMensuel)} €</div><div class="label">Total abonnements mensuels</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent-dark);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${round2(totalAnnuel)} €</div><div class="label">Total abonnements annuels</div></div>
+    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--danger);color:#fff;"><svg><use href="#icon-arrow-up-right"></use></svg></div><div class="num">${round2(ponctuellesMois)} €</div><div class="label">Dépenses ponctuelles ce mois-ci</div></div>`;
 
   const tbody = document.getElementById("depense-tbody");
   tbody.innerHTML = rows.length ? rows.map(d => `
@@ -620,19 +631,17 @@ function renderDepenses() {
       <td>${fmtDateFR(d.date_operation) || "—"}</td>
       <td><strong>${d.libelle || "—"}</strong>${d.fournisseur ? `<br><span style="color:var(--muted);font-size:11.5px;">${d.fournisseur}</span>` : ""}</td>
       <td>${d.categorie || "—"}</td>
-      <td>${badge(d.type, DEPENSE_TYPE_COLORS[d.type])}</td>
-      <td><strong style="color:${d.type === "Dépense" ? "var(--danger)" : "var(--success)"};">${d.type === "Dépense" ? "-" : "+"}${d.montant != null ? d.montant : 0} €</strong></td>
+      <td><strong style="color:var(--danger);">-${d.montant != null ? d.montant : 0} €</strong></td>
       <td>${d.recurrence && d.recurrence !== "Aucune" ? badgeSubtle(d.recurrence, "var(--tertiary)") : "—"}</td>
       <td>${d.recurrence && d.recurrence !== "Aucune" ? (fmtDateFR(d.prochaine_echeance) || "—") : "—"}</td>
       <td class="row-actions"><button onclick="openDepenseDialog(${d.id})">✎</button><button onclick="confirmDelete('depenses', ${d.id}, renderDepenses)">🗑</button></td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="8">Aucune opération — ajoute ta première dépense ou recette</td></tr>`;
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucune opération — ajoute ton premier abonnement ou dépense</td></tr>`;
 }
 function openDepenseDialog(id) {
   const row = id ? cache.depenses.find(d => d.id === id) : {};
   openModal({
     title: id ? "Modifier l'opération" : "Nouvelle opération", table: "depenses", id,
     fields: [
-      { key: "type", label: "Type", type: "radioset", options: TYPES_DEPENSE, colors: DEPENSE_TYPE_COLORS, value: row.type || "Dépense" },
       { key: "libelle", label: "Libellé", type: "text", required: true, value: row.libelle, placeholder: "Ex. Abonnement Canva Pro" },
       { key: "categorie", label: "Catégorie", type: "select-other", options: CATEGORIES_DEPENSE, value: row.categorie, allowEmpty: true },
       { key: "fournisseur", label: "Fournisseur / Organisme", type: "text", value: row.fournisseur },
@@ -649,6 +658,7 @@ function openDepenseDialog(id) {
         }
       });
     },
+    beforeSave: (v) => { v.type = "Dépense"; },
     onSaved: refreshAll,
   });
 }
@@ -660,8 +670,8 @@ function renewDepense(id) {
   });
 }
 function exportDepensesCSV() {
-  const rows = cache.depenses.map(d => [d.date_operation, d.type, d.libelle, d.categorie, d.fournisseur, d.montant, d.recurrence]);
-  exportCSV("depenses_" + todayStr() + ".csv", ["Date", "Type", "Libellé", "Catégorie", "Fournisseur", "Montant (€)", "Récurrence"], rows);
+  const rows = cache.depenses.map(d => [d.date_operation, d.libelle, d.categorie, d.fournisseur, d.montant, d.recurrence, d.prochaine_echeance]);
+  exportCSV("depenses_" + todayStr() + ".csv", ["Date", "Libellé", "Catégorie", "Fournisseur", "Montant (€)", "Récurrence", "Prochaine échéance"], rows);
 }
 
 function renderStats() {
@@ -2214,7 +2224,7 @@ const PAGE_FILTERS = {
   grille_tarifaire: ["grille-search"],
   prospects: ["prospect-filter-statut"],
   temps_passe: ["temps-filter-projet"],
-  depenses: ["depense-search", "depense-filter-type", "depense-filter-categorie"],
+  depenses: ["depense-search", "depense-filter-categorie"],
 };
 function clearTableFilters(table) {
   (PAGE_FILTERS[table] || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
@@ -2222,6 +2232,11 @@ function clearTableFilters(table) {
     grilleCatFilter = "";
     const wrap = document.getElementById("grille-cat-tabs");
     if (wrap) wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.cat === ""));
+  }
+  if (table === "depenses") {
+    depenseRecurFilter = "";
+    const wrap = document.getElementById("depense-recur-tabs");
+    if (wrap) wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.recur === ""));
   }
 }
 function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) {

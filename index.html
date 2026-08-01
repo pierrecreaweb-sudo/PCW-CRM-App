@@ -435,7 +435,7 @@
       <div class="nav-item" data-page="calendrier"><svg class="nav-icon"><use href="#icon-calendar"></use></svg><span>Calendrier</span></div>
       <div class="nav-item" data-page="temps"><svg class="nav-icon"><use href="#icon-stopwatch"></use></svg><span>Temps passé</span></div>
       <div class="nav-section-label">Finances</div>
-      <div class="nav-item" data-page="depenses"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Dépenses</span></div>
+      <div class="nav-item" data-page="depenses"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Abonnements</span></div>
       <div class="nav-section-label">Analyse</div>
       <div class="nav-item" data-page="stats"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Statistiques</span></div>
       <div class="sidebar-footer">
@@ -657,11 +657,10 @@
 
         <!-- DÉPENSES -->
         <div class="page" id="page-depenses">
-          <div class="page-title">Dépenses & recettes</div>
+          <div class="page-title">Abonnements & dépenses</div>
           <div class="page-toolbar">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <input class="filter" id="depense-search" placeholder="Rechercher…">
-              <select class="filter" id="depense-filter-type"><option value="">Tous types</option></select>
               <select class="filter" id="depense-filter-categorie"><option value="">Toutes catégories</option></select>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -669,10 +668,15 @@
               <button class="btn" id="btn-new-depense">＋ Nouvelle opération</button>
             </div>
           </div>
-          <div class="page-note">Suivi de toutes les sorties (charges, abonnements logiciels…) et rentrées d'argent hors facturation client classique. Une opération récurrente (abonnement mensuel/annuel) génère une alerte de renouvellement.</div>
+          <div class="cat-tabs" id="depense-recur-tabs">
+            <button type="button" class="cat-tab active" data-recur="">Toutes</button>
+            <button type="button" class="cat-tab" data-recur="abonnements">🔁 Abonnements</button>
+            <button type="button" class="cat-tab" data-recur="ponctuelles">Dépenses ponctuelles</button>
+          </div>
+          <div class="page-note">Suivi de tes abonnements logiciels (récurrents) et de tes dépenses ponctuelles. Un abonnement (mensuel/annuel) génère une alerte de renouvellement automatique.</div>
           <div class="cards-row" id="depense-summary"></div>
           <table class="data">
-            <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th>Montant</th><th>Récurrence</th><th>Prochaine échéance</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Récurrence</th><th>Prochaine échéance</th><th></th></tr></thead>
             <tbody id="depense-tbody"></tbody>
           </table>
         </div>
