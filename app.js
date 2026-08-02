@@ -600,9 +600,53 @@ function bindDepenseRecurTabs() {
     });
   });
 }
+function computeMonthlyDepensesTotals() {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ y: d.getFullYear(), m: d.getMonth() + 1, label: MOIS_FR[d.getMonth()].slice(0, 3) + " " + String(d.getFullYear()).slice(2) });
+  }
+  const values = months.map(({ y, m }) => {
+    const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
+    const monthEnd = `${y}-${String(m).padStart(2, "0")}-31`;
+    let total = 0;
+    cache.depenses.forEach(d => {
+      const montant = Number(d.montant || 0);
+      const recur = d.recurrence || "Aucune";
+      if (recur === "Aucune") {
+        if (d.date_operation && d.date_operation >= monthStart && d.date_operation <= monthEnd) total += montant;
+      } else if (recur === "Mensuelle") {
+        if (d.date_operation && d.date_operation <= monthEnd) total += montant; // déjà actif à cette période
+      } else if (recur === "Annuelle") {
+        if (d.date_operation) {
+          const startMonth = Number(d.date_operation.slice(5, 7));
+          if (startMonth === m && d.date_operation <= monthEnd) total += montant;
+        }
+      }
+    });
+    return round2(total);
+  });
+  return { labels: months.map(x => x.label), values };
+}
+function renderDepenseChart() {
+  const { labels, values } = computeMonthlyDepensesTotals();
+  const max = Math.max(1, ...values);
+  const gridStyle = `grid-template-columns:repeat(${labels.length},1fr);`;
+  const valsRow = values.map(v => `<div>${v ? fmtEuroCompact(v) : ""}</div>`).join("");
+  const barsRow = values.map(v => `<div class="bar" style="height:${Math.round((v / max) * 54) + 4}px;"></div>`).join("");
+  const lblsRow = labels.map(l => `<div>${l}</div>`).join("");
+  document.getElementById("depense-chart").innerHTML =
+    `<div class="mc-row mc-vals" style="${gridStyle}">${valsRow}</div>` +
+    `<div class="mc-row mc-bars-row" style="${gridStyle}">${barsRow}</div>` +
+    `<div class="mc-row mc-lbls" style="${gridStyle}">${lblsRow}</div>`;
+  const total = round2(values.reduce((s, v) => s + v, 0));
+  document.getElementById("depense-chart-total").textContent = `Total sur les 6 derniers mois : ${total.toFixed(2)} € — abonnements actifs comptés chaque mois depuis leur souscription, dépenses ponctuelles au mois réel.`;
+}
 function renderDepenses() {
   bindSearch("depense-search", renderDepenses);
   bindDepenseRecurTabs();
+  renderDepenseChart();
   ensureFilterOptions("depense-filter-categorie", CATEGORIES_DEPENSE);
   const search = (document.getElementById("depense-search").value || "").toLowerCase();
   const fCat = document.getElementById("depense-filter-categorie").value;
