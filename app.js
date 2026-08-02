@@ -918,20 +918,22 @@ function renderDashboard() {
   }).join("") : `<tr class="empty-row"><td colspan="5">Aucune tâche en cours</td></tr>`;
 
   // À venir : RDV + projets + tâches + devis + factures + abonnements, triés par date
+  // (uniquement les échéances dans le mois qui vient — au-delà, ça n'a plus sa place ici)
+  const dans1Mois = addDaysISO(today, 30);
   const items = [];
-  cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé")
+  cache.rdv.filter(r => (r.date_rdv || "") >= today && r.date_rdv <= dans1Mois && r.statut !== "Annulé")
     .forEach(r => items.push({ date: r.date_rdv, type: "RDV", detail: (r.heure ? r.heure + " · " : "") + (r.objet || "") + " — " + contactLabel(findContact(r.contact_id)), statut: r.statut, fn: `openRdvDialog(${r.id})` }));
-  cache.evenements.filter(e => (e.date_fin || "") >= today)
+  cache.evenements.filter(e => (e.date_fin || "") >= today && e.date_fin <= dans1Mois)
     .forEach(e => items.push({ date: e.date_fin, type: "Projet", detail: eventLabel(e), statut: e.statut, fn: `openEvenementDialog(${e.id})` }));
-  cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance && t.date_echeance >= today)
+  cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance && t.date_echeance >= today && t.date_echeance <= dans1Mois)
     .forEach(t => items.push({ date: t.date_echeance, type: "Tâche", detail: t.titre, statut: effectivePriorite(t), fn: `openTodoDialog(${t.id})` }));
   cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
     const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
-    if (val && val >= today) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, fn: `openDevisEditor(${d.id})` });
+    if (val && val >= today && val <= dans1Mois) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, fn: `openDevisEditor(${d.id})` });
   });
-  cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && !["Payée", "Annulée"].includes(f.statut))
+  cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= dans1Mois && !["Payée", "Annulée"].includes(f.statut))
     .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, fn: `openFactureDialog(${f.id})` }));
-  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance >= today)
+  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance >= today && d.prochaine_echeance <= dans1Mois)
     .forEach(d => items.push({ date: d.prochaine_echeance, type: "Abonnement", detail: (d.libelle || "—") + (d.montant ? " — " + d.montant + " €" : ""), statut: d.recurrence, fn: `openDepenseDialog(${d.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const top = items.slice(0, 15);
