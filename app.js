@@ -142,28 +142,37 @@ function badge(text, color) {
   if (!text) return "";
   return `<span class="badge" style="background:${color || "var(--muted)"}">${text}</span>`;
 }
-function statusSelectInline(table, id, value, options, colors) {
+function statusSelectInline(table, id, value, options, colors, field) {
+  field = field || "statut";
   const color = colors[value] || "var(--muted)";
-  return `<select class="badge-select" data-table="${table}" data-id="${id}" style="background:${color};" onchange="updateStatutInline(this)">
+  return `<select class="badge-select" data-table="${table}" data-id="${id}" data-field="${field}" style="background:${color};" onchange="updateStatutInline(this)">
+    ${options.map(o => `<option value="${escapeAttr(o)}" ${o === value ? "selected" : ""}>${o}</option>`).join("")}
+  </select>`;
+}
+function statusSelectInlineSubtle(table, id, value, options, colors, field) {
+  field = field || "statut";
+  const color = colors[value] || "var(--muted)";
+  return `<select class="badge-select-subtle" data-table="${table}" data-id="${id}" data-field="${field}" style="--sel-c:${color};" onchange="updateStatutInline(this)">
     ${options.map(o => `<option value="${escapeAttr(o)}" ${o === value ? "selected" : ""}>${o}</option>`).join("")}
   </select>`;
 }
 async function updateStatutInline(selectEl) {
   const table = selectEl.dataset.table;
   const id = Number(selectEl.dataset.id);
-  const newStatut = selectEl.value;
-  if (table === "devis") {
+  const field = selectEl.dataset.field || "statut";
+  const newValue = selectEl.value;
+  if (table === "devis" && field === "statut") {
     const d = findDevis(id);
     const wasEnvoye = d && d.statut === "Envoyé";
-    await updateRow("devis", id, { statut: newStatut });
+    await updateRow("devis", id, { statut: newValue });
     await refreshCache();
     const updated = findDevis(id);
-    if (newStatut === "Envoyé" && !wasEnvoye && updated) await createDevisReminders(updated);
+    if (newValue === "Envoyé" && !wasEnvoye && updated) await createDevisReminders(updated);
   } else {
-    await updateRow(table, id, { statut: newStatut });
+    await updateRow(table, id, { [field]: newValue });
     await refreshCache();
   }
-  showToast("Statut mis à jour : " + newStatut);
+  showToast((field === "categorie" ? "Catégorie mise à jour : " : "Statut mis à jour : ") + newValue);
   renderPage(currentPage);
 }
 function badgeSubtle(text, color) {
@@ -1034,7 +1043,7 @@ function renderTodo() {
       <td>${todoLieALabel(t)}</td>
       <td>${badge(p, STATUT_COLORS[p])}</td>
       <td class="${echClass}">${fmtDateFR(t.date_echeance) || "—"}</td>
-      <td>${badge(t.statut, STATUT_COLORS[t.statut])}</td>
+      <td>${statusSelectInline("todos", t.id, t.statut, STATUTS_TODO, STATUT_COLORS)}</td>
       <td class="row-actions">
         <button onclick="openTodoDialog(${t.id})">✎</button>
         <button onclick="confirmDelete('todos', ${t.id}, renderTodo)">🗑</button>
@@ -1141,9 +1150,9 @@ function renderSuivi() {
       <td>${e.derniere_action || "—"}</td>
       <td>${tache ? tache.titre : "—"}</td>
       <td class="row-actions"><button title="Fiche récap" onclick="openEventRecap(${e.id})">📋</button></td>
-      <td>${badgeSubtle(e.statut, STATUT_COLORS[e.statut])}</td>
-      <td>${dev ? badgeSubtle(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
-      <td>${fac ? badgeSubtle(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
+      <td>${statusSelectInlineSubtle("evenements", e.id, e.statut, STATUTS_EVENEMENT, STATUT_COLORS)}</td>
+      <td>${dev ? statusSelectInlineSubtle("devis", dev.id, dev.statut, STATUTS_DEVIS, STATUT_COLORS) : "—"}</td>
+      <td>${fac ? statusSelectInlineSubtle("factures", fac.id, fac.statut, STATUTS_FACTURE, STATUT_COLORS) : "—"}</td>
       <td class="row-actions"><button onclick="openEvenementDialog(${e.id})">✎</button></td>
     </tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="10">Aucun dossier — crée un projet</td></tr>`;
@@ -1258,7 +1267,7 @@ function renderContacts() {
   tbody.innerHTML = rows.length ? rows.map(c => `
     <tr>
       <td>${contactLabel(c)}</td>
-      <td>${badge(c.categorie, STATUT_COLORS[c.categorie])}</td>
+      <td>${statusSelectInline("contacts", c.id, c.categorie, CATEGORIES_CONTACT, STATUT_COLORS, "categorie")}</td>
       <td>${c.societe || "—"}${c.poste ? " · " + c.poste : ""}</td>
       <td>${c.email || "—"}</td>
       <td>${c.telephone || "—"}</td>
@@ -1993,7 +2002,7 @@ function renderEvenements() {
       <td>${(c && c.provenance) || "—"}</td>
       <td>${e.type_evenement || "—"}</td>
       <td>${e.type_prestation || "—"}</td>
-      <td>${badge(e.statut, STATUT_COLORS[e.statut])}</td>
+      <td>${statusSelectInline("evenements", e.id, e.statut, STATUTS_EVENEMENT, STATUT_COLORS)}</td>
       <td>${dev ? badge(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
       <td>${fac ? badge(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
       <td>${e.derniere_action || "—"}</td>
@@ -2091,7 +2100,7 @@ function renderRdv() {
   tbody.innerHTML = rows.length ? rows.map(r => `
     <tr>
       <td>${fmtDateFR(r.date_rdv)}</td><td>${r.heure || "—"}</td><td>${r.objet || "—"}</td>
-      <td>${contactLabel(findContact(r.contact_id))}</td><td>${badge(r.statut, STATUT_COLORS[r.statut])}</td>
+      <td>${contactLabel(findContact(r.contact_id))}</td><td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
       <td class="row-actions"><button onclick="openRdvDialog(${r.id})">✎</button><button onclick="confirmDelete('rdv', ${r.id}, renderRdv)">🗑</button></td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun rendez-vous</td></tr>`;
 }
@@ -2141,9 +2150,9 @@ function renderGrille() {
     const cat = g.categorie || "Prestation";
     const mode = g.mode_paiement || "Paiement unique";
     return `<tr>
-      <td>${badge(cat, TARIF_CAT_COLORS[cat] || "var(--muted)")}</td>
+      <td>${statusSelectInline("grille_tarifaire", g.id, cat, CATEGORIES_TARIF, TARIF_CAT_COLORS, "categorie")}</td>
       <td>${g.nom_presta || "—"}</td>
-      <td>${badge(modePaiementShort(mode), MODE_PAIEMENT_COLORS[mode])}</td>
+      <td>${statusSelectInline("grille_tarifaire", g.id, mode, MODES_PAIEMENT, MODE_PAIEMENT_COLORS, "mode_paiement")}</td>
       <td><strong>${g.pu_ttc != null ? g.pu_ttc + " €" : "—"}</strong><span style="color:var(--muted);font-weight:normal;">${modePaiementSuffix(mode)}</span></td>
       <td class="row-actions"><button onclick="openGrilleDialog(${g.id})">✎</button><button onclick="confirmDelete('grille_tarifaire', ${g.id}, renderGrille)">🗑</button></td>
     </tr>`;
