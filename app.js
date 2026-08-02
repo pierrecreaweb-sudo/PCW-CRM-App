@@ -142,6 +142,30 @@ function badge(text, color) {
   if (!text) return "";
   return `<span class="badge" style="background:${color || "var(--muted)"}">${text}</span>`;
 }
+function statusSelectInline(table, id, value, options, colors) {
+  const color = colors[value] || "var(--muted)";
+  return `<select class="badge-select" data-table="${table}" data-id="${id}" style="background:${color};" onchange="updateStatutInline(this)">
+    ${options.map(o => `<option value="${escapeAttr(o)}" ${o === value ? "selected" : ""}>${o}</option>`).join("")}
+  </select>`;
+}
+async function updateStatutInline(selectEl) {
+  const table = selectEl.dataset.table;
+  const id = Number(selectEl.dataset.id);
+  const newStatut = selectEl.value;
+  if (table === "devis") {
+    const d = findDevis(id);
+    const wasEnvoye = d && d.statut === "Envoyé";
+    await updateRow("devis", id, { statut: newStatut });
+    await refreshCache();
+    const updated = findDevis(id);
+    if (newStatut === "Envoyé" && !wasEnvoye && updated) await createDevisReminders(updated);
+  } else {
+    await updateRow(table, id, { statut: newStatut });
+    await refreshCache();
+  }
+  showToast("Statut mis à jour : " + newStatut);
+  renderPage(currentPage);
+}
 function badgeSubtle(text, color) {
   if (!text) return "";
   const c = color || "var(--muted)";
@@ -1365,7 +1389,7 @@ function renderDevis() {
       <td>${contactLabel(devisContact(d))}</td>
       <td>${fmtDateFR(devisDateEvt(d))}</td>
       <td>${d.montant_ttc ? d.montant_ttc + " €" : "—"}</td>
-      <td>${badge(d.statut, STATUT_COLORS[d.statut])}</td>
+      <td>${statusSelectInline("devis", d.id, d.statut, STATUTS_DEVIS, STATUT_COLORS)}</td>
       <td class="row-actions">
         <button title="Éditer le devis" onclick="openDevisEditor(${d.id})">✎</button>
         <button title="Visualiser" onclick="generateDevisPDF(${d.id}, 'preview')">👁</button>
@@ -1756,7 +1780,7 @@ function renderFactures() {
       <td>${dev ? (dev.numero || ("Devis #" + dev.id)) : "—"}</td>
       <td>${fmtDateFR(f.date_facture)}</td>
       <td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td>
-      <td>${badge(f.statut, STATUT_COLORS[f.statut])}</td>
+      <td>${statusSelectInline("factures", f.id, f.statut, STATUTS_FACTURE, STATUT_COLORS)}</td>
       <td class="row-actions">
         <button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button>
         <button title="Télécharger la facture (PDF)" onclick="generateFacturePDF(${f.id})">⬇</button>
