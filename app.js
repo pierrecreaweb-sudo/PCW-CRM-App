@@ -610,22 +610,22 @@ function computeMonthlyDepensesTotals() {
   const values = months.map(({ y, m }) => {
     const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
     const monthEnd = `${y}-${String(m).padStart(2, "0")}-31`;
-    let total = 0;
+    let totalCents = 0; // on additionne en centimes (entiers) pour éviter toute dérive d'arrondi
     cache.depenses.forEach(d => {
-      const montant = Number(d.montant || 0);
+      const montantCents = Math.round(Number(d.montant || 0) * 100);
       const recur = d.recurrence || "Aucune";
       if (recur === "Aucune") {
-        if (d.date_operation && d.date_operation >= monthStart && d.date_operation <= monthEnd) total += montant;
+        if (d.date_operation && d.date_operation >= monthStart && d.date_operation <= monthEnd) totalCents += montantCents;
       } else if (recur === "Mensuelle") {
-        if (d.date_operation && d.date_operation <= monthEnd) total += montant; // déjà actif à cette période
+        if (d.date_operation && d.date_operation <= monthEnd) totalCents += montantCents; // déjà actif à cette période
       } else if (recur === "Annuelle") {
         if (d.date_operation) {
           const startMonth = Number(d.date_operation.slice(5, 7));
-          if (startMonth === m && d.date_operation <= monthEnd) total += montant;
+          if (startMonth === m && d.date_operation <= monthEnd) totalCents += montantCents;
         }
       }
     });
-    return round2(total);
+    return totalCents / 100;
   });
   return { labels: months.map(x => x.label), values };
 }
@@ -640,7 +640,7 @@ function renderDepenseChart() {
     `<div class="mc-row mc-vals" style="${gridStyle}">${valsRow}</div>` +
     `<div class="mc-row mc-bars-row" style="${gridStyle}">${barsRow}</div>` +
     `<div class="mc-row mc-lbls" style="${gridStyle}">${lblsRow}</div>`;
-  const total = round2(values.reduce((s, v) => s + v, 0));
+  const total = values.reduce((s, v) => s + Math.round(v * 100), 0) / 100;
   document.getElementById("depense-chart-total").textContent = `Total sur les 6 derniers mois : ${total.toFixed(2)} € — abonnements actifs comptés chaque mois depuis leur souscription, dépenses ponctuelles au mois réel.`;
 }
 function renderDepenses() {
