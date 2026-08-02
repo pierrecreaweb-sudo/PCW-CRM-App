@@ -236,6 +236,7 @@
   .editor-sheet{background:#fff;max-width:860px;margin:0 auto;border-top:6px solid var(--accent);border-radius:2px;padding:48px 56px 40px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 30px 70px -15px rgba(16,24,40,.35);position:relative;color:#1A1D24;}
   .editor-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;padding-bottom:22px;margin-bottom:22px;border-bottom:2px solid #EDEFF3;}
   .editor-head .em{font-size:12px;color:#7A8194;text-align:right;line-height:1.7;}
+  .lines-table-scroll{width:100%;}
   .lines-table{width:100%;border-collapse:collapse;margin-top:6px;}
   .lines-table th{background:var(--surface-alt);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 6px;text-align:left;}
   .lines-table td{border-top:1px solid #EDEFF3;padding:8px 6px;}
@@ -293,6 +294,15 @@
     .table-scroll table.data{min-width:600px;}
     .content{padding:16px;overflow-x:hidden;}
     .cards-row{overflow-x:visible;}
+
+    .editor-overlay{padding:14px 8px;}
+    .editor-sheet{padding:22px 16px 26px;border-radius:0;}
+    .editor-head{flex-direction:column;}
+    .editor-head .em{text-align:left;}
+    .lines-table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .lines-table{min-width:640px;}
+    .totaux{text-align:left;}
+    .totaux .grand{font-size:16px;white-space:nowrap;display:inline-block;}
   }
 </style>
 </head>
@@ -779,13 +789,15 @@
       </div>
       <div class="em" id="ed-emetteur"></div>
     </div>
-    <table class="lines-table">
-      <thead><tr>
-        <th style="width:32%;">Désignation</th><th>Qté</th><th>PU (€)</th><th>Remise %</th>
-        <th>Total (€)</th><th></th>
-      </tr></thead>
-      <tbody id="ed-lines"></tbody>
-    </table>
+    <div class="lines-table-scroll">
+      <table class="lines-table">
+        <thead><tr>
+          <th style="width:30%;">Désignation</th><th>Qté</th><th>PU (€)</th><th>Remise %</th>
+          <th>Paiement</th><th>Total (€)</th><th></th>
+        </tr></thead>
+        <tbody id="ed-lines"></tbody>
+      </table>
+    </div>
     <div style="margin-top:10px;"><button class="btn secondary" type="button" id="ed-add-line">＋ Ajouter une ligne</button></div>
     <div class="totaux" id="ed-totaux"></div>
     <div id="ed-cgv-preview" style="margin-top:16px;font-size:12px;color:var(--muted);"></div>
