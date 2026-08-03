@@ -1273,6 +1273,7 @@ function renderContacts() {
       <td>${c.telephone || "—"}</td>
       <td>${c.provenance || "—"}</td>
       <td class="row-actions">
+        <button title="Envoyer un email" onclick="openQuickEmailDialog(${c.id})"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></button>
         <button title="Historique devis / factures" onclick="openContactHistory(${c.id})">📁</button>
         <button onclick="openContactDialog(${c.id})">✎</button>
         <button onclick="confirmDelete('contacts', ${c.id}, renderContacts)">🗑</button>
@@ -1280,6 +1281,23 @@ function renderContacts() {
     </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucun contact</td></tr>`;
 }
 
+function openQuickEmailDialog(id) {
+  const c = findContact(id);
+  if (!c) return;
+  if (!c.email) { showToast("Impossible d'envoyer un email : aucune adresse renseignée sur ce contact"); return; }
+  const prenom = contactLabel(c).split(" ")[0];
+  const html = `
+    <div class="field"><label>Destinataire</label><input type="text" value="${escapeAttr(c.email)}" disabled style="background:var(--surface-alt);color:var(--muted);"></div>
+    <div class="field"><label>Objet</label><input type="text" id="qe-subject" placeholder="Objet de l'email"></div>
+    <div class="field"><label>Message</label><textarea id="qe-body" rows="9">Bonjour ${prenom && prenom !== "—" ? prenom : ""},\n\n\n\nCordialement,\n${EMETTEUR.nom}</textarea></div>`;
+  openRawModal("Envoyer un email à " + contactLabel(c), html, () => {
+    const subject = document.getElementById("qe-subject").value || "";
+    const body = document.getElementById("qe-body").value || "";
+    window.location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    closeModal();
+  });
+  document.getElementById("modal-save").textContent = "Ouvrir dans la messagerie";
+}
 function openContactDialog(id) {
   const row = id ? cache.contacts.find(c => c.id === id) : {};
   openModal({
