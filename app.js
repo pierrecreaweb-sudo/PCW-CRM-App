@@ -59,11 +59,18 @@ function optionsListForType(type) {
   return null;
 }
 const CGV_CLAUSE_MAINTENANCE = "Le prestataire assure la gestion technique pendant toute la durée du contrat de maintenance. En cas de résiliation, le client peut récupérer l'ensemble de ses données et les accès à son site après règlement de toutes les sommes dues.";
+const CGV_CLAUSE_ACOMPTE = "Un acompte de 30% du montant total TTC est dû à la validation du devis. Cet acompte est exigible immédiatement et non remboursable en cas d'annulation de la commande par le client, sauf cas de force majeure.";
+const CGV_CLAUSE_ABONNEMENT = "Les abonnements sont conclus pour une durée de 12 mois. Sauf résiliation notifiée par écrit au moins 30 jours avant l'échéance, ils sont reconduits automatiquement pour une nouvelle période de 12 mois.";
+// ⚠️ CGV_OPTIONS ne sert plus qu'à pré-remplir la table cgv_templates la toute
+// première fois (voir seedCgvTemplates) — une fois en base, c'est la table
+// cgv_templates (modifiable dans l'appli via le bouton "CGV") qui fait foi.
 const CGV_OPTIONS = [
   "Paiement du solde à la livraison du projet.",
   "Paiement à réception de la facture, envoyée 7 jours avant la livraison.",
   "La propriété des livrables et les droits d'utilisation ne sont transférés au client qu'après paiement intégral de la facture.",
   CGV_CLAUSE_MAINTENANCE,
+  CGV_CLAUSE_ACOMPTE,
+  CGV_CLAUSE_ABONNEMENT,
 ];
 
 const EMETTEUR = {
@@ -96,7 +103,7 @@ const STATUT_COLORS = {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -224,7 +231,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -235,8 +242,9 @@ async function refreshCache() {
     fetchAll("factures"),
     fetchAll("temps_passe"),
     fetchAll("depenses"),
+    fetchAll("cgv_templates", "ordre", true),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates };
 }
 
 // ========================================================================
@@ -335,6 +343,13 @@ async function seedDefaultTarification() {
   await refreshCache();
   showToast(toCreate.length + " prestation(s)/option(s) ajoutée(s) à la Tarification");
 }
+async function seedCgvTemplates() {
+  if (cache.cgv_templates.length) return; // déjà initialisé, on ne touche à rien
+  for (let i = 0; i < CGV_OPTIONS.length; i++) {
+    await insertRow("cgv_templates", { texte: CGV_OPTIONS[i], ordre: i, date_creation: todayStr() });
+  }
+  await refreshCache();
+}
 async function onLoggedIn(user) {
   currentUser = user;
   document.getElementById("auth-screen").style.display = "none";
@@ -344,6 +359,7 @@ async function onLoggedIn(user) {
   await autoExpireDevis();
   await autoMarkLateFactures();
   await seedDefaultTarification();
+  await seedCgvTemplates();
   showPage("dashboard");
 }
 async function handleLogout() {
@@ -1582,9 +1598,50 @@ function renderCgvPreview(d) {
 }
 
 // Sélection ordonnée des CGV
+function openCgvManagerDialog() {
+  const rows = [...cache.cgv_templates].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+  const html = `
+    <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Modifie le texte d'une clause, supprime-la, ou ajoute-en une nouvelle en bas. Ces clauses sont celles proposées lors de la finalisation d'un devis.</p>
+    <div id="cgv-manager-list">
+      ${rows.map(t => `
+        <div class="field" data-cgv-row="${t.id}" style="margin-bottom:10px;">
+          <textarea rows="2" data-cgv-text="${t.id}">${(t.texte || "").replace(/</g, "&lt;")}</textarea>
+          <button type="button" class="btn secondary" style="margin-top:4px;padding:5px 10px;font-size:11.5px;" onclick="deleteCgvTemplate(${t.id})">🗑 Supprimer cette clause</button>
+        </div>`).join("")}
+    </div>
+    <div class="field" style="border-top:1px solid var(--border);padding-top:12px;margin-top:6px;">
+      <label>Nouvelle clause</label>
+      <textarea rows="2" id="cgv-new-text" placeholder="Texte de la nouvelle condition générale de vente…"></textarea>
+    </div>`;
+  openRawModal("Gérer les modèles de CGV", html, async () => {
+    for (const t of rows) {
+      const ta = document.querySelector(`[data-cgv-text="${t.id}"]`);
+      const val = ta ? ta.value.trim() : "";
+      if (val && val !== t.texte) await updateRow("cgv_templates", t.id, { texte: val });
+    }
+    const newVal = (document.getElementById("cgv-new-text").value || "").trim();
+    if (newVal) {
+      const maxOrdre = rows.reduce((m, t) => Math.max(m, t.ordre ?? 0), -1);
+      await insertRow("cgv_templates", { texte: newVal, ordre: maxOrdre + 1, date_creation: todayStr() });
+    }
+    await refreshCache();
+    closeModal();
+    showToast("Modèles de CGV mis à jour");
+  });
+  document.getElementById("modal-save").textContent = "Enregistrer";
+}
+async function deleteCgvTemplate(id) {
+  if (!confirm("Supprimer définitivement cette clause de CGV ?")) return;
+  await deleteRow("cgv_templates", id);
+  await refreshCache();
+  closeModal();
+  showToast("Clause supprimée");
+  openCgvManagerDialog();
+}
 function openCgvPicker() {
   readEditorToState();
   const d = findDevis(edState.id);
+  const availableCgv = cache.cgv_templates.length ? cache.cgv_templates.map(t => t.texte) : CGV_OPTIONS;
   let already = (d && Array.isArray(d.cgv)) ? d.cgv.slice() : [];
   // Suggestion automatique (une seule fois, avant toute finalisation) si le
   // projet lié comporte une option de maintenance.
@@ -1594,16 +1651,16 @@ function openCgvPicker() {
     const hasMaintenance = opts.includes("Maintenance & mise à jour") || opts.includes("Maintenance & évolutions");
     if (hasMaintenance && !already.includes(CGV_CLAUSE_MAINTENANCE)) already.push(CGV_CLAUSE_MAINTENANCE);
   }
-  const html = `<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Coche les conditions dans l'ordre où elles doivent apparaître sur le devis.</p>
-    <div class="cgv-list" id="cgv-list">${CGV_OPTIONS.map((c, i) => {
+  const html = `<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Coche les conditions dans l'ordre où elles doivent apparaître sur le devis. <a href="#" onclick="closeModal();openCgvManagerDialog();return false;">Gérer les modèles de CGV</a></p>
+    <div class="cgv-list" id="cgv-list">${availableCgv.map((c, i) => {
       const pos = already.indexOf(c);
       return `<label><span class="cgv-order" data-cgv="${i}">${pos >= 0 ? (pos + 1) : ""}</span>
         <input type="checkbox" data-cgv-cb="${i}" ${pos >= 0 ? "checked" : ""}> ${c}</label>`;
     }).join("")}</div>`;
   openRawModal("Conditions générales de vente", html, async () => {
     // recueille l'ordre de sélection
-    const order = window._cgvOrder || already.map(c => CGV_OPTIONS.indexOf(c)).filter(x => x >= 0);
-    const chosen = order.map(i => CGV_OPTIONS[i]);
+    const order = window._cgvOrder || already.map(c => availableCgv.indexOf(c)).filter(x => x >= 0);
+    const chosen = order.map(i => availableCgv[i]);
     await updateRow("devis", edState.id, { cgv: chosen, finalise: true });
     await refreshCache();
     closeModal();
@@ -1613,7 +1670,7 @@ function openCgvPicker() {
     generateDevisPDF(edState.id);
   });
   // gestion de l'ordre de clic
-  window._cgvOrder = already.map(c => CGV_OPTIONS.indexOf(c)).filter(x => x >= 0);
+  window._cgvOrder = already.map(c => availableCgv.indexOf(c)).filter(x => x >= 0);
   document.querySelectorAll("[data-cgv-cb]").forEach(cb => {
     cb.addEventListener("change", () => {
       const i = Number(cb.dataset.cgvCb);
@@ -1634,6 +1691,9 @@ async function createDevisReminders(d) {
   const num = d.numero || ("#" + d.id);
   const evId = e ? e.id : null;
   const toCreate = [];
+  if (cgv.includes(CGV_CLAUSE_ACOMPTE)) {
+    toCreate.push({ titre: `Envoyer facture d'acompte (30%) du devis ${num}`, priorite: "Haute", date_echeance: todayStr() });
+  }
   if (cgv.includes("Paiement à réception de la facture, envoyée 7 jours avant la livraison.")) {
     toCreate.push({ titre: `Envoyer facture devis ${num}`, priorite: "Haute", date_echeance: addDaysISO(evDate, -7) });
   }
@@ -1805,6 +1865,7 @@ function renderFactures() {
       <td>${f.numero || "—"}</td>
       <td>${contactLabel(findContact(f.contact_id))}</td>
       <td>${dev ? (dev.numero || ("Devis #" + dev.id)) : "—"}</td>
+      <td>${f.type_facture && f.type_facture !== "Facture unique" ? badgeSubtle(f.type_facture.replace(" (30%)", ""), f.type_facture.includes("Acompte") ? "var(--tertiary)" : "var(--success)") : "—"}</td>
       <td>${fmtDateFR(f.date_facture)}</td>
       <td>${f.montant_ttc ? f.montant_ttc + " €" : "—"}</td>
       <td>${statusSelectInline("factures", f.id, f.statut, STATUTS_FACTURE, STATUT_COLORS)}</td>
@@ -1816,13 +1877,29 @@ function renderFactures() {
         <button onclick="openFactureDialog(${f.id})">✎</button>
         <button onclick="confirmDelete('factures', ${f.id}, renderFactures)">🗑</button>
       </td></tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="7">Aucune facture — crée-la ici ou depuis un devis (🧾)</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="8">Aucune facture — crée-la ici ou depuis un devis (🧾)</td></tr>`;
+}
+const TYPES_FACTURE = ["Facture unique", "Facture d'acompte (30%)", "Facture de solde"];
+const ACOMPTE_PERCENT = 30;
+function computeMontantParType(devisId, type, excludeFactureId) {
+  const d = findDevis(Number(devisId));
+  if (!d || d.montant_ttc == null) return null;
+  const total = Number(d.montant_ttc);
+  if (type === "Facture d'acompte (30%)") return round2(total * ACOMPTE_PERCENT / 100);
+  if (type === "Facture de solde") {
+    const dejaFacture = cache.factures
+      .filter(f => f.devis_id === Number(devisId) && f.id !== excludeFactureId && f.type_facture === "Facture d'acompte (30%)")
+      .reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+    return round2(total - dejaFacture);
+  }
+  return total;
 }
 function factureFields(row) {
   return [
     { key: "numero", label: "Numéro", type: "text", value: row.numero != null ? row.numero : nextFactureNumero() },
     { key: "contact_id", label: "Client / contact", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
     { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">— Aucun —</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
+    { key: "type_facture", label: "Type de facture", type: "select", options: TYPES_FACTURE, value: row.type_facture || "Facture unique" },
     { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
     { key: "date_facture", label: "Date de la facture", type: "date", value: row.date_facture || todayStr() },
     { key: "date_echeance", label: "Date d'échéance", type: "date", value: row.date_echeance },
@@ -1832,18 +1909,27 @@ function factureFields(row) {
     { key: "notes", label: "Notes", type: "textarea", value: row.notes },
   ];
 }
-function factureOnRender(form) {
+function factureOnRender(form, currentId) {
+  const recompute = () => {
+    const devisId = form.elements["devis_id"].value;
+    const type = form.elements["type_facture"].value;
+    if (!devisId || type === "Facture unique") return;
+    const m = computeMontantParType(devisId, type, currentId);
+    if (m != null) form.elements["montant_ttc"].value = m;
+  };
   form.elements["devis_id"].addEventListener("change", () => {
     const d = findDevis(Number(form.elements["devis_id"].value)); if (!d) return;
     const c = devisContact(d);
     if (!form.elements["contact_id"].value && c) form.elements["contact_id"].value = c.id;
+    recompute();
     if (!form.elements["montant_ttc"].value && d.montant_ttc != null) form.elements["montant_ttc"].value = d.montant_ttc;
   });
+  form.elements["type_facture"].addEventListener("change", recompute);
 }
 function openFactureDialog(id, prefill) {
   const row = id ? (findFacture(id) || {}) : (prefill || {});
   openModal({
-    title: id ? "Modifier la facture" : "Nouvelle facture", table: "factures", id, fields: factureFields(row), onRender: factureOnRender,
+    title: id ? "Modifier la facture" : "Nouvelle facture", table: "factures", id, fields: factureFields(row), onRender: (form) => factureOnRender(form, id),
     beforeSave: (v) => {
       const linked = v.devis_id ? findDevis(Number(v.devis_id)) : null;
       v.lignes = (linked && Array.isArray(linked.lignes) && linked.lignes.length) ? linked.lignes : (row.lignes || null);
@@ -1876,6 +1962,7 @@ async function generateFacturePDF(id, mode) {
   let infoLine = "N° : " + (f.numero || "—") + "     Date : " + fmtDateFR(f.date_facture || todayStr());
   if (f.date_echeance) infoLine += "     Échéance : " + fmtDateFR(f.date_echeance);
   if (dev) infoLine += "     Réf. devis : " + (dev.numero || ("#" + dev.id));
+  if (f.type_facture && f.type_facture !== "Facture unique") infoLine += "     " + f.type_facture.toUpperCase();
   doc.text(infoLine, 16, 45);
   doc.setTextColor(0);
 
@@ -1923,6 +2010,13 @@ async function generateFacturePDF(id, mode) {
     });
   }
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
+  if (f.type_facture === "Facture de solde" && dev && dev.montant_ttc != null) {
+    const acomptesFacturees = cache.factures.filter(x => x.devis_id === f.devis_id && x.type_facture === "Facture d'acompte (30%)");
+    const totalAcompte = round2(acomptesFacturees.reduce((s, x) => s + Number(x.montant_ttc || 0), 0));
+    doc.setFontSize(9.5); doc.setTextColor(90);
+    doc.text(`Montant total du projet : ${Number(dev.montant_ttc).toFixed(2)} €   —   Acompte déjà facturé : ${totalAcompte.toFixed(2)} € ${acomptesFacturees.length ? "(" + acomptesFacturees.map(x => x.numero).filter(Boolean).join(", ") + ")" : ""}`, 20, y);
+    doc.setTextColor(0); y += 9;
+  }
   doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   y += 14;
   if (f.statut !== "Payée") {
@@ -2609,6 +2703,7 @@ document.addEventListener("DOMContentLoaded", () => {
   tickChrono();
   document.getElementById("btn-new-prospect").addEventListener("click", () => openEvenementDialog(null));
   document.getElementById("btn-new-devis").addEventListener("click", () => openDevisDialog(null));
+  document.getElementById("btn-cgv-manager").addEventListener("click", openCgvManagerDialog);
   document.getElementById("btn-export-devis").addEventListener("click", exportDevisCSV);
   document.getElementById("btn-new-facture").addEventListener("click", () => openFactureDialog(null));
   document.getElementById("btn-export-factures").addEventListener("click", exportFacturesCSV);
