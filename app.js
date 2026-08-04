@@ -1740,13 +1740,23 @@ function drawStamp(doc, text, rgb) {
   doc.text(text, 105, 168, { align: "center", angle: 25 });
   doc.setTextColor(0); doc.setFontSize(11); doc.setFont(undefined, "normal");
 }
-function drawPdfBand(doc, logo, title) {
+function drawPdfBand(doc, logo, title, tag) {
   doc.setFillColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
   doc.rect(0, 0, 210, 36, "F");
   if (logo) drawRoundedImage(doc, logo, 16, 7, 22, 22, 4);
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(22); doc.setFont(undefined, "bold");
   doc.text(title, 44, 23);
+  if (tag) {
+    const tagX = 44 + doc.getTextWidth(title) + 6;
+    doc.setFontSize(10.5); doc.setFont(undefined, "bold");
+    const tw = doc.getTextWidth(tag);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(tagX, 16.5, tw + 8, 8, 3, 3, "F");
+    doc.setTextColor(PDF_BRAND[0], PDF_BRAND[1], PDF_BRAND[2]);
+    doc.text(tag, tagX + 4, 22);
+    doc.setTextColor(255, 255, 255);
+  }
   doc.setFont(undefined, "normal"); doc.setFontSize(8.3);
   let ey = 10;
   [EMETTEUR.nom, EMETTEUR.adresse, EMETTEUR.siret, EMETTEUR.email, "Tél : " + EMETTEUR.telephone, EMETTEUR.site].forEach(l => { doc.text(l, 194, ey, { align: "right" }); ey += 4.2; });
@@ -1954,7 +1964,8 @@ async function generateFacturePDF(id, mode) {
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
   const montant = Number(f.montant_ttc || 0);
   const logo = await getLogoDataUrl();
-  drawPdfBand(doc, logo, "FACTURE");
+  const factureTag = f.type_facture === "Facture d'acompte (30%)" ? "ACOMPTE 30%" : (f.type_facture === "Facture de solde" ? "SOLDE" : null);
+  drawPdfBand(doc, logo, "FACTURE", factureTag);
   const stamp = FACTURE_STAMPS[f.statut];
   if (stamp) drawStamp(doc, stamp[0], stamp[1]);
 
@@ -2010,6 +2021,11 @@ async function generateFacturePDF(id, mode) {
     });
   }
   y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
+  if (f.type_facture === "Facture d'acompte (30%)" && dev && dev.montant_ttc != null) {
+    doc.setFontSize(9.5); doc.setTextColor(90);
+    doc.text(`Montant total du projet : ${Number(dev.montant_ttc).toFixed(2)} €   —   Acompte de 30% facturé ce jour : ${montant.toFixed(2)} €`, 20, y);
+    doc.setTextColor(0); y += 9;
+  }
   if (f.type_facture === "Facture de solde" && dev && dev.montant_ttc != null) {
     const acomptesFacturees = cache.factures.filter(x => x.devis_id === f.devis_id && x.type_facture === "Facture d'acompte (30%)");
     const totalAcompte = round2(acomptesFacturees.reduce((s, x) => s + Number(x.montant_ttc || 0), 0));
@@ -2017,7 +2033,11 @@ async function generateFacturePDF(id, mode) {
     doc.text(`Montant total du projet : ${Number(dev.montant_ttc).toFixed(2)} €   —   Acompte déjà facturé : ${totalAcompte.toFixed(2)} € ${acomptesFacturees.length ? "(" + acomptesFacturees.map(x => x.numero).filter(Boolean).join(", ") + ")" : ""}`, 20, y);
     doc.setTextColor(0); y += 9;
   }
-  doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
+  if (f.type_facture === "Facture d'acompte (30%)") {
+    doc.setFontSize(13); doc.text("ACOMPTE À PAYER (30%) : " + montant.toFixed(2) + " €", 20, y);
+  } else {
+    doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
+  }
   y += 14;
   if (f.statut !== "Payée") {
     doc.setFontSize(9); doc.setTextColor(90);
