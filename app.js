@@ -26,7 +26,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ---- 2) CONSTANTES ----
-const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
+const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète", "Audit Express", "Audit Complet"];
 const STATUTS_PROSPECT = ["Nouveau", "Contacté", "Qualifié", "Devis envoyé", "Converti", "Perdu"];
 const STATUTS_DEVIS = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
 const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "En retard", "Annulée"];
@@ -325,13 +325,15 @@ async function handleAuthSubmit() {
 // uniquement les prestations/options qui n'existent pas encore (comparaison
 // par nom), sans jamais toucher aux lignes déjà présentes ou à leurs prix.
 async function seedDefaultTarification() {
-  const prestations = TYPES_EVENEMENT.map(nom => ({ nom_presta: nom, categorie: "Prestation" }));
+  const prestations = TYPES_EVENEMENT.filter(nom => nom !== "Audit Express" && nom !== "Audit Complet").map(nom => ({ nom_presta: nom, categorie: "Prestation" }));
   const optionsUniques = [...new Set([...OPTIONS_SITE, ...OPTIONS_APP])];
   const options = optionsUniques.map(nom => ({ nom_presta: nom, categorie: "Option / Supplément" }));
   const packs = [
     { nom_presta: "Pack Lancement", categorie: "Prestation", pu_ttc: 790 },
     { nom_presta: "Pack Croissance", categorie: "Prestation", pu_ttc: 1280 },
     { nom_presta: "Pack Artisan Connecté", categorie: "Prestation", pu_ttc: 3200 },
+    { nom_presta: "Audit Express", categorie: "Prestation", pu_ttc: 99 },
+    { nom_presta: "Audit Complet", categorie: "Prestation", pu_ttc: 249 },
   ];
   const toCheck = [...prestations, ...options, ...packs];
   const existingNames = new Set(cache.grille_tarifaire.map(g => (g.nom_presta || "").trim().toLowerCase()));
