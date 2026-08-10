@@ -483,12 +483,6 @@ function computeNotifications() {
       sub: "Échéance le " + fmtDateFR(e.prochaine_facturation),
       fn: () => { showPage("dashboard"); } });
   });
-  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance <= addDaysISO(today, 7)).forEach(d => {
-    items.push({ id: "abonnement-" + d.id + "-" + d.prochaine_echeance, urgent: d.prochaine_echeance <= today, color: "var(--tertiary)", icon: "icon-wallet", date: d.prochaine_echeance,
-      label: "Abonnement à renouveler : " + (d.libelle || ""),
-      sub: (d.montant ? d.montant + " € · " : "") + "Échéance le " + fmtDateFR(d.prochaine_echeance),
-      fn: () => { showPage("depenses"); setTimeout(() => openDepenseDialog(d.id), 150); } });
-  });
 
   const dismissed = getDismissedNotifs();
   const filtered = items.filter(it => !dismissed.includes(it.id));
@@ -602,7 +596,6 @@ function renderPage(key) {
   else if (key === "calendrier") renderCalendrier();
   else if (key === "tarification") renderGrille();
   else if (key === "temps") renderTemps();
-  else if (key === "depenses") renderDepenses();
   else if (key === "stats") renderStats();
 }
 function advanceDateBy(dateStr, freq) {
@@ -630,145 +623,6 @@ async function refreshAll() { await refreshCache(); renderPage(currentPage); }
 // ========================================================================
 //  STATISTIQUES
 // ========================================================================
-// ========================================================================
-//  DÉPENSES & RECETTES
-// ========================================================================
-function advanceRecurrenceDate(dateStr, recurrence) {
-  const d = new Date(dateStr);
-  if (recurrence === "Annuelle") d.setFullYear(d.getFullYear() + 1); else d.setMonth(d.getMonth() + 1);
-  return isoOf(d);
-}
-let depenseRecurFilter = "";
-function bindDepenseRecurTabs() {
-  const wrap = document.getElementById("depense-recur-tabs");
-  if (!wrap || wrap.dataset.bound) return;
-  wrap.dataset.bound = "1";
-  wrap.querySelectorAll(".cat-tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      depenseRecurFilter = btn.dataset.recur;
-      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
-      renderDepenses();
-    });
-  });
-}
-function computeMonthlyDepensesTotals() {
-  const now = new Date();
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ y: d.getFullYear(), m: d.getMonth() + 1, label: MOIS_FR[d.getMonth()].slice(0, 3) + " " + String(d.getFullYear()).slice(2) });
-  }
-  const values = months.map(({ y, m }) => {
-    const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
-    const monthEnd = `${y}-${String(m).padStart(2, "0")}-31`;
-    let totalCents = 0; // on additionne en centimes (entiers) pour éviter toute dérive d'arrondi
-    cache.depenses.forEach(d => {
-      const montantCents = Math.round(Number(d.montant || 0) * 100);
-      const recur = d.recurrence || "Aucune";
-      if (recur === "Aucune") {
-        if (d.date_operation && d.date_operation >= monthStart && d.date_operation <= monthEnd) totalCents += montantCents;
-      } else if (recur === "Mensuelle") {
-        if (d.date_operation && d.date_operation <= monthEnd) totalCents += montantCents; // déjà actif à cette période
-      } else if (recur === "Annuelle") {
-        if (d.date_operation) {
-          const startMonth = Number(d.date_operation.slice(5, 7));
-          if (startMonth === m && d.date_operation <= monthEnd) totalCents += montantCents;
-        }
-      }
-    });
-    return totalCents / 100;
-  });
-  return { labels: months.map(x => x.label), values };
-}
-function renderDepenseChart() {
-  const { labels, values } = computeMonthlyDepensesTotals();
-  const max = Math.max(1, ...values);
-  const gridStyle = `grid-template-columns:repeat(${labels.length},1fr);`;
-  const valsRow = values.map(v => `<div>${v ? fmtEuroCompact(v) : ""}</div>`).join("");
-  const barsRow = values.map(v => `<div class="bar" style="height:${Math.round((v / max) * 54) + 4}px;"></div>`).join("");
-  const lblsRow = labels.map(l => `<div>${l}</div>`).join("");
-  document.getElementById("depense-chart").innerHTML =
-    `<div class="mc-row mc-vals" style="${gridStyle}">${valsRow}</div>` +
-    `<div class="mc-row mc-bars-row" style="${gridStyle}">${barsRow}</div>` +
-    `<div class="mc-row mc-lbls" style="${gridStyle}">${lblsRow}</div>`;
-  const total = values.reduce((s, v) => s + Math.round(v * 100), 0) / 100;
-  document.getElementById("depense-chart-total").textContent = `Total sur les 6 derniers mois : ${total.toFixed(2)} € — abonnements actifs comptés chaque mois depuis leur souscription, dépenses ponctuelles au mois réel.`;
-}
-function renderDepenses() {
-  bindSearch("depense-search", renderDepenses);
-  bindDepenseRecurTabs();
-  renderDepenseChart();
-  ensureFilterOptions("depense-filter-categorie", CATEGORIES_DEPENSE);
-  const search = (document.getElementById("depense-search").value || "").toLowerCase();
-  const fCat = document.getElementById("depense-filter-categorie").value;
-  let rows = [...cache.depenses].sort((a, b) => (b.date_operation || "").localeCompare(a.date_operation || ""));
-  if (depenseRecurFilter === "abonnements") rows = rows.filter(d => d.recurrence && d.recurrence !== "Aucune");
-  if (depenseRecurFilter === "ponctuelles") rows = rows.filter(d => !d.recurrence || d.recurrence === "Aucune");
-  if (fCat) rows = rows.filter(d => d.categorie === fCat);
-  if (search) rows = rows.filter(d => ((d.libelle || "") + " " + (d.fournisseur || "")).toLowerCase().includes(search));
-
-  const today = todayStr();
-  const monthKey = today.slice(0, 7);
-  const abonnementsActifs = cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune");
-  const totalMensuel = abonnementsActifs.filter(d => d.recurrence === "Mensuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
-  const totalAnnuel = abonnementsActifs.filter(d => d.recurrence === "Annuelle").reduce((s, d) => s + Number(d.montant || 0), 0);
-  const ponctuellesMois = cache.depenses.filter(d => (!d.recurrence || d.recurrence === "Aucune") && (d.date_operation || "").slice(0, 7) === monthKey).reduce((s, d) => s + Number(d.montant || 0), 0);
-
-  document.getElementById("depense-summary").innerHTML = `
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div><div class="num">${abonnementsActifs.length}</div><div class="label">Abonnements actifs</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${round2(totalMensuel)} €</div><div class="label">Total abonnements mensuels</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--accent-dark);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div><div class="num">${round2(totalAnnuel)} €</div><div class="label">Total abonnements annuels</div></div>
-    <div class="stat-card"><div class="stat-icon-wrap" style="background:var(--danger);color:#fff;"><svg><use href="#icon-arrow-up-right"></use></svg></div><div class="num">${round2(ponctuellesMois)} €</div><div class="label">Dépenses ponctuelles ce mois-ci</div></div>`;
-
-  const tbody = document.getElementById("depense-tbody");
-  tbody.innerHTML = rows.length ? rows.map(d => `
-    <tr>
-      <td>${fmtDateFR(d.date_operation) || "—"}</td>
-      <td><strong>${d.libelle || "—"}</strong>${d.fournisseur ? `<br><span style="color:var(--muted);font-size:11.5px;">${d.fournisseur}</span>` : ""}</td>
-      <td>${d.categorie || "—"}</td>
-      <td><strong style="color:var(--danger);">-${d.montant != null ? d.montant : 0} €</strong></td>
-      <td>${d.recurrence && d.recurrence !== "Aucune" ? badgeSubtle(d.recurrence, "var(--tertiary)") : "—"}</td>
-      <td>${d.recurrence && d.recurrence !== "Aucune" ? (fmtDateFR(d.prochaine_echeance) || "—") : "—"}</td>
-      <td class="row-actions"><button onclick="openDepenseDialog(${d.id})">✎</button><button onclick="confirmDelete('depenses', ${d.id}, renderDepenses)">🗑</button></td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucune opération — ajoute ton premier abonnement ou dépense</td></tr>`;
-}
-function openDepenseDialog(id) {
-  const row = id ? cache.depenses.find(d => d.id === id) : {};
-  openModal({
-    title: id ? "Modifier l'opération" : "Nouvelle opération", table: "depenses", id,
-    fields: [
-      { key: "libelle", label: "Libellé", type: "text", required: true, value: row.libelle, placeholder: "Ex. Abonnement Canva Pro" },
-      { key: "categorie", label: "Catégorie", type: "select-other", options: CATEGORIES_DEPENSE, value: row.categorie, allowEmpty: true },
-      { key: "fournisseur", label: "Fournisseur / Organisme", type: "text", value: row.fournisseur },
-      { key: "montant", label: "Montant (€)", type: "number", required: true, value: row.montant },
-      { key: "date_operation", label: "Date de l'opération", type: "date", value: row.date_operation || todayStr() },
-      { key: "recurrence", label: "Récurrence (abonnement)", type: "select", options: RECURRENCE_DEPENSE, value: row.recurrence || "Aucune" },
-      { key: "prochaine_echeance", label: "Prochaine échéance (si récurrent)", type: "date", value: row.prochaine_echeance },
-      { key: "notes", label: "Notes", type: "textarea", value: row.notes },
-    ],
-    onRender: (form) => {
-      form.elements["recurrence"].addEventListener("change", () => {
-        if (form.elements["recurrence"].value !== "Aucune" && !form.elements["prochaine_echeance"].value) {
-          form.elements["prochaine_echeance"].value = advanceRecurrenceDate(form.elements["date_operation"].value || todayStr(), form.elements["recurrence"].value);
-        }
-      });
-    },
-    beforeSave: (v) => { v.type = "Dépense"; },
-    onSaved: refreshAll,
-  });
-}
-function renewDepense(id) {
-  const d = cache.depenses.find(x => x.id === id); if (!d) return;
-  const next = advanceRecurrenceDate(d.prochaine_echeance || todayStr(), d.recurrence);
-  updateRow("depenses", id, { prochaine_echeance: next }).then(async () => {
-    await refreshCache(); showToast("Échéance avancée au " + fmtDateFR(next)); renderPage(currentPage);
-  });
-}
-function exportDepensesCSV() {
-  const rows = cache.depenses.map(d => [d.date_operation, d.libelle, d.categorie, d.fournisseur, d.montant, d.recurrence, d.prochaine_echeance]);
-  exportCSV("depenses_" + todayStr() + ".csv", ["Date", "Libellé", "Catégorie", "Fournisseur", "Montant (€)", "Récurrence", "Prochaine échéance"], rows);
-}
-
 function renderStats() {
   const devisEmis = cache.devis.filter(d => d.statut !== "En attente");
   const devisAcceptes = cache.devis.filter(d => d.statut === "Accepté");
@@ -984,8 +838,6 @@ function renderDashboard() {
   });
   cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= dans1Mois && !["Payée", "Annulée"].includes(f.statut))
     .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, fn: `openFactureDialog(${f.id})` }));
-  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance && d.prochaine_echeance >= today && d.prochaine_echeance <= dans1Mois)
-    .forEach(d => items.push({ date: d.prochaine_echeance, type: "Abonnement", detail: (d.libelle || "—") + (d.montant ? " — " + d.montant + " €" : ""), statut: d.recurrence, fn: `openDepenseDialog(${d.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const top = items.slice(0, 15);
   document.getElementById("dash-dates").innerHTML = top.length ? top.map(it => {
@@ -1067,6 +919,28 @@ function renderTodo() {
         <button onclick="confirmDelete('todos', ${t.id}, renderTodo)">🗑</button>
       </td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="6">Aucune tâche</td></tr>`;
+
+  renderTodoRdvAvenir();
+}
+function renderTodoRdvAvenir() {
+  const tbody = document.getElementById("todo-rdv-avenir-tbody");
+  if (!tbody) return;
+  const today = todayStr();
+  const rows = [...cache.rdv]
+    .filter(r => r.date_rdv && r.date_rdv >= today && r.statut !== "Annulé")
+    .sort((a, b) => (a.date_rdv || "").localeCompare(b.date_rdv || "") || (a.heure || "").localeCompare(b.heure || ""));
+  tbody.innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td>${fmtDateFR(r.date_rdv)}</td>
+      <td>${r.heure || "—"}</td>
+      <td>${r.objet || "—"}</td>
+      <td>${contactLabel(findContact(r.contact_id))}</td>
+      <td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
+      <td class="row-actions">
+        <button onclick="openRdvDialog(${r.id})">✎</button>
+        <button onclick="confirmDelete('rdv', ${r.id}, renderTodo)">🗑</button>
+      </td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun RDV à venir</td></tr>`;
 }
 
 function openTodoDialog(id) {
@@ -2427,7 +2301,7 @@ function openTempsDialog(id, defaultEvenementId) {
   });
 }
 
-const CAL_TYPE_COLORS = { "Projet": "var(--success)", "RDV": "var(--tertiary)", "Devis": "var(--info)", "Facture": "var(--warning)", "Abonnement": "var(--accent-dark)", "Tâche": "var(--danger)" };
+const CAL_TYPE_COLORS = { "Projet": "var(--success)", "RDV": "var(--tertiary)", "Devis": "var(--info)", "Facture": "var(--warning)", "Tâche": "var(--danger)" };
 function collectCalendarItems() {
   const items = [];
   cache.evenements.filter(e => e.date_fin).forEach(e => items.push({ date: e.date_fin, type: "Projet", label: eventLabel(e), fn: `openEvenementDialog(${e.id})` }));
@@ -2438,9 +2312,6 @@ function collectCalendarItems() {
   });
   cache.factures.filter(f => f.date_echeance && !["Payée", "Annulée"].includes(f.statut)).forEach(f => {
     items.push({ date: f.date_echeance, type: "Facture", label: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), fn: `openFactureDialog(${f.id})` });
-  });
-  cache.depenses.filter(d => d.recurrence && d.recurrence !== "Aucune" && d.prochaine_echeance).forEach(d => {
-    items.push({ date: d.prochaine_echeance, type: "Abonnement", label: (d.libelle || "—") + (d.montant ? " — " + d.montant + " €" : ""), fn: `openDepenseDialog(${d.id})` });
   });
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance).forEach(t => {
     items.push({ date: t.date_echeance, type: "Tâche", label: t.titre, fn: `openTodoDialog(${t.id})` });
@@ -2501,7 +2372,6 @@ const PAGE_FILTERS = {
   grille_tarifaire: ["grille-search"],
   prospects: ["prospect-filter-statut"],
   temps_passe: ["temps-filter-projet"],
-  depenses: ["depense-search", "depense-filter-categorie"],
 };
 function clearTableFilters(table) {
   (PAGE_FILTERS[table] || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
@@ -2509,11 +2379,6 @@ function clearTableFilters(table) {
     grilleCatFilter = "";
     const wrap = document.getElementById("grille-cat-tabs");
     if (wrap) wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.cat === ""));
-  }
-  if (table === "depenses") {
-    depenseRecurFilter = "";
-    const wrap = document.getElementById("depense-recur-tabs");
-    if (wrap) wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.recur === ""));
   }
 }
 function openModal({ title, table, id, fields, onSaved, onRender, beforeSave }) {
@@ -2718,8 +2583,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-new-todo").addEventListener("click", () => openTodoDialog(null));
   document.getElementById("btn-new-temps").addEventListener("click", () => openTempsDialog(null));
-  document.getElementById("btn-new-depense").addEventListener("click", () => openDepenseDialog(null));
-  document.getElementById("btn-export-depenses").addEventListener("click", exportDepensesCSV);
   document.getElementById("chrono-toggle-btn").addEventListener("click", toggleChrono);
   setInterval(tickChrono, 1000);
   tickChrono();
