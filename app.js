@@ -152,14 +152,14 @@ function badge(text, color) {
 function statusSelectInline(table, id, value, options, colors, field) {
   field = field || "statut";
   const color = colors[value] || "var(--muted)";
-  return `<select class="badge-select" data-table="${table}" data-id="${id}" data-field="${field}" style="background:${color};" onchange="updateStatutInline(this)">
+  return `<select class="badge-select" data-table="${table}" data-id="${id}" data-field="${field}" style="background:${color};" onclick="event.stopPropagation()" onchange="updateStatutInline(this)">
     ${options.map(o => `<option value="${escapeAttr(o)}" ${o === value ? "selected" : ""}>${o}</option>`).join("")}
   </select>`;
 }
 function statusSelectInlineSubtle(table, id, value, options, colors, field) {
   field = field || "statut";
   const color = colors[value] || "var(--muted)";
-  return `<select class="badge-select-subtle" data-table="${table}" data-id="${id}" data-field="${field}" style="--sel-c:${color};" onchange="updateStatutInline(this)">
+  return `<select class="badge-select-subtle" data-table="${table}" data-id="${id}" data-field="${field}" style="--sel-c:${color};" onclick="event.stopPropagation()" onchange="updateStatutInline(this)">
     ${options.map(o => `<option value="${escapeAttr(o)}" ${o === value ? "selected" : ""}>${o}</option>`).join("")}
   </select>`;
 }
@@ -819,7 +819,7 @@ function renderDashboard() {
       <td>${t.titre}</td><td>${todoLieALabel(t)}</td>
       <td>${badge(p, STATUT_COLORS[p])}</td>
       <td class="${echClass}">${fmtDateFR(t.date_echeance) || "—"}</td>
-      <td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`;
+      <td>${statusSelectInline("todos", t.id, t.statut, STATUTS_TODO, STATUT_COLORS)}</td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="5">Aucune tâche en cours</td></tr>`;
 
   // À venir : RDV + projets + tâches + devis + factures + abonnements, triés par date
@@ -827,24 +827,24 @@ function renderDashboard() {
   const dans1Mois = addDaysISO(today, 30);
   const items = [];
   cache.rdv.filter(r => (r.date_rdv || "") >= today && r.date_rdv <= dans1Mois && r.statut !== "Annulé")
-    .forEach(r => items.push({ date: r.date_rdv, type: "RDV", detail: (r.heure ? r.heure + " · " : "") + (r.objet || "") + " — " + contactLabel(findContact(r.contact_id)), statut: r.statut, fn: `openRdvDialog(${r.id})` }));
+    .forEach(r => items.push({ date: r.date_rdv, type: "RDV", detail: (r.heure ? r.heure + " · " : "") + (r.objet || "") + " — " + contactLabel(findContact(r.contact_id)), statut: r.statut, editTable: "rdv", editId: r.id, editField: "statut", editOptions: STATUTS_RDV, fn: `openRdvDialog(${r.id})` }));
   cache.evenements.filter(e => (e.date_fin || "") >= today && e.date_fin <= dans1Mois)
-    .forEach(e => items.push({ date: e.date_fin, type: "Projet", detail: eventLabel(e), statut: e.statut, fn: `openEvenementDialog(${e.id})` }));
+    .forEach(e => items.push({ date: e.date_fin, type: "Projet", detail: eventLabel(e), statut: e.statut, editTable: "evenements", editId: e.id, editField: "statut", editOptions: STATUTS_EVENEMENT, fn: `openEvenementDialog(${e.id})` }));
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance && t.date_echeance >= today && t.date_echeance <= dans1Mois)
-    .forEach(t => items.push({ date: t.date_echeance, type: "Tâche", detail: t.titre, statut: effectivePriorite(t), fn: `openTodoDialog(${t.id})` }));
+    .forEach(t => items.push({ date: t.date_echeance, type: "Tâche", detail: t.titre, statut: t.statut, editTable: "todos", editId: t.id, editField: "statut", editOptions: STATUTS_TODO, fn: `openTodoDialog(${t.id})` }));
   cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
     const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
-    if (val && val >= today && val <= dans1Mois) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, fn: `openDevisEditor(${d.id})` });
+    if (val && val >= today && val <= dans1Mois) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, editTable: "devis", editId: d.id, editField: "statut", editOptions: STATUTS_DEVIS, fn: `openDevisEditor(${d.id})` });
   });
   cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= dans1Mois && !["Payée", "Annulée"].includes(f.statut))
-    .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, fn: `openFactureDialog(${f.id})` }));
+    .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, editTable: "factures", editId: f.id, editField: "statut", editOptions: STATUTS_FACTURE, fn: `openFactureDialog(${f.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const top = items.slice(0, 15);
   document.getElementById("dash-dates").innerHTML = top.length ? top.map(it => {
     const cls = daysUntil(it.date) <= 0 ? "due-today" : "";
     return `<tr onclick="${it.fn}" style="cursor:pointer;">
       <td class="${cls}">${fmtDateFR(it.date)}</td><td>${it.type}</td><td>${it.detail}</td>
-      <td>${badge(it.statut, STATUT_COLORS[it.statut])}</td></tr>`;
+      <td>${statusSelectInline(it.editTable, it.editId, it.statut, it.editOptions, STATUT_COLORS, it.editField)}</td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="4">Rien à venir</td></tr>`;
 }
 
@@ -1121,7 +1121,7 @@ function openEventRecap(id) {
     <h3 style="font-size:14px;margin:0 0 8px;">📝 Notes</h3>
     <div style="font-size:16px;line-height:1.5;white-space:pre-wrap;background:#FAFAF8;border:1px solid var(--border);border-radius:8px;padding:12px;min-height:50px;">${e.notes || "—"}</div>
     <h3 style="font-size:14px;margin:16px 0 8px;">✅ Tâches liées</h3>
-    <table class="data" style="margin-bottom:16px;"><tbody>${taches.length ? taches.map(t => `<tr><td>${t.titre}</td><td>${badge(t.statut, STATUT_COLORS[t.statut])}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Aucune</td></tr>`}</tbody></table>
+    <table class="data" style="margin-bottom:16px;"><tbody>${taches.length ? taches.map(t => `<tr><td>${t.titre}</td><td>${statusSelectInlineSubtle("todos", t.id, t.statut, STATUTS_TODO, STATUT_COLORS)}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="2">Aucune</td></tr>`}</tbody></table>
     <h3 style="font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">⏱ Temps passé (${round2(tempsList.reduce((s, t) => s + Number(t.duree_heures || 0), 0))} h)
       <button class="btn secondary" style="padding:6px 10px;font-size:11.5px;" onclick="closeModal();openTempsDialog(null, ${e.id});">＋ Ajouter</button></h3>
     <table class="data"><tbody>${tempsList.length ? tempsList.map(t => `<tr><td>${fmtDateFR(t.date_travail)}</td><td>${t.duree_heures} h</td><td>${t.description || "—"}</td></tr>`).join("") : `<tr class="empty-row"><td colspan="3">Aucune saisie</td></tr>`}</tbody></table>`;
@@ -2052,8 +2052,8 @@ function renderEvenements() {
       <td>${e.type_evenement || "—"}</td>
       <td>${e.type_prestation || "—"}</td>
       <td>${statusSelectInline("evenements", e.id, e.statut, STATUTS_EVENEMENT, STATUT_COLORS)}</td>
-      <td>${dev ? badge(dev.statut, STATUT_COLORS[dev.statut]) : "—"}</td>
-      <td>${fac ? badge(fac.statut, STATUT_COLORS[fac.statut]) : "—"}</td>
+      <td>${dev ? statusSelectInlineSubtle("devis", dev.id, dev.statut, STATUTS_DEVIS, STATUT_COLORS) : "—"}</td>
+      <td>${fac ? statusSelectInlineSubtle("factures", fac.id, fac.statut, STATUTS_FACTURE, STATUT_COLORS) : "—"}</td>
       <td>${e.derniere_action || "—"}</td>
       <td class="row-actions">
         <button title="Fiche récap" onclick="openEventRecap(${e.id})">📋</button>
