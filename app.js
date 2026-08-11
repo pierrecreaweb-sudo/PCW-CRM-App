@@ -893,7 +893,7 @@ function renderTodo() {
   const fPrio = document.getElementById("todo-filter-priorite").value;
   const sort = sortSel.value;
 
-  let rows = [...cache.todos];
+  let rows = [...cache.todos].filter(t => t.statut !== "Terminé");
   if (fStatut) rows = rows.filter(t => t.statut === fStatut);
   if (fPrio) rows = rows.filter(t => effectivePriorite(t) === fPrio);
   const prioRank = { "Urgente": 0, "Haute": 1, "Normale": 2, "Basse": 3 };
@@ -920,7 +920,28 @@ function renderTodo() {
       </td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="6">Aucune tâche</td></tr>`;
 
+  renderTodoTerminees();
   renderTodoRdvAvenir();
+  renderTodoRdvPasses();
+}
+function renderTodoTerminees() {
+  const tbody = document.getElementById("todo-terminees-tbody");
+  if (!tbody) return;
+  const rows = cache.todos.filter(t => t.statut === "Terminé")
+    .sort((a, b) => (b.date_echeance || "").localeCompare(a.date_echeance || ""));
+  tbody.innerHTML = rows.length ? rows.map(t => {
+    const p = effectivePriorite(t);
+    return `<tr>
+      <td>${t.titre}</td>
+      <td>${todoLieALabel(t)}</td>
+      <td>${badge(p, STATUT_COLORS[p])}</td>
+      <td>${fmtDateFR(t.date_echeance) || "—"}</td>
+      <td>${statusSelectInline("todos", t.id, t.statut, STATUTS_TODO, STATUT_COLORS)}</td>
+      <td class="row-actions">
+        <button onclick="openTodoDialog(${t.id})">✎</button>
+        <button onclick="confirmDelete('todos', ${t.id}, renderTodo)">🗑</button>
+      </td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="6">Aucune tâche terminée</td></tr>`;
 }
 function renderTodoRdvAvenir() {
   const tbody = document.getElementById("todo-rdv-avenir-tbody");
@@ -941,6 +962,26 @@ function renderTodoRdvAvenir() {
         <button onclick="confirmDelete('rdv', ${r.id}, renderTodo)">🗑</button>
       </td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun RDV à venir</td></tr>`;
+}
+function renderTodoRdvPasses() {
+  const tbody = document.getElementById("todo-rdv-passes-tbody");
+  if (!tbody) return;
+  const today = todayStr();
+  const rows = [...cache.rdv]
+    .filter(r => r.date_rdv && (r.date_rdv < today || r.statut === "Annulé"))
+    .sort((a, b) => (b.date_rdv || "").localeCompare(a.date_rdv || "") || (b.heure || "").localeCompare(a.heure || ""));
+  tbody.innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td>${fmtDateFR(r.date_rdv)}</td>
+      <td>${r.heure || "—"}</td>
+      <td>${r.objet || "—"}</td>
+      <td>${contactLabel(findContact(r.contact_id))}</td>
+      <td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
+      <td class="row-actions">
+        <button onclick="openRdvDialog(${r.id})">✎</button>
+        <button onclick="confirmDelete('rdv', ${r.id}, renderTodo)">🗑</button>
+      </td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun RDV passé</td></tr>`;
 }
 
 function openTodoDialog(id) {
