@@ -91,6 +91,7 @@
   .sidebar-footer{margin-top:auto;padding:16px 22px 0;border-top:1px solid #1B2740;}
   .sidebar-footer button{background:none;border:none;color:var(--sidebar-text);font-size:12.5px;padding:8px 0;transition:.15s;}
   .sidebar-footer button:hover{color:#fff;}
+  #google-connect-btn.connected span{color:#3FA772;}
 
   .main{flex:1;min-width:0;display:flex;flex-direction:column;}
   .toolbar{padding:20px 30px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;}
@@ -443,6 +444,7 @@
       <div class="nav-section-label">Ventes</div>
       <div class="nav-item" data-page="devis"><svg class="nav-icon"><use href="#icon-file-text"></use></svg><span>Devis</span></div>
       <div class="nav-item" data-page="factures"><svg class="nav-icon"><use href="#icon-receipt"></use></svg><span>Facturation</span></div>
+      <div class="nav-item" data-page="relances"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Relances</span></div>
       <div class="nav-item" data-page="tarification"><svg class="nav-icon"><use href="#icon-tag"></use></svg><span>Tarification</span></div>
       <div class="nav-section-label">Organisation</div>
       <div class="nav-item" data-page="evenements"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Projets</span></div>
@@ -453,6 +455,7 @@
       <div class="nav-item" data-page="stats"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Statistiques</span></div>
       <div class="sidebar-footer">
         <div style="color:#C7CAD1;font-size:11.5px;margin-bottom:6px;" id="user-email-lbl"></div>
+        <button id="google-connect-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-mail"></use></svg><span id="google-connect-lbl">Connecter Google</span></button>
         <button id="theme-toggle-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;" id="theme-toggle-icon"><use href="#icon-moon"></use></svg><span id="theme-toggle-label">Mode sombre</span></button>
         <button id="logout-btn" style="display:flex;align-items:center;gap:8px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-logout"></use></svg><span>Se déconnecter</span></button>
       </div>
@@ -713,19 +716,58 @@
 
         <!-- CALENDRIER -->
         <div class="page" id="page-calendrier">
-          <div class="page-title">Calendrier</div>
-          <div class="panel">
-            <div class="cal-header">
-              <button id="cal-prev">← Précédent</button>
-              <div id="cal-month-lbl" style="font-weight:bold;"></div>
-              <button id="cal-next">Suivant →</button>
+          <div class="page-toolbar" style="align-items:center;">
+            <div class="page-title" style="margin:0;">Calendrier</div>
+            <div class="cat-tabs" id="cal-view-tabs" style="margin:0;">
+              <button type="button" class="cat-tab active" data-view="mensuel">Vue mensuelle</button>
+              <button type="button" class="cat-tab" data-view="google">Google Agenda</button>
             </div>
-            <div class="cal-grid" id="cal-grid"></div>
           </div>
-          <div class="panel cal-day-panel">
-            <h3 id="cal-day-lbl">Échéances du jour</h3>
-            <table class="data"><thead><tr><th>Type</th><th>Détail</th></tr></thead>
-            <tbody id="cal-day-tbody"></tbody></table>
+          <div id="cal-view-mensuel">
+            <div class="panel">
+              <div class="cal-header">
+                <button id="cal-prev">← Précédent</button>
+                <div id="cal-month-lbl" style="font-weight:bold;"></div>
+                <button id="cal-next">Suivant →</button>
+              </div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </div>
+            <div class="panel cal-day-panel">
+              <h3 id="cal-day-lbl">Échéances du jour</h3>
+              <table class="data"><thead><tr><th>Type</th><th>Détail</th></tr></thead>
+              <tbody id="cal-day-tbody"></tbody></table>
+            </div>
+          </div>
+          <div id="cal-view-google" style="display:none;">
+            <div class="page-toolbar">
+              <div class="page-title" style="margin:0;font-size:19px;">Calendrier Google</div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn secondary" id="btn-refresh-google-cal"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-repeat"></use></svg> Actualiser</button>
+                <button class="btn" id="btn-new-google-event">＋ Nouvel événement</button>
+              </div>
+            </div>
+            <div class="page-note">Vos 30 prochains événements</div>
+            <div id="google-cal-list"></div>
+          </div>
+        </div>
+
+        <!-- RELANCES -->
+        <div class="page" id="page-relances">
+          <div class="page-title">Relances clients</div>
+          <div class="page-note" id="relances-summary"></div>
+          <div class="panel">
+            <h3>Factures à relancer</h3>
+            <div id="relances-liste"></div>
+          </div>
+          <div class="panel" style="margin-top:16px;">
+            <h3>Composer un email</h3>
+            <div class="field"><label>Destinataire</label><input type="email" id="relance-to" placeholder="client@email.com"></div>
+            <div class="field"><label>Objet</label><input type="text" id="relance-subject"></div>
+            <div class="field"><label>Message</label><textarea id="relance-body" rows="8"></textarea></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:10px;">
+              <span style="font-size:11.5px;color:var(--muted);" id="relance-hint">L'email est envoyé directement depuis votre compte Gmail connecté.</span>
+              <button class="btn" id="btn-send-relance"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-mail"></use></svg> Envoyer</button>
+            </div>
           </div>
         </div>
 

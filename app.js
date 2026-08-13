@@ -8,6 +8,7 @@
 // (voir README.md, section 1 et 2).
 const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
+const EDGE_FUNCTIONS_URL = SUPABASE_URL + "/functions/v1";
 // Stockage personnalisé : si "Rester connecté" est coché, la session est
 // gardée dans localStorage (persiste après fermeture du navigateur/appli) ;
 // sinon elle va dans sessionStorage (effacée à la fermeture).
@@ -362,6 +363,13 @@ async function onLoggedIn(user) {
   await autoMarkLateFactures();
   await seedDefaultTarification();
   await seedCgvTemplates();
+  await checkGoogleConnection();
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("google_connected")) {
+    showToast(params.get("google_connected") === "1" ? "Compte Google connecté ✔" : "Échec de la connexion Google");
+    window.history.replaceState({}, "", window.location.pathname);
+    await checkGoogleConnection();
+  }
   showPage("dashboard");
 }
 async function handleLogout() {
@@ -594,6 +602,7 @@ function renderPage(key) {
   else if (key === "evenements") renderEvenements();
   else if (key === "rdv") renderRdv();
   else if (key === "calendrier") renderCalendrier();
+  else if (key === "relances") renderRelances();
   else if (key === "tarification") renderGrille();
   else if (key === "temps") renderTemps();
   else if (key === "stats") renderStats();
@@ -959,7 +968,7 @@ function renderTodoRdvAvenir() {
       <td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
       <td class="row-actions">
         <button onclick="openRdvDialog(${r.id})">✎</button>
-        <button onclick="confirmDelete('rdv', ${r.id}, renderTodo)">🗑</button>
+        <button onclick="deleteRdvWithGoogleSync(${r.id}, renderTodo)">🗑</button>
       </td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun RDV à venir</td></tr>`;
 }
@@ -979,7 +988,7 @@ function renderTodoRdvPasses() {
       <td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
       <td class="row-actions">
         <button onclick="openRdvDialog(${r.id})">✎</button>
-        <button onclick="confirmDelete('rdv', ${r.id}, renderTodo)">🗑</button>
+        <button onclick="deleteRdvWithGoogleSync(${r.id}, renderTodo)">🗑</button>
       </td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun RDV passé</td></tr>`;
 }
@@ -1267,6 +1276,33 @@ async function autoExpireDevis() {
   await refreshCache();
   return expiring;
 }
+// ---- Intégration Google (Gmail + Agenda) ----
+let googleConnected = false; // mis à jour par checkGoogleConnection() après connexion
+async function callEdgeFunction(name, body) {
+  const { data: sessionData } = await sb.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  const res = await fetch(`${EDGE_FUNCTIONS_URL}/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify(body || {}),
+  });
+  return res.json();
+}
+async function checkGoogleConnection() {
+  const { data } = await sb.from("google_tokens").select("gmail_address").maybeSingle();
+  googleConnected = !!data;
+  const lbl = document.getElementById("google-connect-lbl");
+  if (lbl) lbl.textContent = googleConnected ? "Google connecté (" + (data.gmail_address || "") + ")" : "Connecter Google";
+  const btn = document.getElementById("google-connect-btn");
+  if (btn) btn.classList.toggle("connected", googleConnected);
+}
+async function startGoogleConnect() {
+  showToast("Redirection vers Google…");
+  const res = await callEdgeFunction("google-oauth-start", {});
+  if (res && res.url) window.location.href = res.url;
+  else showToast("Impossible de démarrer la connexion Google");
+}
+
 async function autoMarkLateFactures() {
   const today = todayStr();
   const late = cache.factures.filter(f => f.statut === "Envoyée" && f.date_echeance && f.date_echeance < today);
@@ -1284,15 +1320,144 @@ function factureRelanceUrl(f) {
   const body = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
-function relancerFacture(id) {
+async function relancerFacture(id) {
   const f = findFacture(id); if (!f) return;
   const c = findContact(f.contact_id);
   if (!c || !c.email) {
     showToast("Impossible d'envoyer la relance : aucun email renseigné sur ce contact");
     return;
   }
-  window.location.href = factureRelanceUrl(f);
+  if (!googleConnected) {
+    // Repli : ouvre un brouillon dans le client mail par défaut (comportement historique)
+    window.location.href = factureRelanceUrl(f);
+    return;
+  }
+  const nom = contactLabel(c);
+  const montant = f.montant_ttc != null ? f.montant_ttc + " €" : "";
+  const subject = `Relance — Facture ${f.numero || ""} — PCW`;
+  const body = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
+  showToast("Envoi de la relance via Gmail…");
+  const res = await callEdgeFunction("send-gmail-relance", { to: c.email, subject, body });
+  if (res && res.ok) showToast("Relance envoyée avec succès ✔");
+  else { showToast(res?.error || "Échec de l'envoi — ouverture du brouillon"); window.location.href = factureRelanceUrl(f); }
 }
+
+// ========================================================================
+//  RELANCES CLIENTS
+// ========================================================================
+let relanceSelectedFactureId = null;
+function facturesARelancer() {
+  const today = todayStr();
+  return cache.factures.filter(f => ["Envoyée", "En retard"].includes(f.statut));
+}
+function renderRelances() {
+  const factures = facturesARelancer();
+  const enRetard = factures.filter(f => f.statut === "En retard").length;
+  document.getElementById("relances-summary").innerHTML =
+    `${enRetard} facture(s) en retard · ${factures.length} à relancer`;
+
+  const listEl = document.getElementById("relances-liste");
+  listEl.innerHTML = factures.length ? factures.map(f => {
+    const c = findContact(f.contact_id);
+    const color = f.statut === "En retard" ? "var(--danger)" : "var(--warning)";
+    return `<div class="relance-item" onclick="selectFactureForRelance(${f.id})" style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;">
+      <div>
+        <strong>${f.numero || "—"}</strong> — ${contactLabel(c)}
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${f.montant_ttc != null ? f.montant_ttc + " €" : ""} ${f.date_echeance ? "· échue le " + fmtDateFR(f.date_echeance) : ""}</div>
+      </div>
+      ${badge(f.statut, color)}
+    </div>`;
+  }).join("") : `<div style="text-align:center;padding:30px;color:var(--muted);">Aucune relance en attente 🎉</div>`;
+
+  if (relanceSelectedFactureId && !factures.find(f => f.id === relanceSelectedFactureId)) relanceSelectedFactureId = null;
+  const hint = document.getElementById("relance-hint");
+  hint.textContent = googleConnected
+    ? "L'email est envoyé directement depuis votre compte Gmail connecté."
+    : "Google non connecté — l'envoi ouvrira un brouillon dans votre messagerie par défaut.";
+}
+function selectFactureForRelance(id) {
+  const f = findFacture(id); if (!f) return;
+  relanceSelectedFactureId = id;
+  const c = findContact(f.contact_id);
+  const nom = contactLabel(c);
+  const montant = f.montant_ttc != null ? f.montant_ttc + " €" : "";
+  document.getElementById("relance-to").value = (c && c.email) || "";
+  document.getElementById("relance-subject").value = `Relance — Facture ${f.numero || ""} — ${EMETTEUR.nom}`;
+  document.getElementById("relance-body").value = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
+}
+async function sendRelanceFromForm() {
+  const to = document.getElementById("relance-to").value.trim();
+  const subject = document.getElementById("relance-subject").value.trim();
+  const body = document.getElementById("relance-body").value.trim();
+  if (!to || !subject || !body) { showToast("Destinataire, objet et message sont requis"); return; }
+  if (!googleConnected) {
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return;
+  }
+  showToast("Envoi en cours…");
+  const res = await callEdgeFunction("send-gmail-relance", { to, subject, body });
+  if (res && res.ok) {
+    showToast("Email envoyé ✔");
+    document.getElementById("relance-to").value = "";
+    document.getElementById("relance-subject").value = "";
+    document.getElementById("relance-body").value = "";
+    relanceSelectedFactureId = null;
+  } else {
+    showToast(res?.error || "Échec de l'envoi");
+  }
+}
+
+// ========================================================================
+//  CALENDRIER GOOGLE (liste des événements à venir)
+// ========================================================================
+function bindCalViewTabs() {
+  const wrap = document.getElementById("cal-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      const isGoogle = btn.dataset.view === "google";
+      document.getElementById("cal-view-mensuel").style.display = isGoogle ? "none" : "block";
+      document.getElementById("cal-view-google").style.display = isGoogle ? "block" : "none";
+      if (isGoogle) loadGoogleCalendarList();
+    });
+  });
+}
+async function loadGoogleCalendarList() {
+  const listEl = document.getElementById("google-cal-list");
+  if (!googleConnected) {
+    listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);">Connecte ton compte Google (en bas de la sidebar) pour voir ton agenda ici.</div>`;
+    return;
+  }
+  listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);">Chargement…</div>`;
+  const res = await callEdgeFunction("sync-google-calendar", { action: "list" });
+  if (!res || !res.ok) { listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);">Impossible de charger l'agenda Google.</div>`; return; }
+  const events = res.events || [];
+  if (!events.length) { listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);">Aucun événement à venir.</div>`; return; }
+
+  const groups = {};
+  events.forEach(e => {
+    const day = (e.debut || "").slice(0, 10);
+    (groups[day] = groups[day] || []).push(e);
+  });
+  listEl.innerHTML = Object.keys(groups).sort().map(day => {
+    const items = groups[day].map(e => {
+      const heure = e.journeeEntiere ? "Toute la journée" : `${fmtHeure(e.debut)} – ${fmtHeure(e.fin)}`;
+      return `<div class="panel" style="margin-bottom:10px;padding:14px 16px;border-left:3px solid var(--accent);">
+        <strong>${e.titre}</strong>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">🕐 ${heure}${e.lieu ? " · 📍 " + e.lieu : ""}</div>
+      </div>`;
+    }).join("");
+    return `<div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;margin:16px 0 8px;">${fmtDateFR(day)}</div>${items}`;
+  }).join("");
+}
+function fmtHeure(iso) {
+  if (!iso || iso.length <= 10) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
 function nextDevisNumero() {
   let max = 0;
   cache.devis.forEach(d => { const m = (d.numero || "").match(/\d+/g); if (m) { const n = parseInt(m[m.length - 1], 10); if (n > max) max = n; } });
@@ -2150,7 +2315,7 @@ function renderRdv() {
     <tr>
       <td>${fmtDateFR(r.date_rdv)}</td><td>${r.heure || "—"}</td><td>${r.objet || "—"}</td>
       <td>${contactLabel(findContact(r.contact_id))}</td><td>${statusSelectInline("rdv", r.id, r.statut, STATUTS_RDV, STATUT_COLORS)}</td>
-      <td class="row-actions"><button onclick="openRdvDialog(${r.id})">✎</button><button onclick="confirmDelete('rdv', ${r.id}, renderRdv)">🗑</button></td>
+      <td class="row-actions"><button onclick="openRdvDialog(${r.id})">✎</button><button onclick="deleteRdvWithGoogleSync(${r.id})">🗑</button></td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun rendez-vous</td></tr>`;
 }
 function openRdvDialog(id) {
@@ -2165,8 +2330,35 @@ function openRdvDialog(id) {
       { key: "statut", label: "Statut", type: "select", options: STATUTS_RDV, value: row.statut || "Prévu" },
       { key: "notes", label: "Notes", type: "textarea", value: row.notes },
     ],
-    onSaved: refreshAll,
+    onSaved: async (saved) => {
+      await refreshAll();
+      syncRdvToGoogleCalendar(saved).catch(e => console.error("Sync Google Agenda", e));
+    },
   });
+}
+async function syncRdvToGoogleCalendar(rdv) {
+  if (!googleConnected || !rdv || rdv.statut === "Annulé") return;
+  const c = findContact(rdv.contact_id);
+  const res = await callEdgeFunction("sync-google-calendar", {
+    action: rdv.google_event_id ? "update" : "create",
+    rdvId: rdv.id,
+    googleEventId: rdv.google_event_id || null,
+    titre: rdv.objet || "Rendez-vous",
+    date: rdv.date_rdv,
+    heure: rdv.heure,
+    dureeMinutes: 60,
+    description: (c ? "Contact : " + contactLabel(c) + "\n" : "") + (rdv.notes || ""),
+  });
+  if (res && res.googleEventId && !rdv.google_event_id) {
+    await refreshCache(); // récupère le google_event_id enregistré côté serveur
+  }
+}
+async function deleteRdvWithGoogleSync(id, renderFn) {
+  const r = cache.rdv.find(x => x.id === id);
+  if (googleConnected && r && r.google_event_id) {
+    callEdgeFunction("sync-google-calendar", { action: "delete", googleEventId: r.google_event_id }).catch(e => console.error(e));
+  }
+  await confirmDelete("rdv", id, renderFn || renderRdv);
 }
 
 // ========================================================================
@@ -2360,6 +2552,7 @@ function collectCalendarItems() {
   return items;
 }
 function renderCalendrier() {
+  bindCalViewTabs();
   const { year, month } = calState;
   document.getElementById("cal-month-lbl").textContent = `${MOIS_FR[month - 1]} ${year}`;
   const allItems = collectCalendarItems();
@@ -2614,6 +2807,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("auth-password2").addEventListener("keydown", e => { if (e.key === "Enter") handleAuthSubmit(); });
   document.getElementById("auth-email").addEventListener("keydown", e => { if (e.key === "Enter" && authMode === "reset-request") handleAuthSubmit(); });
   document.getElementById("logout-btn").addEventListener("click", handleLogout);
+  document.getElementById("google-connect-btn").addEventListener("click", startGoogleConnect);
+  document.getElementById("btn-send-relance").addEventListener("click", sendRelanceFromForm);
+  document.getElementById("btn-refresh-google-cal").addEventListener("click", loadGoogleCalendarList);
+  document.getElementById("btn-new-google-event").addEventListener("click", () => openRdvDialog(null));
 
   document.getElementById("sc-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("sc-facture").addEventListener("click", () => openFactureDialog(null));
