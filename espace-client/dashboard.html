@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mon espace — PCW</title>
 <link rel="icon" href="../logo.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#0F2247">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PCW Client">
 <style>
   :root{
     --sky:#29a8f0; --indigo:#1e3a8a; --navy:#0f2247; --white:#fff;
@@ -58,6 +65,9 @@
   .msg-time{display:block;font-size:.65rem;opacity:.7;margin-top:3px;}
   .compose{display:flex;gap:8px;}
   .compose textarea{flex:1;min-height:44px;}
+  .item-actions{display:flex;gap:8px;margin-top:8px;}
+  .btn-pdf{background:var(--bg);border:1px solid var(--border);color:var(--navy);padding:6px 12px;border-radius:6px;font-size:.78rem;font-weight:600;cursor:pointer;}
+  .btn-pdf:hover{border-color:var(--sky);color:var(--sky);}
 </style>
 </head>
 <body>
@@ -136,7 +146,9 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="pdf-client.js"></script>
 <script>
 const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
@@ -281,6 +293,10 @@ async function chargerDocuments() {
     <div class="item">
       <div class="item-title">${escapeHtml(d.numero || "Devis")} <span class="pill pill-statut">${escapeHtml(d.statut || "")}</span></div>
       <div class="item-meta">${d.montant_ttc ? d.montant_ttc + " € TTC" : ""} — ${fmtDateFR(d.date_creation)}</div>
+      <div class="item-actions">
+        <button class="btn-pdf" onclick='voirDevisPDF(${d.id}, "preview")'>Voir le PDF</button>
+        <button class="btn-pdf" onclick='voirDevisPDF(${d.id}, "download")'>Télécharger</button>
+      </div>
     </div>`).join("") : '<div class="empty-state">Aucun devis pour le moment.</div>';
 
   const { data: factures } = await sb.from("factures").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
@@ -289,10 +305,36 @@ async function chargerDocuments() {
     <div class="item">
       <div class="item-title">${escapeHtml(f.numero || "Facture")} <span class="pill pill-statut">${escapeHtml(f.statut || "")}</span></div>
       <div class="item-meta">${f.montant_ttc ? f.montant_ttc + " € TTC" : ""} — ${fmtDateFR(f.date_creation)}</div>
+      <div class="item-actions">
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "preview")'>Voir le PDF</button>
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "download")'>Télécharger</button>
+      </div>
     </div>`).join("") : '<div class="empty-state">Aucune facture pour le moment.</div>';
 }
 
+async function voirDevisPDF(id, mode) {
+  const { data: d, error } = await sb.from("devis").select("*").eq("id", id).eq("contact_id", myContact.id).single();
+  if (error || !d) { alert("Devis introuvable."); return; }
+  await generateDevisPDF(d, myContact, mode);
+}
+
+async function voirFacturePDF(id, mode) {
+  const { data: f, error } = await sb.from("factures").select("*").eq("id", id).eq("contact_id", myContact.id).single();
+  if (error || !f) { alert("Facture introuvable."); return; }
+  let devisRef = null;
+  if (f.devis_id) {
+    const { data: d } = await sb.from("devis").select("id, numero").eq("id", f.devis_id).maybeSingle();
+    devisRef = d || null;
+  }
+  await generateFacturePDF(f, myContact, devisRef, mode);
+}
+
 init();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
 </script>
 </body>
 </html>
