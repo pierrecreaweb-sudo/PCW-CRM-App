@@ -7,111 +7,66 @@
 <link rel="icon" href="../logo.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="../icon-192.png">
-<meta name="theme-color" content="#0B1B36">
+<meta name="theme-color" content="#0B1220">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PCW Client">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --sky:#29a8f0; --indigo:#2946b0; --navy:#0b1b36; --paper:#fff;
-    --cloud:#f3f6fc; --line:#e3e8f2; --slate:#5b6b8c;
-    --grad: linear-gradient(135deg, var(--sky) 0%, var(--indigo) 100%);
-    --radius:16px; --shadow:0 30px 60px -20px rgba(11,27,54,.5);
+    --bg:#FBFDFE; --accent:#2C96D8; --accent-dark:#1D74AC; --accent-light:#E7F4FC;
+    --card:#FFFFFF; --text:#070F13; --muted:#69787F; --border:#E2EDF2;
+    --danger:#D9534F; --success:#3FA772; --input-bg:#F4FAFD;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow-lg:0 12px 32px rgba(16,24,40,.12),0 2px 6px rgba(16,24,40,.06);
   }
   *{box-sizing:border-box;}
-  body{
-    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-    padding:24px; background:var(--navy); position:relative; overflow-x:hidden;
-    font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    color:var(--navy);
-  }
-  body::before{
-    content:""; position:fixed; inset:0;
-    background:
-      radial-gradient(circle at 18% 15%, rgba(41,168,240,.28), transparent 45%),
-      radial-gradient(circle at 85% 80%, rgba(41,70,176,.5), transparent 50%);
-    pointer-events:none;
-  }
-  h1,.display{font-family:'Space Grotesk',sans-serif;}
-  .scene{position:relative; width:100%; max-width:380px;}
+  body{margin:0;font-family:"Inter",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+  input{font-family:inherit;}
 
-  .brand{display:flex; align-items:center; gap:11px; margin-bottom:28px; padding:0 2px;}
-  .brand img{height:38px; width:38px; border-radius:9px;}
-  .brand .name{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1.05rem; color:#fff;}
-  .brand .sub{font-size:.68rem; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:#9db3de;}
-
-  .card{
-    background:var(--paper); border-radius:var(--radius); box-shadow:var(--shadow);
-    padding:30px 28px;
-  }
-  .card h1{font-size:1.25rem; margin:0 0 4px; letter-spacing:-.01em;}
-  .card p.lead{margin:0 0 22px; font-size:.85rem; color:var(--slate);}
-
-  .tab-toggle{display:flex; gap:6px; margin-bottom:20px; background:var(--cloud); border-radius:10px; padding:4px;}
-  .tab-toggle button{
-    flex:1; padding:9px; border-radius:8px; border:none; background:transparent;
-    cursor:pointer; font-weight:600; font-size:.83rem; color:var(--slate); font-family:'Inter',sans-serif;
-    transition:background .15s, color .15s;
-  }
-  .tab-toggle button.active{background:var(--paper); color:var(--navy); box-shadow:0 1px 3px rgba(11,27,54,.1);}
-
-  label{display:block; font-size:.78rem; font-weight:600; color:var(--slate); margin:14px 0 5px;}
-  label:first-of-type{margin-top:0;}
-  input{
-    width:100%; padding:10px 13px; border:1.5px solid var(--line); border-radius:9px;
-    font-size:.92rem; font-family:'Inter',sans-serif; color:var(--navy); outline:none; transition:border-color .15s;
-  }
-  input:focus{border-color:var(--sky);}
-  .btn-primary{
-    margin-top:20px; width:100%; background:var(--grad); color:#fff; border:none;
-    padding:11px 20px; border-radius:9px; font-weight:600; cursor:pointer; font-size:.9rem;
-    transition:opacity .15s, transform .1s;
-  }
-  .btn-primary:hover{opacity:.92;}
-  .btn-primary:active{transform:scale(.98);}
-  .error-msg{color:#dc2626; font-size:.82rem; margin-top:10px;}
-  .success-msg{color:#15a26b; font-size:.82rem; margin-top:10px;}
+  #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 20% 20%, #16233F 0%, #0B1220 55%, #060A12 100%);padding:20px;}
+  .auth-box{background:var(--card);padding:40px 40px 34px;border-radius:16px;width:360px;max-width:90vw;box-shadow:var(--shadow-lg);}
+  .auth-box h1{font-size:21px;margin:0 0 4px;color:var(--text);font-weight:700;text-align:center;}
+  .auth-box p.sub{color:var(--muted);font-size:13px;margin:0 0 22px;text-align:center;}
+  .auth-box input{width:100%;padding:11px 13px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--input-bg);color:var(--text);transition:.15s;outline:none;}
+  .auth-box input:focus{border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
+  .auth-box button.primary{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;box-shadow:var(--shadow-sm);cursor:pointer;transition:.15s;}
+  .auth-box button.primary:hover{background:var(--accent-dark);transform:translateY(-1px);}
+  .auth-switch{text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
+  .auth-switch a{color:var(--accent);cursor:pointer;text-decoration:none;font-weight:600;}
+  .auth-switch a:hover{text-decoration:underline;}
+  .auth-error{background:#FDECEB;color:var(--danger);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
+  .auth-success{background:#E9F7EF;color:var(--success);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
 </style>
 </head>
 <body>
 
-<div class="scene">
-  <div class="brand">
-    <img src="../logo.png" alt="PCW">
-    <div><div class="name">PCW</div><div class="sub">Espace Client</div></div>
-  </div>
-
-  <div class="card">
-    <h1 id="card-title">Bon retour</h1>
-    <p class="lead" id="card-lead">Connecte-toi pour retrouver ton espace.</p>
-
-    <div class="tab-toggle">
-      <button id="tab-login" class="active" onclick="switchTab('login')">Connexion</button>
-      <button id="tab-signup" onclick="switchTab('signup')">Créer un compte</button>
-    </div>
+<div id="auth-screen">
+  <div class="auth-box">
+    <img src="../logo.png" alt="PCW" style="width:76px;height:76px;display:block;margin:0 auto 10px;">
+    <h1 id="card-title">Connexion</h1>
+    <p class="sub" id="card-lead">Espace Client PCW — accède à ton compte</p>
+    <div class="auth-error" id="login-msg"></div>
+    <div class="auth-error" id="signup-msg"></div>
 
     <div id="form-login">
-      <label for="login-email">Email</label>
-      <input type="email" id="login-email" placeholder="toi@exemple.fr">
-      <label for="login-password">Mot de passe</label>
-      <input type="password" id="login-password" placeholder="••••••••">
-      <button class="btn-primary" onclick="login()">Se connecter</button>
-      <div id="login-msg"></div>
+      <input type="email" id="login-email" placeholder="Adresse email" autocomplete="username">
+      <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password">
+      <button class="primary" onclick="login()">Se connecter</button>
+      <div class="auth-switch">
+        <span>Pas encore de compte ?</span>
+        <a onclick="switchTab('signup')">Créer un compte</a>
+      </div>
     </div>
 
     <div id="form-signup" style="display:none;">
-      <label for="signup-nom">Nom / société</label>
       <input type="text" id="signup-nom" placeholder="Ton nom ou ta société">
-      <label for="signup-email">Email</label>
-      <input type="email" id="signup-email" placeholder="toi@exemple.fr">
-      <label for="signup-password">Mot de passe</label>
-      <input type="password" id="signup-password" placeholder="••••••••">
-      <button class="btn-primary" onclick="signup()">Créer mon compte</button>
-      <div id="signup-msg"></div>
+      <input type="email" id="signup-email" placeholder="Adresse email" autocomplete="username">
+      <input type="password" id="signup-password" placeholder="Mot de passe" autocomplete="new-password">
+      <button class="primary" onclick="signup()">Créer mon compte</button>
+      <div class="auth-switch">
+        <a onclick="switchTab('login')">← Retour à la connexion</a>
+      </div>
     </div>
   </div>
 </div>
@@ -124,23 +79,28 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function switchTab(tab) {
   const isLogin = tab === "login";
-  document.getElementById("tab-login").classList.toggle("active", isLogin);
-  document.getElementById("tab-signup").classList.toggle("active", !isLogin);
   document.getElementById("form-login").style.display = isLogin ? "block" : "none";
   document.getElementById("form-signup").style.display = isLogin ? "none" : "block";
-  document.getElementById("card-title").textContent = isLogin ? "Bon retour" : "Créer un compte";
-  document.getElementById("card-lead").textContent = isLogin ? "Connecte-toi pour retrouver ton espace." : "Rejoins ton espace client Pierre Créa Web.";
+  document.getElementById("card-title").textContent = isLogin ? "Connexion" : "Créer un compte";
+  document.getElementById("card-lead").textContent = isLogin ? "Espace Client PCW — accède à ton compte" : "Rejoins ton espace client Pierre Créa Web.";
+  document.getElementById("login-msg").style.display = "none";
+  document.getElementById("signup-msg").style.display = "none";
+}
+
+function showMsg(id, text) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.style.display = "block";
 }
 
 async function login() {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
-  const msgEl = document.getElementById("login-msg");
-  msgEl.innerHTML = "";
-  if (!email || !password) { msgEl.innerHTML = '<div class="error-msg">Merci de remplir email et mot de passe.</div>'; return; }
+  document.getElementById("login-msg").style.display = "none";
+  if (!email || !password) { showMsg("login-msg", "Merci de remplir email et mot de passe."); return; }
 
   const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (error) { showMsg("login-msg", error.message); return; }
   window.location.href = "dashboard.html";
 }
 
@@ -148,14 +108,13 @@ async function signup() {
   const nom = document.getElementById("signup-nom").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
-  const msgEl = document.getElementById("signup-msg");
-  msgEl.innerHTML = "";
-  if (!nom || !email || !password) { msgEl.innerHTML = '<div class="error-msg">Tous les champs sont requis.</div>'; return; }
-  if (password.length < 6) { msgEl.innerHTML = '<div class="error-msg">Le mot de passe doit faire au moins 6 caractères.</div>'; return; }
+  document.getElementById("signup-msg").style.display = "none";
+  if (!nom || !email || !password) { showMsg("signup-msg", "Tous les champs sont requis."); return; }
+  if (password.length < 6) { showMsg("signup-msg", "Le mot de passe doit faire au moins 6 caractères."); return; }
 
   const { data, error } = await sb.auth.signUp({ email, password });
-  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
-  if (!data.user) { msgEl.innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>'; return; }
+  if (error) { showMsg("signup-msg", error.message); return; }
+  if (!data.user) { showMsg("signup-msg", "Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi."); return; }
 
   // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique).
   // .limit(1) évite toute ambiguïté s'il existe plusieurs fiches avec le même email.
@@ -182,7 +141,7 @@ async function signup() {
   // 2) Sinon, crée sa propre fiche contact
   const { data: ownerId, error: ownerError } = await sb.rpc("owner_id");
   if (ownerError || !ownerId) {
-    msgEl.innerHTML = '<div class="error-msg">Compte créé, mais impossible de finaliser ton profil. Contacte PCW.</div>';
+    showMsg("signup-msg", "Compte créé, mais impossible de finaliser ton profil. Contacte PCW.");
     return;
   }
   const { error: insertError } = await sb.from("contacts").insert({
@@ -190,7 +149,7 @@ async function signup() {
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
   if (insertError) {
-    msgEl.innerHTML = `<div class="error-msg">Compte créé, mais erreur profil : ${insertError.message}</div>`;
+    showMsg("signup-msg", "Compte créé, mais erreur profil : " + insertError.message);
     return;
   }
   finishSignup(data.session);
@@ -198,7 +157,7 @@ async function signup() {
 
 function finishSignup(session) {
   if (session) window.location.href = "dashboard.html";
-  else document.getElementById("signup-msg").innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>';
+  else showMsg("signup-msg", "Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.");
 }
 
 (async () => {
@@ -209,7 +168,6 @@ function finishSignup(session) {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
-
 </script>
 </body>
 </html>
