@@ -109,7 +109,7 @@ const PRIORITES_DEMANDES = ["Urgent", "Normal", "Faible"];
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -237,7 +237,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -251,8 +251,10 @@ async function refreshCache() {
     fetchAll("cgv_templates", "ordre", true),
     fetchAll("demandes"),
     fetchAll("messages", "id", true),
+    fetchAll("fichiers_clients", "id", true),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients };
+  updateNavBadgeMessages();
 }
 
 // ========================================================================
@@ -615,6 +617,8 @@ function renderPage(key) {
   else if (key === "stats") renderStats();
   else if (key === "demandes") renderDemandes();
   else if (key === "messages") renderMessages();
+  else if (key === "fichiers") renderFichiersClients();
+  else if (key === "paiements") renderPaiements();
 }
 function advanceDateBy(dateStr, freq) {
   const d = new Date(dateStr);
@@ -2422,8 +2426,9 @@ function renderMessages() {
   } else {
     list.innerHTML = clients.map(c => {
       const last = lastMessageFor(c.id);
+      const nonLus = cache.messages.filter(m => m.contact_id === c.id && m.expediteur === "client" && !m.lu).length;
       return `<div class="messages-contact-item ${c.id === selectedMessageContactId ? "active" : ""}" onclick="selectMessageContact(${c.id})">
-        <div class="mc-name">${contactLabel(c)}</div>
+        <div class="mc-name">${contactLabel(c)}${nonLus ? ` <span class="nav-badge" style="position:relative;top:-1px;">${nonLus}</span>` : ""}</div>
         <div class="mc-preview">${last ? escapeHtml(last.contenu) : "Aucun message"}</div>
       </div>`;
     }).join("");
@@ -2434,6 +2439,7 @@ function selectMessageContact(contactId) {
   selectedMessageContactId = contactId;
   document.getElementById("messages-compose").style.display = "flex";
   renderMessages();
+  marquerMessagesLusAdmin(contactId);
 }
 function renderMessageThread(contactId) {
   const thread = document.getElementById("messages-thread");
@@ -2450,12 +2456,124 @@ async function sendAdminMessage() {
   const input = document.getElementById("messages-input");
   const contenu = input.value.trim();
   if (!contenu) return;
-  const saved = await insertRow("messages", { contact_id: selectedMessageContactId, expediteur: "admin", contenu });
+  const saved = await insertRow("messages", { contact_id: selectedMessageContactId, expediteur: "admin", contenu, lu: false });
   if (saved) {
     input.value = "";
     await refreshCache();
     renderMessages();
   }
+}
+
+// ========================================================================
+//  MESSAGES NON LUS — badge de navigation
+// ========================================================================
+function updateNavBadgeMessages() {
+  const badge = document.getElementById("nav-badge-messages");
+  if (!badge) return;
+  const count = cache.messages.filter(m => m.expediteur === "client" && !m.lu).length;
+  if (count > 0) { badge.textContent = count > 9 ? "9+" : count; badge.style.display = "inline-flex"; }
+  else { badge.style.display = "none"; }
+}
+
+async function marquerMessagesLusAdmin(contactId) {
+  const nonLus = cache.messages.filter(m => m.contact_id === contactId && m.expediteur === "client" && !m.lu);
+  if (!nonLus.length) return;
+  await sb.from("messages").update({ lu: true }).eq("contact_id", contactId).eq("expediteur", "client").eq("lu", false);
+  nonLus.forEach(m => { m.lu = true; });
+  updateNavBadgeMessages();
+}
+
+// ========================================================================
+//  FICHIERS CLIENTS
+// ========================================================================
+function formatTailleAdmin(octets) {
+  if (!octets) return "";
+  if (octets < 1024) return octets + " o";
+  if (octets < 1024 * 1024) return (octets / 1024).toFixed(0) + " Ko";
+  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+}
+async function renderFichiersClients() {
+  const el = document.getElementById("files-by-client");
+  const parContact = {};
+  cache.fichiers_clients.forEach(f => {
+    if (!parContact[f.contact_id]) parContact[f.contact_id] = [];
+    parContact[f.contact_id].push(f);
+  });
+  const contactIds = Object.keys(parContact);
+  if (!contactIds.length) {
+    el.innerHTML = `<div class="page-note">Aucun fichier envoyé par un client pour l'instant.</div>`;
+    return;
+  }
+  el.innerHTML = contactIds.map(cid => {
+    const contact = findContact(Number(cid));
+    const fichiers = parContact[cid].sort((a, b) => b.id - a.id);
+    return `
+    <div class="files-client-group">
+      <h4>${contactLabel(contact)}</h4>
+      ${fichiers.map(f => `
+        <div class="file-row">
+          <div>
+            <div class="fr-name">${escapeAttr(f.nom_fichier)}</div>
+            <div class="fr-meta">${formatTailleAdmin(f.taille_octets)} — ${f.date_creation ? f.date_creation.slice(0, 10).split("-").reverse().join("/") : ""}</div>
+          </div>
+          <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
+        </div>`).join("")}
+    </div>`;
+  }).join("");
+}
+async function telechargerFichierAdmin(chemin) {
+  const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
+  if (error) { showToast("Fichier introuvable"); return; }
+  window.open(data.signedUrl, "_blank");
+}
+
+// ========================================================================
+//  PAIEMENTS — factures impayées + abonnements récurrents
+// ========================================================================
+function renderPaiements() {
+  const today = new Date().toISOString().slice(0, 10);
+  const addDays = (iso, days) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+
+  const impayees = cache.factures
+    .filter(f => f.statut !== "Payée" && f.statut !== "Annulée")
+    .sort((a, b) => (a.date_echeance || "9999").localeCompare(b.date_echeance || "9999"));
+
+  const tbody = document.getElementById("paiements-tbody");
+  tbody.innerHTML = impayees.length ? impayees.map(f => {
+    const contact = findContact(f.contact_id);
+    let flagClass = "payments-flag-ok", flagText = f.date_echeance ? f.date_echeance.slice(0, 10).split("-").reverse().join("/") : "—";
+    if (f.date_echeance) {
+      if (f.date_echeance < today) { flagClass = "payments-flag-late"; flagText = "En retard — " + flagText; }
+      else if (f.date_echeance <= addDays(today, 7)) { flagClass = "payments-flag-soon"; flagText = "Bientôt — " + flagText; }
+    }
+    return `<tr>
+      <td>${contactLabel(contact)}</td>
+      <td>${escapeAttr(f.numero || "—")}</td>
+      <td>${f.montant_ttc ? Number(f.montant_ttc).toFixed(2) + " €" : "—"}</td>
+      <td class="${flagClass}">${flagText}</td>
+      <td>${statusSelectInline("factures", f.id, f.statut, ["Envoyée", "Payée", "En retard", "Annulée"], STATUT_COLORS, "statut")}</td>
+    </tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="5">Aucune facture impayée 🎉</td></tr>`;
+
+  const recurrents = cache.evenements.filter(e => e.facturation_recurrente);
+  const recTbody = document.getElementById("recurrents-tbody");
+  recTbody.innerHTML = recurrents.length ? recurrents
+    .sort((a, b) => (a.prochaine_facturation || "9999").localeCompare(b.prochaine_facturation || "9999"))
+    .map(e => {
+      const contact = findContact(e.contact_id);
+      let flagClass = "payments-flag-ok";
+      if (e.prochaine_facturation) {
+        if (e.prochaine_facturation < today) flagClass = "payments-flag-late";
+        else if (e.prochaine_facturation <= addDays(today, 7)) flagClass = "payments-flag-soon";
+      }
+      return `<tr>
+        <td>${contactLabel(contact)}</td>
+        <td>${escapeAttr(eventLabel(e))}</td>
+        <td>${e.montant_recurrent ? Number(e.montant_recurrent).toFixed(2) + " €" : "—"}</td>
+        <td>${escapeAttr(e.frequence_facturation || "—")}</td>
+        <td class="${flagClass}">${e.prochaine_facturation ? e.prochaine_facturation.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+      </tr>`;
+    }).join("") : `<tr class="empty-row"><td colspan="5">Aucun abonnement récurrent</td></tr>`;
 }
 
 // ========================================================================
