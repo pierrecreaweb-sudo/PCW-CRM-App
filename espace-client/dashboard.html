@@ -24,7 +24,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --sky:#29a8f0; --indigo:#2946b0; --navy:#0b1b36; --paper:#fff;
+    --sky:#29a8f0; --indigo:#2946b0; --sidebar-bg:#0b1b36; --navy:#0b1b36; --paper:#fff;
     --cloud:#f3f6fc; --line:#e3e8f2; --slate:#5b6b8c;
     --urgent:#dc2626; --normal:#d97706; --faible:#15a26b;
     --grad: linear-gradient(135deg, var(--sky) 0%, var(--indigo) 100%);
@@ -53,7 +53,7 @@
   /* ---------- SHELL ---------- */
   .shell{display:flex; min-height:100vh;}
   .sidebar{
-    width:236px; flex-shrink:0; background:var(--navy); color:#cbd5e1;
+    width:236px; flex-shrink:0; background:var(--sidebar-bg); color:#cbd5e1;
     display:flex; flex-direction:column; padding:24px 16px;
     position:sticky; top:0; height:100vh;
   }
