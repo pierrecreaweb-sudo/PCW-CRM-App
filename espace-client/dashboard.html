@@ -241,6 +241,30 @@
   .file-name{font-size:.86rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .file-meta{font-size:.74rem; color:var(--slate); font-family:'JetBrains Mono',monospace;}
 
+  .pay-flag-late{color:var(--urgent); font-weight:700;}
+  .pay-flag-soon{color:var(--normal); font-weight:700;}
+  .pay-flag-ok{color:var(--slate);}
+  .pay-summary{display:flex; gap:14px; margin-bottom:18px; flex-wrap:wrap;}
+  .pay-summary-item{
+    flex:1; min-width:150px; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:16px 18px;
+  }
+  .pay-summary-item .ps-label{font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--slate); margin-bottom:5px;}
+  .pay-summary-item .ps-value{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1.3rem;}
+  .pay-summary-item.late .ps-value{color:var(--urgent);}
+  .pay-summary-item.soon .ps-value{color:var(--normal);}
+  .abo-box{
+    display:flex; align-items:center; gap:14px; padding:16px 18px; border:1px solid var(--line);
+    border-radius:var(--radius-sm); background:var(--cloud); margin-bottom:12px;
+  }
+  .abo-box .abo-icon{
+    width:38px; height:38px; border-radius:10px; background:var(--grad);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .abo-box .abo-icon svg{width:18px; height:18px; color:#fff;}
+  .abo-box .abo-title{font-weight:600; font-size:.9rem;}
+  .abo-box .abo-sub{font-size:.78rem; color:var(--slate); font-family:'JetBrains Mono',monospace;}
+
   @media (max-width: 820px){
     .shell{flex-direction:column;}
     .sidebar{
@@ -285,6 +309,10 @@
       <div class="tab" data-page="fichiers" onclick="showPage('fichiers')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         <span>Fichiers</span>
+      </div>
+      <div class="tab" data-page="paiements" onclick="showPage('paiements')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <span>Paiements</span>
       </div>
       <div class="tab" data-page="projet" onclick="showPage('projet')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
@@ -413,6 +441,23 @@
         </div>
       </div>
 
+      <!-- PAIEMENTS -->
+      <div class="page" id="page-paiements">
+        <div class="page-head">
+          <h1>Paiements</h1>
+          <p>Tes échéances et ton abonnement, en un coup d'œil.</p>
+        </div>
+        <div class="pay-summary" id="pay-summary"></div>
+        <div class="card" id="abo-card" style="display:none;">
+          <h2>Abonnement récurrent</h2>
+          <div id="abo-content"></div>
+        </div>
+        <div class="card">
+          <h2>Factures en attente</h2>
+          <div id="paiements-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -488,6 +533,7 @@ async function init() {
   chargerFichiers();
   chargerProjet();
   chargerDocuments();
+  chargerPaiements();
   rafraichirBadgeMessages();
 }
 
@@ -727,6 +773,70 @@ document.getElementById("upload-zone").addEventListener("drop", e => {
   e.preventDefault(); e.currentTarget.classList.remove("dragover");
   handleFileSelect(e.dataTransfer.files);
 });
+
+// ---- PAIEMENTS ----
+async function chargerPaiements() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [{ data: factures }, { data: projets }] = await Promise.all([
+    sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée").order("date_echeance", { ascending: true }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
+  ]);
+
+  const list = factures || [];
+  const enRetard = list.filter(f => f.date_echeance && f.date_echeance < today);
+  const bientot = list.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= addDaysISO(today, 7));
+
+  document.getElementById("pay-summary").innerHTML = `
+    <div class="pay-summary-item ${enRetard.length ? "late" : ""}">
+      <div class="ps-label">En retard</div>
+      <div class="ps-value">${enRetard.length}</div>
+    </div>
+    <div class="pay-summary-item ${bientot.length ? "soon" : ""}">
+      <div class="ps-label">Sous 7 jours</div>
+      <div class="ps-value">${bientot.length}</div>
+    </div>
+    <div class="pay-summary-item">
+      <div class="ps-label">Total en attente</div>
+      <div class="ps-value">${list.reduce((s, f) => s + Number(f.montant_ttc || 0), 0).toFixed(0)} €</div>
+    </div>`;
+
+  const aboCard = document.getElementById("abo-card");
+  const projet = (projets || [])[0];
+  if (projet) {
+    aboCard.style.display = "block";
+    document.getElementById("abo-content").innerHTML = `
+      <div class="abo-box">
+        <div class="abo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+        <div>
+          <div class="abo-title">${escapeHtml(projet.titre || "Abonnement")} — ${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(2) + " €" : "—"} / ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
+          <div class="abo-sub">${projet.prochaine_facturation ? "Prochaine facture le " + fmtDateFR(projet.prochaine_facturation) : "Date non définie"}</div>
+        </div>
+      </div>`;
+  } else {
+    aboCard.style.display = "none";
+  }
+
+  const el = document.getElementById("paiements-list");
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Aucune facture en attente. Tout est à jour !</div>';
+    return;
+  }
+  el.innerHTML = list.map(f => {
+    let cls = "pay-flag-ok", texte = f.date_echeance ? fmtDateFR(f.date_echeance) : "—";
+    if (f.date_echeance && f.date_echeance < today) { cls = "pay-flag-late"; texte = "En retard — " + texte; }
+    else if (f.date_echeance && f.date_echeance <= addDaysISO(today, 7)) { cls = "pay-flag-soon"; texte = "Bientôt — " + texte; }
+    return `
+    <div class="item">
+      <div class="item-title">${escapeHtml(f.numero || "Facture")} <span class="pill pill-statut">${escapeHtml(f.statut || "")}</span></div>
+      <div class="item-meta">${f.montant_ttc ? Number(f.montant_ttc).toFixed(2) + " € TTC" : ""}</div>
+      <div class="item-meta ${cls}">${texte}</div>
+      <div class="item-actions">
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "preview")'>Voir le PDF</button>
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "download")'>Télécharger</button>
+      </div>
+    </div>`;
+  }).join("");
+}
 
 // ---- SUIVI DE PROJET ----
 async function chargerProjet() {
