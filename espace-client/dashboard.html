@@ -180,6 +180,24 @@
   }
   .btn-pdf:hover{border-color:var(--sky); color:var(--sky);}
 
+  .dash-hello{font-size:.95rem; color:var(--slate); margin:-4px 0 20px;}
+  .dash-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:20px;}
+  .dash-card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:18px 20px; cursor:pointer; transition:transform .12s, border-color .15s;
+  }
+  .dash-card:hover{transform:translateY(-2px); border-color:var(--sky);}
+  .dash-card .dc-icon{
+    width:32px; height:32px; border-radius:9px; background:var(--grad);
+    display:flex; align-items:center; justify-content:center; margin-bottom:12px;
+  }
+  .dash-card .dc-icon svg{width:17px; height:17px; stroke:#fff;}
+  .dash-card .dc-label{font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--slate); margin-bottom:4px;}
+  .dash-card .dc-value{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1.3rem;}
+  .dash-card .dc-sub{font-size:.76rem; color:var(--slate); margin-top:3px; font-family:'JetBrains Mono',monospace;}
+  .dash-recent .item{cursor:pointer;}
+  .dash-recent .item:hover .item-title{color:var(--sky);}
+
   @media (max-width: 820px){
     .shell{flex-direction:column;}
     .sidebar{
@@ -208,7 +226,11 @@
     </div>
 
     <nav class="tabs">
-      <div class="tab active" data-page="demandes" onclick="showPage('demandes')">
+      <div class="tab active" data-page="dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        <span>Tableau de bord</span>
+      </div>
+      <div class="tab" data-page="demandes" onclick="showPage('demandes')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span>Demandes</span>
       </div>
@@ -245,8 +267,25 @@
   <div class="main">
     <div class="container">
 
+      <!-- TABLEAU DE BORD -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-head">
+          <h1 id="dash-greeting">Bonjour</h1>
+          <p>Voici un résumé de ton espace.</p>
+        </div>
+        <div class="dash-grid" id="dash-grid"></div>
+        <div class="card dash-recent">
+          <h2>Dernière demande</h2>
+          <div id="dash-last-demande"><div class="empty-state">Chargement…</div></div>
+        </div>
+        <div class="card dash-recent">
+          <h2>Dernier message</h2>
+          <div id="dash-last-message"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
       <!-- DEMANDES -->
-      <div class="page active" id="page-demandes">
+      <div class="page" id="page-demandes">
         <div class="page-head">
           <h1>Mes demandes</h1>
           <p>Envoie une demande de modification ou une question à PCW.</p>
@@ -377,7 +416,9 @@ async function init() {
   const displayName = [contact.prenom, contact.nom].filter(Boolean).join(" ") || contact.societe || "PCW";
   document.getElementById("header-client-name").textContent = displayName;
   document.getElementById("avatar-initials").textContent = initialsOf(contact.prenom, contact.nom);
+  document.getElementById("dash-greeting").textContent = "Bonjour " + (contact.prenom || displayName);
 
+  chargerTableauDeBord();
   chargerDemandes();
   chargerMessages();
   chargerProjet();
@@ -392,6 +433,75 @@ async function logout() {
 function showPage(key) {
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.page === key));
   document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + key));
+}
+
+// ---- TABLEAU DE BORD ----
+async function chargerTableauDeBord() {
+  const [demandesRes, messagesRes, projetRes, facturesRes] = await Promise.all([
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false }),
+    sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }).limit(1),
+    sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").order("date_echeance", { ascending: true }),
+  ]);
+
+  const demandes = demandesRes.data || [];
+  const messages = messagesRes.data || [];
+  const projet = (projetRes.data || [])[0] || null;
+  const facturesEnAttente = facturesRes.data || [];
+
+  const enCours = demandes.filter(d => d.statut !== "Traité").length;
+  const prochaineFacture = facturesEnAttente[0] || null;
+
+  let projetLabel = "Aucun projet", projetSub = "—";
+  if (projet) {
+    const idx = ETAPES.indexOf(projet.etape_projet || "maquette");
+    projetLabel = ETAPES_LABELS[projet.etape_projet || "maquette"];
+    projetSub = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) + "% terminé" : "—";
+  }
+
+  document.getElementById("dash-grid").innerHTML = `
+    <div class="dash-card" onclick="showPage('demandes')">
+      <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+      <div class="dc-label">Demandes en cours</div>
+      <div class="dc-value">${enCours}</div>
+      <div class="dc-sub">${demandes.length} au total</div>
+    </div>
+    <div class="dash-card" onclick="showPage('messages')">
+      <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <div class="dc-label">Messages</div>
+      <div class="dc-value">${messages.length}</div>
+      <div class="dc-sub">${messages.length ? fmtDateFR(messages[0].date_creation) : "Aucun message"}</div>
+    </div>
+    <div class="dash-card" onclick="showPage('projet')">
+      <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg></div>
+      <div class="dc-label">Suivi de projet</div>
+      <div class="dc-value" style="font-size:1.05rem;">${escapeHtml(projetLabel)}</div>
+      <div class="dc-sub">${projetSub}</div>
+    </div>
+    <div class="dash-card" onclick="showPage('documents')">
+      <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="dc-label">${prochaineFacture ? "Facture en attente" : "Factures"}</div>
+      <div class="dc-value">${prochaineFacture ? Number(prochaineFacture.montant_ttc || 0).toFixed(0) + " €" : "À jour"}</div>
+      <div class="dc-sub">${prochaineFacture ? (prochaineFacture.date_echeance ? "Échéance " + fmtDateFR(prochaineFacture.date_echeance) : prochaineFacture.numero || "") : "Aucune facture en attente"}</div>
+    </div>`;
+
+  const lastDemandeEl = document.getElementById("dash-last-demande");
+  lastDemandeEl.innerHTML = demandes.length ? `
+    <div class="item" onclick="showPage('demandes')">
+      <div class="item-title">${escapeHtml(demandes[0].titre)}
+        <span class="pill ${PILL_PRIORITE[demandes[0].priorite] || "pill-normal"}">${escapeHtml(demandes[0].priorite)}</span>
+        <span class="pill pill-statut">${escapeHtml(demandes[0].statut)}</span>
+      </div>
+      <div class="item-meta">${fmtDateFR(demandes[0].date_creation)}</div>
+    </div>` : '<div class="empty-state">Aucune demande pour le moment.</div>';
+
+  const lastMessageEl = document.getElementById("dash-last-message");
+  lastMessageEl.innerHTML = messages.length ? `
+    <div class="item" onclick="showPage('messages')">
+      <div class="item-title">${messages[0].expediteur === "client" ? "Toi" : "PCW"}</div>
+      <div class="item-desc">${escapeHtml(messages[0].contenu)}</div>
+      <div class="item-meta">${messages[0].date_creation ? messages[0].date_creation.slice(0, 16).replace("T", " ") : ""}</div>
+    </div>` : '<div class="empty-state">Aucun message pour l\'instant.</div>';
 }
 
 // ---- DEMANDES ----
