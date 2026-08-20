@@ -2,853 +2,150 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>PCW — Gestion Client</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0B1220">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Espace Client — Pierre Créa Web</title>
+<link rel="icon" href="../logo.png">
 <style>
   :root{
-    --bg:#FBFDFE; --sidebar:#0B1220; --sidebar-active:#17233B; --sidebar-text:#AEB7C9;
-    --accent:#2C96D8; --accent-dark:#1D74AC; --accent-light:#E7F4FC; --card:#FFFFFF; --text:#070F13;
-    --muted:#69787F; --border:#E2EDF2; --success:#3FA772; --warning:#D99A2B;
-    --danger:#D9534F; --info:#7EC5F1; --tertiary:#40B1F7; --tertiary-light:#E3F6FE;
-    --surface-alt:#EFF8FC; --input-bg:#F4FAFD;
-    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
-    --shadow-md:0 2px 8px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
-    --shadow-lg:0 12px 32px rgba(16,24,40,.12),0 2px 6px rgba(16,24,40,.06);
-  }
-  :root[data-theme="dark"]{
-    --bg:#010304; --sidebar:#070A11; --sidebar-active:#161D2C; --sidebar-text:#8D96AC;
-    --accent:#2791D3; --accent-dark:#0879BF; --accent-light:#0D2536; --card:#0D1418; --text:#ECF4F8;
-    --muted:#8890A0; --border:#16232C; --success:#3FA772; --warning:#D99A2B;
-    --danger:#E0645F; --info:#0E5581; --tertiary:#0879BF; --tertiary-light:#0A2E42;
-    --surface-alt:#0D1A22; --input-bg:#0A1318;
-    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
-    --shadow-md:0 2px 8px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.25);
-    --shadow-lg:0 12px 32px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
+    --sky:#29a8f0; --indigo:#1e3a8a; --navy:#0f2247; --white:#fff;
+    --bg:#f6f9fd; --border:#e2e8f0; --text:#0f2247; --muted:#64748b;
+    --grad: linear-gradient(120deg, var(--sky) 0%, var(--indigo) 100%);
+    --radius:10px; --shadow:0 1px 3px rgba(15,34,71,.07),0 1px 2px rgba(15,34,71,.05);
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:"Inter",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
-  button{font-family:inherit;cursor:pointer;}
-  input,select,textarea{font-family:inherit;color:var(--text);}
-  select{background:var(--card);}
-  ::selection{background:var(--accent-light);color:var(--accent-dark);}
-
-  /* ---------- AUTH SCREEN ---------- */
-  #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 20% 20%, #16233F 0%, #0B1220 55%, #060A12 100%);}
-  .auth-box{background:var(--card);padding:40px 40px 34px;border-radius:16px;width:360px;max-width:90vw;box-shadow:var(--shadow-lg);}
-  .auth-box h1{font-size:21px;margin:0 0 4px;color:var(--text);font-weight:700;text-align:center;}
-  .auth-box p.sub{color:var(--muted);font-size:13px;margin:0 0 22px;text-align:center;}
-  .auth-box input{width:100%;padding:11px 13px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--input-bg);color:var(--text);transition:.15s;}
-  .auth-box input:focus{outline:none;border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
-  .auth-box button.primary{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;box-shadow:var(--shadow-sm);transition:.15s;}
-  .auth-box button.primary:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:var(--shadow-md);}
-  .auth-switch{text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
-  .auth-switch a{color:var(--accent);cursor:pointer;text-decoration:none;font-weight:600;}
-  .auth-switch a:hover{text-decoration:underline;}
-  .auth-error{background:#FDECEB;color:var(--danger);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
-  .auth-success{background:#E9F7EF;color:var(--success);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none;}
-  .auth-options{display:flex;align-items:center;justify-content:space-between;margin:-4px 0 14px;flex-wrap:wrap;gap:6px;}
-  .auth-options label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;}
-  .auth-options input[type="checkbox"]{width:auto;margin:0;}
-  .auth-options a{font-size:12px;color:var(--accent);cursor:pointer;text-decoration:none;font-weight:600;}
-  .auth-options a:hover{text-decoration:underline;}
-  .auth-logo{font-size:34px;text-align:center;margin-bottom:6px;}
-
-  /* ---------- APP LAYOUT ---------- */
-  #app-screen{display:none;min-height:100vh;}
-  .layout{display:flex;min-height:100vh;}
-  .sidebar{width:236px;background:var(--sidebar);flex-shrink:0;padding:26px 0 20px;display:flex;flex-direction:column;transition:width .2s ease;}
-  .sidebar-head{display:flex;align-items:center;justify-content:space-between;padding:0 14px 22px 22px;gap:8px;}
-  .sidebar .logo{color:#fff;font-size:16px;font-weight:700;line-height:1.3;letter-spacing:.02em;display:flex;align-items:center;min-width:0;}
-  .logo-text{white-space:nowrap;overflow:hidden;}
-  .sidebar-collapse-btn{background:none;border:none;color:var(--sidebar-text);font-size:16px;padding:6px 8px;border-radius:7px;cursor:pointer;flex-shrink:0;transition:.15s;}
-  .sidebar-collapse-btn:hover{background:var(--sidebar-active);color:#fff;}
-  .sidebar.collapsed{width:74px;}
-  .sidebar.collapsed .logo-text,
-  .sidebar.collapsed .nav-section-label,
-  .sidebar.collapsed .nav-item span,
-  .sidebar.collapsed .sidebar-footer span,
-  .sidebar.collapsed #theme-toggle-label,
-  .sidebar.collapsed #user-email-lbl{display:none;}
-  .sidebar.collapsed .sidebar-head{justify-content:center;padding:0 0 22px;}
-  .sidebar.collapsed .logo img{margin-right:0;}
-  .sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;margin:2px 12px;}
-  .sidebar.collapsed .nav-icon{margin:0;}
-  .sidebar.collapsed #logout-btn,
-  .sidebar.collapsed #theme-toggle-btn{justify-content:center;}
-  .sidebar.collapsed .sidebar-footer{padding:16px 12px 0;}
-  .nav-item{color:var(--sidebar-text);padding:11px 22px;margin:2px 12px;border-radius:9px;font-size:13.5px;font-weight:500;cursor:pointer;user-select:none;transition:.15s;display:flex;align-items:center;gap:11px;}
-  .nav-item:hover{background:var(--sidebar-active);color:#fff;}
-  .nav-item.active{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(47,125,246,.35);}
-  .nav-icon{width:17px;height:17px;flex-shrink:0;opacity:.85;}
-  .nav-item.active .nav-icon{opacity:1;}
-  .nav-section-label{color:#4C5975;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:16px 22px 6px;}
-  .nav-section-label:first-of-type{padding-top:4px;}
-  .sidebar-footer{margin-top:auto;padding:16px 22px 0;border-top:1px solid #1B2740;}
-  .sidebar-footer button{background:none;border:none;color:var(--sidebar-text);font-size:12.5px;padding:8px 0;transition:.15s;}
-  .sidebar-footer button:hover{color:#fff;}
-  #google-connect-btn.connected span{color:#3FA772;}
-
-  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
-  .toolbar{padding:20px 30px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;}
-  .global-search-wrap{position:relative;margin:20px 30px 0;max-width:420px;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow-sm);}
-  .global-search-wrap input{border:none;outline:none;background:transparent;flex:1;font-size:13.5px;color:var(--text);}
-  .topbar-row{display:flex;align-items:flex-start;gap:12px;margin:0 30px;flex-wrap:wrap;}
-  .topbar-row .global-search-wrap{margin:20px 0 0;flex:1;min-width:220px;}
-  .notif-wrap{position:relative;margin-top:20px;flex-shrink:0;}
-  .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
-  .notif-bell:hover{border-color:var(--accent);}
-  .notif-badge{position:absolute;top:-5px;right:-5px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
-  .notif-panel{display:none;position:absolute;top:calc(100% + 8px);right:0;width:360px;max-width:88vw;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);max-height:420px;overflow-y:auto;z-index:41;}
-  .notif-panel.open{display:block;}
-  .notif-panel-header{padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
-  .notif-item{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
-  .notif-item:last-child{border-bottom:none;}
-  .notif-item:hover{background:var(--surface-alt);}
-  .notif-item .ni-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;}
-  .notif-item .ni-icon svg{width:15px;height:15px;}
-  .notif-item .ni-label{font-size:12.5px;font-weight:600;}
-  .notif-item .ni-sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
-  .notif-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:12.5px;}
-  .notif-dismiss{background:none;border:none;color:var(--muted);font-size:13px;padding:2px 6px;border-radius:6px;flex-shrink:0;line-height:1;}
-  .notif-dismiss:hover{color:var(--danger);background:var(--surface-alt);}
-  .global-search-results{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);max-height:360px;overflow-y:auto;z-index:40;}
-  .global-search-results.open{display:block;}
-  .gsr-item{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;align-items:center;}
-  .gsr-item:last-child{border-bottom:none;}
-  .gsr-item:hover{background:var(--surface-alt);}
-  .gsr-item .gsr-type{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;flex-shrink:0;}
-  .gsr-empty{padding:14px;font-size:12.5px;color:var(--muted);text-align:center;}
-  .kanban-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;}
-  .kanban-col{background:var(--surface-alt);border-radius:12px;padding:12px;min-width:250px;flex:1;max-width:280px;}
-  .kanban-col h4{margin:0 0 10px;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;justify-content:space-between;}
-  .kanban-col.drag-over{outline:2px dashed var(--accent);outline-offset:-4px;}
-  .kanban-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;cursor:grab;box-shadow:var(--shadow-sm);font-size:12.5px;}
-  .kanban-card:active{cursor:grabbing;}
-  .kanban-card.dragging{opacity:.4;}
-  .kanban-card .kc-title{font-weight:700;margin-bottom:3px;}
-  .kanban-card .kc-sub{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
-  .kanban-card .kc-badges{display:flex;gap:5px;flex-wrap:wrap;}
-  #chrono-display{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);min-width:118px;}
-  .chrono-indicator{display:flex;align-items:center;gap:8px;margin:20px 30px 0;background:var(--danger);color:#fff;padding:8px 14px;border-radius:20px;font-size:12.5px;font-weight:700;width:fit-content;cursor:pointer;font-variant-numeric:tabular-nums;}
-  .chrono-indicator .ci-dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:ciPulse 1.2s infinite;flex-shrink:0;}
-  @keyframes ciPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
-  .toolbar .lbl{color:var(--muted);font-size:12.5px;margin-right:4px;font-weight:600;}
-  .shortcut-btn{background:var(--card);border:1px solid var(--border);padding:9px 18px;border-radius:999px;font-size:12.5px;color:var(--text);font-weight:500;transition:.15s;box-shadow:var(--shadow-sm);}
-  .shortcut-btn:hover{border-color:var(--accent);color:var(--accent-dark);transform:translateY(-1px);box-shadow:var(--shadow-md);}
-
-  .content{flex:1;padding:22px 30px 44px;overflow-x:auto;}
-  .page{display:none;}
-  .page.active{display:block;animation:pageIn .28s ease;}
-  @keyframes pageIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-  .page-title{font-size:22px;font-weight:800;margin:4px 0 18px;letter-spacing:-.01em;}
-  .page-note{font-size:12.5px;color:var(--muted);margin:-10px 0 16px;}
-
-  /* cards / dashboard */
-  .cards-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;}
-  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;min-width:150px;flex:1;box-shadow:var(--shadow-sm);transition:.18s;}
-  .stat-card.clickable{cursor:pointer;}
-  .stat-card.clickable:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow-md);}
-  .stat-card .num{font-size:27px;font-weight:800;letter-spacing:-.01em;}
-  .stat-card .label{font-size:12px;color:var(--muted);margin-top:3px;font-weight:500;}
-  .stat-icon-wrap{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
-  .stat-icon-wrap svg{width:18px;height:18px;}
-  .dash-greeting{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:4px 0 2px;}
-  .dash-greeting-sub{font-size:12.5px;color:var(--muted);margin:0 0 18px;text-transform:capitalize;}
-  .mini-chart-bars{margin-top:16px;}
-  .mc-row{display:grid;gap:8px;}
-  .mc-vals{font-size:10.5px;font-weight:700;color:var(--accent);text-align:center;margin-bottom:5px;line-height:1.3;}
-  .mc-bars-row{align-items:end;height:64px;margin-bottom:8px;}
-  .mc-bars-row .bar{width:100%;max-width:30px;margin:0 auto;background:var(--accent);border-radius:4px 4px 0 0;min-height:3px;transition:.2s;}
-  .mc-lbls{font-size:10px;color:var(--muted);text-align:center;text-transform:capitalize;}
-  .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:20px;box-shadow:var(--shadow-sm);}
-  .panel h3{margin:0 0 14px;font-size:14px;font-weight:700;}
-
-  /* toolbar for pages */
-  .page-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
-  .btn{border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;background:var(--accent);color:#fff;box-shadow:var(--shadow-sm);transition:.15s;}
-  .btn:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:var(--shadow-md);}
-  .btn.secondary{background:var(--card);color:var(--text);border:1px solid var(--border);font-weight:600;box-shadow:none;}
-  .btn.secondary:hover{border-color:var(--accent);color:var(--accent-dark);transform:none;box-shadow:var(--shadow-sm);}
-  .btn.danger{background:var(--danger);}
-  select.filter,input.filter{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--card);color:var(--text);transition:.15s;}
-  select.filter:focus,input.filter:focus{outline:none;border-color:var(--accent);}
-
-  /* quick category tabs (tarification) */
-  .cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px;}
-  .cat-tab{border:1px solid var(--border);background:var(--card);padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:600;color:var(--muted);transition:.15s;}
-  .cat-tab:hover{border-color:var(--accent);color:var(--text);}
-  .cat-tab.active{color:#fff;border-color:transparent;background:var(--accent);}
-  .cat-tab.active[data-cat=""]{background:var(--text);}
-  .cat-tab.active[data-cat="Prestation"]{background:var(--accent);}
-  .cat-tab.active[data-cat="Option / Supplément"]{background:var(--tertiary);}
-
-  /* table */
-  table.data{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm);}
-  table.data th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:12px 14px;}
-  table.data td{padding:12px 14px;font-size:13.5px;border-top:1px solid var(--border);vertical-align:top;}
-  table.data tr:hover td{background:var(--surface-alt);}
-  .badge{display:inline-block;padding:4px 10px;border-radius:20px;color:#fff;font-size:11px;font-weight:700;letter-spacing:.01em;}
-  .badge-select{appearance:none;-webkit-appearance:none;border:none;border-radius:20px;color:#fff;font-size:11px;font-weight:700;letter-spacing:.01em;padding:4px 22px 4px 10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;background-size:10px;}
-  .badge-select:hover{opacity:.88;}
-  .badge-select option{color:#000;background:#fff;font-weight:600;}
-  .badge-select-subtle{appearance:none;-webkit-appearance:none;border:1px solid var(--border);border-radius:20px;color:var(--sel-c,var(--muted));background:var(--surface-alt);font-size:11px;font-weight:700;letter-spacing:.01em;padding:4px 20px 4px 10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238890A0' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;background-size:9px;}
-  .badge-select-subtle option{color:#000;background:#fff;font-weight:600;}
-  .badge.subtle{color:var(--badge-c,var(--muted));background:var(--badge-bg,var(--surface-alt));font-weight:600;}
-  .row-actions{white-space:nowrap;}
-  .row-actions button{background:none;border:none;font-size:14px;padding:3px 6px;color:var(--muted);border-radius:6px;transition:.15s;}
-  .row-actions button:hover{color:var(--accent);background:var(--accent-light);}
-  .empty-row td{text-align:center;color:var(--muted);padding:30px;font-style:italic;}
-  .due-today{color:var(--danger);font-weight:700;}
-
-  /* modal */
-  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,18,32,.55);align-items:center;justify-content:center;z-index:70;padding:20px;backdrop-filter:blur(2px);}
-  .modal-overlay.open{display:flex;}
-  .modal-box{background:var(--card);border-radius:16px;width:540px;max-width:100%;max-height:90vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg);animation:modalIn .18s ease;}
-  @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
-  .modal-box h2{margin:0 0 20px;font-size:18px;font-weight:700;}
-  .field{margin-bottom:14px;}
-  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700;}
-  .field input,.field select,.field textarea{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;transition:.15s;background:var(--input-bg);color:var(--text);}
-  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
-  .field textarea{resize:vertical;min-height:60px;}
-  .field .inline-checks{display:flex;gap:16px;flex-wrap:wrap;}
-  .field .inline-checks label{font-weight:normal;color:var(--text);display:flex;align-items:center;gap:6px;}
-  .field .inline-checks input{width:auto;}
-  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;flex-wrap:wrap;}
-
-  /* calendar */
-  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-  .cal-header button{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-weight:600;font-size:12.5px;transition:.15s;}
-  .cal-header button:hover{border-color:var(--accent);color:var(--accent-dark);}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
-  .cal-dow{text-align:center;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0;text-transform:uppercase;letter-spacing:.04em;}
-  .cal-cell{background:var(--card);border:1px solid var(--border);border-radius:9px;min-height:64px;padding:7px 9px;cursor:pointer;font-size:12px;transition:.15s;}
-  .cal-cell:not(.empty):hover{border-color:var(--accent);}
-  .cal-cell.empty{background:transparent;border:none;cursor:default;}
-  .cal-cell.today{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .cal-cell.selected{outline:2px solid var(--accent);outline-offset:-1px;}
-  .cal-cell .evt-dot{font-size:10.5px;margin-top:4px;color:var(--accent);font-weight:600;}
-  .cal-cell.today .evt-dot{color:#fff;}
-  .cal-day-panel{margin-top:16px;}
-
-  /* devis editor (plein écran) */
-  .editor-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;padding:36px 24px;}
-  .editor-overlay.open{display:block;}
-  .editor-sheet{background:#fff;max-width:860px;margin:0 auto;border-top:6px solid var(--accent);border-radius:2px;padding:48px 56px 40px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 30px 70px -15px rgba(16,24,40,.35);position:relative;color:#1A1D24;}
-  .editor-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;padding-bottom:22px;margin-bottom:22px;border-bottom:2px solid #EDEFF3;}
-  .editor-head .em{font-size:12px;color:#7A8194;text-align:right;line-height:1.7;}
-  .lines-table-scroll{width:100%;}
-  .lines-table{width:100%;border-collapse:collapse;margin-top:6px;}
-  .lines-table th{background:var(--surface-alt);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 6px;text-align:left;}
-  .lines-table td{border-top:1px solid #EDEFF3;padding:8px 6px;}
-  .lines-table input,.lines-table select{width:100%;padding:7px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:#1A1D24;background:#fff;}
-  .lines-table .ro{background:var(--surface-alt);color:var(--muted);font-weight:600;}
-  .lines-table .del{color:var(--danger);border:none;background:none;font-size:15px;}
-  .totaux{margin-top:18px;padding-top:16px;border-top:2px solid #EDEFF3;text-align:right;font-size:14px;line-height:1.9;}
-  .totaux .grand{font-size:19px;font-weight:800;color:var(--accent-dark);}
-  .cgv-list label{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
-  .cgv-list input{margin-top:3px;}
-  .cgv-order{font-size:11px;color:var(--accent);font-weight:700;min-width:20px;}
-
-  .toast{position:fixed;bottom:22px;right:22px;background:var(--text);color:#fff;padding:13px 20px;border-radius:10px;font-size:13px;opacity:0;transform:translateY(8px);transition:.25s;z-index:90;max-width:80vw;box-shadow:var(--shadow-lg);}
-  .toast.show{opacity:1;transform:translateY(0);}
-  .warn-banner{background:#FDF3E3;border:1px solid var(--warning);color:#7a5a12;padding:11px 15px;border-radius:10px;font-size:13px;margin-bottom:14px;}
-
-  .mobile-topbar{display:none;}
-  .sidebar-overlay{display:none;}
-
-  @media(max-width:820px){
-    .layout{flex-direction:column;}
-
-    .mobile-topbar{
-      display:flex;align-items:center;gap:14px;
-      background:var(--sidebar);color:#fff;padding:14px 16px;
-      padding-top:calc(14px + env(safe-area-inset-top));
-      position:sticky;top:0;z-index:35;
-    }
-    .mobile-topbar button{
-      background:none;border:none;color:#fff;font-size:22px;padding:2px 4px;line-height:1;
-    }
-    .mobile-topbar-title{font-size:15px;font-weight:bold;}
-
-    .sidebar{
-      position:fixed;top:0;left:0;bottom:0;z-index:45;
-      width:250px;flex-direction:column;overflow-y:auto;
-      transform:translateX(-100%);transition:transform .25s ease;
-      padding:calc(20px + env(safe-area-inset-top)) 0 20px;
-      box-shadow:2px 0 18px rgba(0,0,0,.25);
-    }
-    .sidebar.open{transform:translateX(0);}
-    .sidebar .logo{display:block;}
-    .nav-item{padding:12px 20px;font-size:14px;}
-    .sidebar-footer{margin-top:auto;padding:14px 20px 0;border-top:1px solid #343945;}
-
-    .sidebar-overlay{
-      display:none;position:fixed;inset:0;background:rgba(20,20,20,.45);z-index:44;
-    }
-    .sidebar-overlay.open{display:block;}
-
-    .sidebar-collapse-btn{display:none;}
-    table.data{font-size:12px;}
-    .panel{max-width:100%;}
-    .table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-    .table-scroll table.data{min-width:600px;}
-    .content{padding:16px;overflow-x:hidden;}
-    .cards-row{overflow-x:visible;}
-
-    .editor-overlay{padding:14px 8px;}
-    .editor-sheet{padding:22px 16px 26px;border-radius:0;}
-    .editor-head{flex-direction:column;}
-    .editor-head .em{text-align:left;}
-    .lines-table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-    .lines-table{min-width:640px;}
-    .totaux{text-align:left;}
-    .totaux .grand{font-size:16px;white-space:nowrap;display:inline-block;}
-  }
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  .header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;gap:12px;}
+  .header img{height:40px;width:40px;}
+  .header .wordmark{line-height:1.15;}
+  .header .app-name{font-weight:800;font-size:1rem;}
+  .header .app-sub{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .wrap{max-width:380px;margin:8vh auto;padding:0 20px;}
+  .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 24px;}
+  .tab-toggle{display:flex;gap:8px;margin-bottom:18px;}
+  .tab-toggle button{flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-weight:600;font-size:.85rem;color:var(--muted);}
+  .tab-toggle button.active{background:var(--indigo);color:var(--white);border-color:var(--indigo);}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px;}
+  input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.95rem;font-family:inherit;}
+  .btn-primary{margin-top:18px;width:100%;background:var(--grad);color:var(--white);border:none;padding:11px 20px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.92rem;}
+  .btn-primary:hover{opacity:.92;}
+  .error-msg{color:#dc2626;font-size:.85rem;margin-top:8px;}
+  .success-msg{color:#16a34a;font-size:.85rem;margin-top:8px;}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
-  <defs>
-    <symbol id="icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>
-    </symbol>
-    <symbol id="icon-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>
-    </symbol>
-    <symbol id="icon-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/>
-    </symbol>
-    <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.2 3.6-6.5 8-6.5s8 2.3 8 6.5"/>
-    </symbol>
-    <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h5M9.5 17h5M9.5 9.3h1.5"/>
-    </symbol>
-    <symbol id="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 3h12v18l-2-1.3L14 21l-2-1.3L10 21l-2-1.3L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/>
-    </symbol>
-    <symbol id="icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    </symbol>
-    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 7.3v5l3.5 2"/>
-    </symbol>
-    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
-    </symbol>
-    <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 12.5L11.5 21 3 12.5V4h8.5z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/>
-    </symbol>
-    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>
-    </symbol>
-    <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="10" r="3.2"/><path d="M12 21c4-4.5 7-8 7-11a7 7 0 0 0-14 0c0 3 3 6.5 7 11z"/>
-    </symbol>
-    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="4.3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
-    </symbol>
-    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 14.2A8.3 8.3 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2z"/>
-    </symbol>
-    <symbol id="icon-stopwatch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6M12 2v3"/>
-    </symbol>
-    <symbol id="icon-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
-    </symbol>
-    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/>
-    </symbol>
-    <symbol id="icon-kanban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/>
-    </symbol>
-    <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
-    </symbol>
-    <symbol id="icon-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>
-    </symbol>
-    <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3v13M7 11l5 5 5-5"/><path d="M4 20h16"/>
-    </symbol>
-    <symbol id="icon-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </symbol>
-    <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/>
-    </symbol>
-    <symbol id="icon-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v11a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1 0-4"/><circle cx="16.5" cy="14" r="1.4" fill="currentColor" stroke="none"/>
-    </symbol>
-    <symbol id="icon-arrow-up-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M7 17L17 7"/><path d="M8 7h9v9"/>
-    </symbol>
-    <symbol id="icon-arrow-down-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M17 7L7 17"/><path d="M16 17H7V8"/>
-    </symbol>
-  </defs>
-</svg>
 
-<!-- ============ AUTH SCREEN ============ -->
-<div id="auth-screen">
-  <div class="auth-box">
-    <img src="logo.png" alt="PCW" style="width:76px;height:76px;display:block;margin:0 auto 10px;">
-    <h1 id="auth-title">Connexion</h1>
-    <p class="sub" id="auth-sub">PCW — Gestion Client — accède à ton compte</p>
-    <div class="auth-error" id="auth-error"></div>
-    <div class="auth-success" id="auth-success"></div>
-    <input type="email" id="auth-email" placeholder="Adresse email" autocomplete="username">
-    <input type="password" id="auth-password" placeholder="Mot de passe" autocomplete="current-password">
-    <input type="password" id="auth-password2" placeholder="Confirmer le mot de passe" autocomplete="new-password" style="display:none;">
-    <div class="auth-options" id="auth-options-row">
-      <label><input type="checkbox" id="auth-remember" checked> Rester connecté</label>
-      <a id="auth-forgot-link">Mot de passe oublié ?</a>
+<div class="header">
+  <img src="../logo.png" alt="PCW">
+  <div class="wordmark"><div class="app-name">PCW</div><div class="app-sub">Espace Client</div></div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="tab-toggle">
+      <button id="tab-login" class="active" onclick="switchTab('login')">Connexion</button>
+      <button id="tab-signup" onclick="switchTab('signup')">Créer un compte</button>
     </div>
-    <button class="primary" id="auth-submit">Se connecter</button>
-    <div class="auth-switch">
-      <span id="auth-switch-text">Pas encore de compte ?</span>
-      <a id="auth-switch-link">Créer un compte</a>
+
+    <div id="form-login">
+      <label for="login-email">Email</label>
+      <input type="email" id="login-email" placeholder="toi@exemple.fr">
+      <label for="login-password">Mot de passe</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+      <button class="btn-primary" onclick="login()">Se connecter</button>
+      <div id="login-msg"></div>
     </div>
-    <div class="auth-switch" id="auth-back-login-row" style="display:none;">
-      <a id="auth-back-login-link">← Retour à la connexion</a>
+
+    <div id="form-signup" style="display:none;">
+      <label for="signup-nom">Nom / société</label>
+      <input type="text" id="signup-nom" placeholder="Ton nom ou ta société">
+      <label for="signup-email">Email</label>
+      <input type="email" id="signup-email" placeholder="toi@exemple.fr">
+      <label for="signup-password">Mot de passe</label>
+      <input type="password" id="signup-password" placeholder="••••••••">
+      <button class="btn-primary" onclick="signup()">Créer mon compte</button>
+      <div id="signup-msg"></div>
     </div>
   </div>
 </div>
-
-<!-- ============ APP SCREEN ============ -->
-<div class="mobile-topbar" id="mobile-topbar">
-  <button id="menu-toggle-btn" aria-label="Ouvrir le menu">☰</button>
-  <div class="mobile-topbar-title"><img src="logo.png" alt="PCW" style="width:20px;height:20px;vertical-align:-4px;margin-right:6px;">PCW — Gestion Client</div>
-</div>
-<div class="sidebar-overlay" id="sidebar-overlay"></div>
-<div id="app-screen">
-  <div class="layout">
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <div class="logo"><img src="logo.png" alt="PCW" style="width:40px;height:40px;vertical-align:middle;margin-right:8px;border-radius:50%;flex-shrink:0;"><span class="logo-text">PCW<br><span style="font-weight:normal;font-size:12px;color:var(--sidebar-text);">Gestion Client</span></span></div>
-        <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Réduire / déplier le menu" aria-label="Réduire ou déplier le menu">☰</button>
-      </div>
-      <div class="nav-section-label">Pilotage</div>
-      <div class="nav-item" data-page="dashboard"><svg class="nav-icon"><use href="#icon-home"></use></svg><span>Dashboard</span></div>
-      <div class="nav-item" data-page="todo"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>To Do List</span></div>
-      <div class="nav-section-label">Clients</div>
-      <div class="nav-item" data-page="prospects"><svg class="nav-icon"><use href="#icon-target"></use></svg><span>Suivi Clients</span></div>
-      <div class="nav-item" data-page="contacts"><svg class="nav-icon"><use href="#icon-user"></use></svg><span>Contacts</span></div>
-      <div class="nav-section-label">Ventes</div>
-      <div class="nav-item" data-page="devis"><svg class="nav-icon"><use href="#icon-file-text"></use></svg><span>Devis</span></div>
-      <div class="nav-item" data-page="factures"><svg class="nav-icon"><use href="#icon-receipt"></use></svg><span>Facturation</span></div>
-      <div class="nav-item" data-page="relances"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Relances</span></div>
-      <div class="nav-item" data-page="tarification"><svg class="nav-icon"><use href="#icon-tag"></use></svg><span>Tarification</span></div>
-      <div class="nav-section-label">Organisation</div>
-      <div class="nav-item" data-page="evenements"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Projets</span></div>
-      <div class="nav-item" data-page="rdv"><svg class="nav-icon"><use href="#icon-clock"></use></svg><span>RDV</span></div>
-      <div class="nav-item" data-page="calendrier"><svg class="nav-icon"><use href="#icon-calendar"></use></svg><span>Calendrier</span></div>
-      <div class="nav-item" data-page="temps"><svg class="nav-icon"><use href="#icon-stopwatch"></use></svg><span>Temps passé</span></div>
-      <div class="nav-section-label">Analyse</div>
-      <div class="nav-item" data-page="stats"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Statistiques</span></div>
-      <div class="sidebar-footer">
-        <div style="color:#C7CAD1;font-size:11.5px;margin-bottom:6px;" id="user-email-lbl"></div>
-        <button id="google-connect-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-mail"></use></svg><span id="google-connect-lbl">Connecter Google</span></button>
-        <button id="theme-toggle-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;" id="theme-toggle-icon"><use href="#icon-moon"></use></svg><span id="theme-toggle-label">Mode sombre</span></button>
-        <button id="logout-btn" style="display:flex;align-items:center;gap:8px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-logout"></use></svg><span>Se déconnecter</span></button>
-      </div>
-    </div>
-
-    <div class="main">
-      <div id="chrono-indicator" class="chrono-indicator" onclick="showPage('temps')" style="display:none;">
-        <span class="ci-dot"></span><span class="ci-time">00:00:00</span> — chrono en cours, cliquer pour ouvrir
-      </div>
-      <div class="topbar-row">
-        <div class="global-search-wrap">
-          <svg class="nav-icon" style="width:15px;height:15px;color:var(--muted);"><use href="#icon-search"></use></svg>
-          <input type="text" id="global-search-input" placeholder="Rechercher un contact, un devis, un projet…" autocomplete="off">
-          <div class="global-search-results" id="global-search-results"></div>
-        </div>
-        <div class="notif-wrap" id="notif-wrap">
-          <button id="notif-bell-btn" class="notif-bell" title="Notifications">
-            <svg class="nav-icon" style="width:18px;height:18px;"><use href="#icon-bell"></use></svg>
-            <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
-          </button>
-          <div class="notif-panel" id="notif-panel"></div>
-        </div>
-      </div>
-      <div class="toolbar">
-        <span class="lbl">Raccourcis :</span>
-        <button class="shortcut-btn" id="sc-devis">＋ Nouveau devis</button>
-        <button class="shortcut-btn" id="sc-facture">＋ Nouvelle facture</button>
-        <button class="shortcut-btn" id="sc-contact">＋ Nouveau contact</button>
-        <button class="shortcut-btn" id="sc-evenement">＋ Nouveau projet</button>
-        <button class="shortcut-btn" id="sc-rdv">＋ Nouveau RDV</button>
-        <button class="shortcut-btn" id="sc-todo">＋ Nouvelle tâche</button>
-      </div>
-
-      <div class="content">
-
-        <!-- DASHBOARD -->
-        <div class="page" id="page-dashboard">
-          <div class="dash-greeting" id="dash-greeting"></div>
-          <div class="dash-greeting-sub" id="dash-greeting-sub"></div>
-          <div class="cards-row" id="dash-cards"></div>
-          <div class="panel" id="dash-recurring-panel" style="display:none;">
-            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-repeat"></use></svg>Facturations récurrentes à renouveler</h3>
-            <table class="data"><thead><tr><th>Projet</th><th>Contact</th><th>Échéance</th><th>Montant</th><th></th></tr></thead>
-            <tbody id="dash-recurring-tbody"></tbody></table>
-          </div>
-          <div class="panel">
-            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-check-square"></use></svg>Aperçu des tâches</h3>
-            <table class="data"><thead><tr><th>Titre</th><th>Lié à</th><th>Priorité</th><th>Échéance</th><th>Statut</th></tr></thead>
-            <tbody id="dash-todos"></tbody></table>
-          </div>
-          <div class="panel">
-            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-pin"></use></svg>À venir (RDV, projets, devis, factures & échéances)</h3>
-            <table class="data"><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th>Statut</th></tr></thead>
-            <tbody id="dash-dates"></tbody></table>
-          </div>
-          <div class="panel">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
-              <h3 style="margin:0;">Évolution du CA facturé (factures payées)</h3>
-              <div class="cat-tabs" id="dash-chart-tabs" style="margin:0;">
-                <button type="button" class="cat-tab" data-view="semaine">Semaine</button>
-                <button type="button" class="cat-tab active" data-view="mois">Mois</button>
-                <button type="button" class="cat-tab" data-view="annee">Année</button>
-              </div>
-            </div>
-            <div class="mini-chart-bars" id="dash-chart"></div>
-            <div id="dash-chart-total" style="margin-top:14px;font-size:12.5px;color:var(--muted);"></div>
-          </div>
-        </div>
-
-        <!-- TODO -->
-        <div class="page" id="page-todo">
-          <div class="page-title">To Do List</div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <select class="filter" id="todo-filter-statut"><option value="">Tous les statuts</option></select>
-              <select class="filter" id="todo-filter-priorite"><option value="">Toutes priorités</option></select>
-              <select class="filter" id="todo-sort"><option value="echeance">Trier par échéance</option><option value="priorite">Trier par priorité</option><option value="statut">Trier par statut</option></select>
-            </div>
-            <button class="btn" id="btn-new-todo">＋ Nouvelle tâche</button>
-          </div>
-          <div class="page-note">Une tâche avec une échéance à 7 jours ou moins passe automatiquement en <strong>Urgente</strong> (affichée en rouge).</div>
-          <table class="data">
-            <thead><tr><th>Titre</th><th>Lié à</th><th>Priorité</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="todo-tbody"></tbody>
-          </table>
-
-          <div class="page-title" style="margin-top:34px;font-size:19px;">Tâches terminées</div>
-          <table class="data">
-            <thead><tr><th>Titre</th><th>Lié à</th><th>Priorité</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="todo-terminees-tbody"></tbody>
-          </table>
-
-          <div class="page-title" style="margin-top:34px;font-size:19px;">RDV à venir</div>
-          <table class="data">
-            <thead><tr><th>Date</th><th>Heure</th><th>Objet</th><th>Contact</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="todo-rdv-avenir-tbody"></tbody>
-          </table>
-
-          <div class="page-title" style="margin-top:34px;font-size:19px;">RDV passés</div>
-          <table class="data">
-            <thead><tr><th>Date</th><th>Heure</th><th>Objet</th><th>Contact</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="todo-rdv-passes-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- SUIVI CLIENTS -->
-        <div class="page" id="page-prospects">
-          <div class="page-title">Suivi Clients</div>
-          <div class="page-toolbar">
-            <select class="filter" id="prospect-filter-statut"><option value="">Tous les statuts</option></select>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <div class="cat-tabs" id="prospect-view-tabs" style="margin:0;">
-                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
-                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
-              </div>
-              <button class="btn" id="btn-new-prospect">＋ Nouveau projet</button>
-            </div>
-          </div>
-          <div class="page-note">Suivi de tous les dossiers (prospects et clients). Un clic sur 📋 ouvre la fiche récap du projet. En vue Kanban, glisse une carte vers une autre colonne pour changer son statut.</div>
-          <table class="data" id="prospect-table-view">
-            <thead><tr><th>Projet</th><th>Contact</th><th>Date</th><th>Dernière action</th><th>Tâche liée</th><th>Récap</th><th>Statut projet</th><th>Devis</th><th>Facture</th><th></th></tr></thead>
-            <tbody id="prospect-tbody"></tbody>
-          </table>
-          <div id="prospect-kanban-view" class="kanban-board" style="display:none;"></div>
-        </div>
-
-        <!-- CONTACTS -->
-        <div class="page" id="page-contacts">
-          <div class="page-title">Contacts</div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <input class="filter" id="contact-search" placeholder="Rechercher un contact…">
-              <select class="filter" id="contact-filter-categorie"><option value="">Toutes catégories</option></select>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <div class="cat-tabs" id="contact-view-tabs" style="margin:0;">
-                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
-                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
-              </div>
-              <button class="btn" id="btn-new-contact">＋ Nouveau contact</button>
-            </div>
-          </div>
-          <table class="data" id="contact-table-view">
-            <thead><tr><th>Nom</th><th>Catégorie</th><th>Société</th><th>Email</th><th>Téléphone</th><th>Provenance</th><th></th></tr></thead>
-            <tbody id="contact-tbody"></tbody>
-          </table>
-          <div id="contact-kanban-view" class="kanban-board" style="display:none;"></div>
-        </div>
-
-        <!-- DEVIS -->
-        <div class="page" id="page-devis">
-          <div class="page-title">Devis</div>
-          <div class="page-note" id="devis-last"></div>
-          <div id="devis-warn"></div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <input class="filter" id="devis-search" placeholder="Rechercher un client…">
-              <select class="filter" id="devis-filter-statut"><option value="">Tous les statuts</option></select>
-            </div>
-            <button class="btn secondary" id="btn-export-devis"><svg class="nav-icon" style="width:13px;height:13px;"><use href="#icon-download"></use></svg>Exporter (CSV)</button>
-            <button class="btn secondary" id="btn-cgv-manager">CGV</button>
-            <button class="btn" id="btn-new-devis">＋ Nouveau devis</button>
-          </div>
-          <table class="data">
-            <thead><tr><th>N°</th><th>Projet</th><th>Contact</th><th>Date projet</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="devis-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- FACTURATION -->
-        <div class="page" id="page-factures">
-          <div class="page-title">Facturation</div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <input class="filter" id="facture-search" placeholder="Rechercher un client…">
-              <select class="filter" id="facture-filter-statut"><option value="">Tous les statuts</option></select>
-            </div>
-            <button class="btn secondary" id="btn-export-factures"><svg class="nav-icon" style="width:13px;height:13px;"><use href="#icon-download"></use></svg>Exporter (CSV)</button>
-            <button class="btn" id="btn-new-facture">＋ Nouvelle facture</button>
-          </div>
-          <table class="data">
-            <thead><tr><th>N°</th><th>Contact</th><th>Devis lié</th><th>Type</th><th>Date</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="facture-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- PROJETS -->
-        <div class="page" id="page-evenements">
-          <div class="page-title">Projets</div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <select class="filter" id="evenement-filter-type"><option value="">Tous les types</option></select>
-              <select class="filter" id="evenement-filter-mois"><option value="">Tous les mois</option></select>
-              <select class="filter" id="evenement-filter-statut"><option value="">Tous les statuts</option></select>
-            </div>
-            <button class="btn" id="btn-new-evenement">＋ Nouveau projet</button>
-          </div>
-          <table class="data">
-            <thead><tr><th>Nom</th><th>Date</th><th>Contact</th><th>Provenance</th><th>Type de projet</th><th>Formule</th><th>Statut</th><th>Devis</th><th>Facture</th><th>Dernière action</th><th></th></tr></thead>
-            <tbody id="evenement-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- RDV -->
-        <div class="page" id="page-rdv">
-          <div class="page-title">Rendez-vous</div>
-          <div class="page-toolbar">
-            <select class="filter" id="rdv-filter-statut"><option value="">Tous les statuts</option></select>
-            <button class="btn" id="btn-new-rdv">＋ Nouveau RDV</button>
-          </div>
-          <table class="data">
-            <thead><tr><th>Date</th><th>Heure</th><th>Objet</th><th>Contact</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="rdv-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- TEMPS PASSÉ -->
-        <div class="page" id="page-temps">
-          <div class="page-title">Temps passé</div>
-          <div class="panel" id="chrono-panel">
-            <h3><svg class="nav-icon" style="color:var(--text);width:15px;height:15px;vertical-align:-3px;margin-right:4px;"><use href="#icon-stopwatch"></use></svg>Chronomètre</h3>
-            <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-              <select class="filter" id="chrono-projet" style="min-width:220px;"><option value="">— Aucun projet précis —</option></select>
-              <div id="chrono-display">00:00:00</div>
-              <button class="btn" id="chrono-toggle-btn">▶ Démarrer</button>
-            </div>
-            <div id="chrono-running-note" style="font-size:12px;color:var(--muted);margin-top:10px;display:none;"></div>
-          </div>
-          <div class="page-toolbar">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <select class="filter" id="temps-filter-projet"><option value="">Tous les projets</option></select>
-            </div>
-            <button class="btn" id="btn-new-temps">＋ Saisir manuellement</button>
-          </div>
-          <div class="cards-row" id="temps-summary"></div>
-          <table class="data">
-            <thead><tr><th>Date</th><th>Projet</th><th>Contact</th><th>Durée</th><th>Description</th><th></th></tr></thead>
-            <tbody id="temps-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- DÉPENSES -->
-        <!-- STATISTIQUES -->
-        <div class="page" id="page-stats">
-          <div class="page-title">Statistiques</div>
-          <div class="cards-row" id="stats-cards"></div>
-          <div class="panel">
-            <h3>Répartition du CA payé par type de projet</h3>
-            <table class="data"><thead><tr><th>Type de projet</th><th>CA payé</th><th>Nb factures</th></tr></thead>
-            <tbody id="stats-types-tbody"></tbody></table>
-          </div>
-          <div class="panel">
-            <h3>Top 5 clients les plus rentables (factures payées)</h3>
-            <table class="data"><thead><tr><th>Client</th><th>Total payé</th><th>Nb factures</th></tr></thead>
-            <tbody id="stats-clients-tbody"></tbody></table>
-          </div>
-        </div>
-
-        <!-- CALENDRIER -->
-        <div class="page" id="page-calendrier">
-          <div class="page-toolbar" style="align-items:center;">
-            <div class="page-title" style="margin:0;">Calendrier</div>
-            <div class="cat-tabs" id="cal-view-tabs" style="margin:0;">
-              <button type="button" class="cat-tab active" data-view="mensuel">Vue mensuelle</button>
-              <button type="button" class="cat-tab" data-view="google">Google Agenda</button>
-            </div>
-          </div>
-          <div id="cal-view-mensuel">
-            <div class="panel">
-              <div class="cal-header">
-                <button id="cal-prev">← Précédent</button>
-                <div id="cal-month-lbl" style="font-weight:bold;"></div>
-                <button id="cal-next">Suivant →</button>
-              </div>
-              <div class="cal-grid" id="cal-grid"></div>
-            </div>
-            <div class="panel cal-day-panel">
-              <h3 id="cal-day-lbl">Échéances du jour</h3>
-              <table class="data"><thead><tr><th>Type</th><th>Détail</th></tr></thead>
-              <tbody id="cal-day-tbody"></tbody></table>
-            </div>
-          </div>
-          <div id="cal-view-google" style="display:none;">
-            <div class="page-toolbar">
-              <div class="page-title" style="margin:0;font-size:19px;">Calendrier Google</div>
-              <div style="display:flex;gap:8px;">
-                <button class="btn secondary" id="btn-refresh-google-cal"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-repeat"></use></svg> Actualiser</button>
-                <button class="btn" id="btn-new-google-event">＋ Nouvel événement</button>
-              </div>
-            </div>
-            <div class="page-note">Vos 30 prochains événements</div>
-            <div id="google-cal-list"></div>
-          </div>
-        </div>
-
-        <!-- RELANCES -->
-        <div class="page" id="page-relances">
-          <div class="page-title">Relances clients</div>
-          <div class="page-note" id="relances-summary"></div>
-          <div class="panel">
-            <h3>Factures à relancer</h3>
-            <div id="relances-liste"></div>
-          </div>
-          <div class="panel" style="margin-top:16px;">
-            <h3>Composer un email</h3>
-            <div class="field"><label>Destinataire</label><input type="email" id="relance-to" placeholder="client@email.com"></div>
-            <div class="field"><label>Objet</label><input type="text" id="relance-subject"></div>
-            <div class="field"><label>Message</label><textarea id="relance-body" rows="8"></textarea></div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:10px;">
-              <span style="font-size:11.5px;color:var(--muted);" id="relance-hint">L'email est envoyé directement depuis votre compte Gmail connecté.</span>
-              <button class="btn" id="btn-send-relance"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-mail"></use></svg> Envoyer</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TARIFICATION -->
-        <div class="page" id="page-tarification">
-          <div class="page-title">Tarification</div>
-          <div class="page-toolbar">
-            <input class="filter" id="grille-search" placeholder="Rechercher…" style="max-width:220px;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn secondary" id="btn-new-grille-option">＋ Option / Supplément</button>
-              <button class="btn" id="btn-new-grille">＋ Nouvelle prestation</button>
-            </div>
-          </div>
-          <div class="cat-tabs" id="grille-cat-tabs">
-            <button type="button" class="cat-tab active" data-cat="">Toutes</button>
-            <button type="button" class="cat-tab" data-cat="Prestation">🔵 Prestations</button>
-            <button type="button" class="cat-tab" data-cat="Option / Supplément">🟣 Options / Suppléments</button>
-          </div>
-          <div class="page-note">Ces prestations et options alimentent la liste des désignations dans l'éditeur de devis. Prix exprimés hors TVA (TVA non applicable, art. 293 B du CGI).</div>
-          <table class="data">
-            <thead><tr><th>Catégorie</th><th>Prestation</th><th>Paiement</th><th>Prix</th><th></th></tr></thead>
-            <tbody id="grille-tbody"></tbody>
-          </table>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ MODAL GENERIQUE ============ -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal-box">
-    <h2 id="modal-title">Titre</h2>
-    <form id="modal-form"></form>
-    <div class="modal-actions">
-      <button class="btn secondary" type="button" id="modal-cancel">Annuler</button>
-      <button class="btn danger" type="button" id="modal-delete" style="display:none;">Supprimer</button>
-      <button class="btn" type="button" id="modal-save">Enregistrer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ EDITEUR DE DEVIS (A4) ============ -->
-<div class="editor-overlay" id="devis-editor">
-  <div class="editor-sheet">
-    <div class="editor-head">
-      <div>
-        <img id="ed-logo" src="logo.png" alt="PCW" style="width:56px;height:56px;border-radius:50%;margin-bottom:8px;">
-        <h2 style="margin:0 0 6px;font-size:26px;letter-spacing:.06em;color:var(--accent-dark);">DEVIS</h2>
-        <div id="ed-numero" style="font-size:13px;color:var(--muted);"></div>
-        <div id="ed-client" style="font-size:13px;margin-top:8px;"></div>
-      </div>
-      <div class="em" id="ed-emetteur"></div>
-    </div>
-    <div class="lines-table-scroll">
-      <table class="lines-table">
-        <thead><tr>
-          <th style="width:30%;">Désignation</th><th>Qté</th><th>PU (€)</th><th>Remise %</th>
-          <th>Paiement</th><th>Total (€)</th><th></th>
-        </tr></thead>
-        <tbody id="ed-lines"></tbody>
-      </table>
-    </div>
-    <div style="margin-top:10px;"><button class="btn secondary" type="button" id="ed-add-line">＋ Ajouter une ligne</button></div>
-    <div class="totaux" id="ed-totaux"></div>
-    <div id="ed-cgv-preview" style="margin-top:16px;font-size:12px;color:var(--muted);"></div>
-    <div class="modal-actions" style="margin-top:24px;">
-      <button class="btn secondary" type="button" id="ed-close">Fermer</button>
-      <button class="btn secondary" type="button" id="ed-save">Enregistrer</button>
-      <button class="btn secondary" type="button" id="ed-view">Visualiser</button>
-      <button class="btn secondary" type="button" id="ed-pdf">Télécharger PDF</button>
-      <button class="btn" type="button" id="ed-finaliser">Finaliser (CGV)</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="app.js"></script>
+<script>
+const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function switchTab(tab) {
+  const isLogin = tab === "login";
+  document.getElementById("tab-login").classList.toggle("active", isLogin);
+  document.getElementById("tab-signup").classList.toggle("active", !isLogin);
+  document.getElementById("form-login").style.display = isLogin ? "block" : "none";
+  document.getElementById("form-signup").style.display = isLogin ? "none" : "block";
+}
+
+async function login() {
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  const msgEl = document.getElementById("login-msg");
+  msgEl.innerHTML = "";
+  if (!email || !password) { msgEl.innerHTML = '<div class="error-msg">Merci de remplir email et mot de passe.</div>'; return; }
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  window.location.href = "dashboard.html";
+}
+
+async function signup() {
+  const nom = document.getElementById("signup-nom").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const msgEl = document.getElementById("signup-msg");
+  msgEl.innerHTML = "";
+  if (!nom || !email || !password) { msgEl.innerHTML = '<div class="error-msg">Tous les champs sont requis.</div>'; return; }
+  if (password.length < 6) { msgEl.innerHTML = '<div class="error-msg">Le mot de passe doit faire au moins 6 caractères.</div>'; return; }
+
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data.user) { msgEl.innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>'; return; }
+
+  // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique)
+  const { data: claimed, error: claimError } = await sb
+    .from("contacts")
+    .update({ client_user_id: data.user.id })
+    .ilike("email", email)
+    .is("client_user_id", null)
+    .select();
+
+  if (!claimError && claimed && claimed.length > 0) {
+    finishSignup(data.session);
+    return;
+  }
+
+  // 2) Sinon, crée sa propre fiche contact
+  const { data: ownerId, error: ownerError } = await sb.rpc("owner_id");
+  if (ownerError || !ownerId) {
+    msgEl.innerHTML = '<div class="error-msg">Compte créé, mais impossible de finaliser ton profil. Contacte PCW.</div>';
+    return;
+  }
+  const { error: insertError } = await sb.from("contacts").insert({
+    user_id: ownerId, client_user_id: data.user.id, nom, email,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (insertError) {
+    msgEl.innerHTML = `<div class="error-msg">Compte créé, mais erreur profil : ${insertError.message}</div>`;
+    return;
+  }
+  finishSignup(data.session);
+}
+
+function finishSignup(session) {
+  if (session) window.location.href = "dashboard.html";
+  else document.getElementById("signup-msg").innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>';
+}
+
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) window.location.href = "dashboard.html";
+})();
+</script>
 </body>
 </html>

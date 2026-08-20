@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon espace — PCW</title>
+<link rel="icon" href="../logo.png">
+<style>
+  :root{
+    --sky:#29a8f0; --indigo:#1e3a8a; --navy:#0f2247; --white:#fff;
+    --bg:#f6f9fd; --border:#e2e8f0; --text:#0f2247; --muted:#64748b;
+    --urgent:#dc2626; --normal:#d97706; --faible:#16a34a;
+    --grad: linear-gradient(120deg, var(--sky) 0%, var(--indigo) 100%);
+    --radius:10px; --shadow:0 1px 3px rgba(15,34,71,.07),0 1px 2px rgba(15,34,71,.05);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  .header{background:var(--white);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+  .header .brand{display:flex;align-items:center;gap:12px;}
+  .header img{height:40px;width:40px;}
+  .header .wordmark{line-height:1.15;}
+  .header .app-name{font-weight:800;font-size:1rem;}
+  .header .app-sub{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .header button{background:var(--white);border:1.5px solid var(--border);color:var(--navy);padding:8px 16px;border-radius:var(--radius);cursor:pointer;font-size:.85rem;font-weight:600;}
+  .tabs{display:flex;gap:6px;max-width:920px;margin:18px auto 0;padding:0 20px;overflow-x:auto;}
+  .tab{padding:9px 16px;border-radius:8px 8px 0 0;font-size:.85rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;}
+  .tab.active{background:var(--white);color:var(--navy);border:1px solid var(--border);border-bottom:none;}
+  .container{max-width:920px;margin:0 auto;padding:0 20px 60px;}
+  .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 24px;margin-bottom:20px;}
+  .card h2{margin-top:0;font-size:1.02rem;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px;}
+  input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.95rem;font-family:inherit;}
+  textarea{resize:vertical;min-height:80px;}
+  .btn-primary{margin-top:18px;background:var(--grad);color:var(--white);border:none;padding:11px 20px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.92rem;}
+  .btn-primary:hover{opacity:.92;}
+  .page{display:none;}
+  .page.active{display:block;}
+  .item{border-bottom:1px solid var(--border);padding:14px 0;}
+  .item:last-child{border-bottom:none;}
+  .item-title{font-weight:600;margin-bottom:4px;}
+  .item-meta{font-size:.8rem;color:var(--muted);}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
+  .pill-urgent{background:#fee2e2;color:var(--urgent);}
+  .pill-normal{background:#fef3c7;color:var(--normal);}
+  .pill-faible{background:#dcfce7;color:var(--faible);}
+  .pill-statut{background:var(--bg);color:var(--muted);}
+  .empty-state{text-align:center;color:var(--muted);padding:30px 10px;font-size:.9rem;}
+  .error-msg{color:var(--urgent);font-size:.85rem;margin-top:8px;}
+  .success-msg{color:var(--faible);font-size:.85rem;margin-top:8px;}
+  .progress-track{background:var(--bg);border:1px solid var(--border);border-radius:999px;height:10px;overflow:hidden;margin:10px 0 6px;}
+  .progress-fill{height:100%;background:var(--grad);transition:width .3s;}
+  .progress-steps{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);}
+  .progress-steps .done{color:var(--indigo);font-weight:600;}
+  .thread{max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  .msg-bubble{max-width:75%;padding:8px 12px;border-radius:12px;font-size:.85rem;line-height:1.4;}
+  .msg-bubble.client{align-self:flex-end;background:var(--grad);color:#fff;}
+  .msg-bubble.admin{align-self:flex-start;background:var(--bg);}
+  .msg-time{display:block;font-size:.65rem;opacity:.7;margin-top:3px;}
+  .compose{display:flex;gap:8px;}
+  .compose textarea{flex:1;min-height:44px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <img src="../logo.png" alt="PCW">
+    <div class="wordmark"><div class="app-name" id="header-client-name">PCW</div><div class="app-sub">Espace Client</div></div>
+  </div>
+  <button onclick="logout()">Déconnexion</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-page="demandes" onclick="showPage('demandes')">Demandes</div>
+  <div class="tab" data-page="messages" onclick="showPage('messages')">Messages</div>
+  <div class="tab" data-page="projet" onclick="showPage('projet')">Suivi de projet</div>
+  <div class="tab" data-page="documents" onclick="showPage('documents')">Devis & Factures</div>
+</div>
+
+<div class="container">
+
+  <!-- DEMANDES -->
+  <div class="page active" id="page-demandes">
+    <div class="card">
+      <h2>Nouvelle demande</h2>
+      <label for="d-titre">Titre</label>
+      <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
+      <label for="d-description">Description</label>
+      <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
+      <label for="d-priorite">Priorité</label>
+      <select id="d-priorite">
+        <option value="Normal">Normal</option>
+        <option value="Urgent">Urgent</option>
+        <option value="Faible">Faible</option>
+      </select>
+      <button class="btn-primary" onclick="creerDemande()">Envoyer la demande</button>
+      <div id="demande-msg"></div>
+    </div>
+    <div class="card">
+      <h2>Mes demandes</h2>
+      <div id="demandes-list"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div class="page" id="page-messages">
+    <div class="card">
+      <h2>Messages</h2>
+      <div class="thread" id="messages-thread"><div class="empty-state">Chargement...</div></div>
+      <div class="compose">
+        <textarea id="message-input" placeholder="Écrire un message..."></textarea>
+        <button class="btn-primary" style="margin-top:0;" onclick="envoyerMessage()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUIVI DE PROJET -->
+  <div class="page" id="page-projet">
+    <div class="card">
+      <h2>Suivi de projet</h2>
+      <div id="projet-content"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <!-- DEVIS & FACTURES -->
+  <div class="page" id="page-documents">
+    <div class="card">
+      <h2>Devis</h2>
+      <div id="devis-list"><div class="empty-state">Chargement...</div></div>
+    </div>
+    <div class="card">
+      <h2>Factures</h2>
+      <div id="factures-list"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let myContact = null;
+const ETAPES = ["maquette", "developpement", "revisions", "mise_en_ligne", "termine"];
+const ETAPES_LABELS = { maquette: "Maquette", developpement: "Développement", revisions: "Révisions", mise_en_ligne: "Mise en ligne", termine: "Terminé" };
+const PILL_PRIORITE = { Urgent: "pill-urgent", Normal: "pill-normal", Faible: "pill-faible" };
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+function fmtDateFR(iso) {
+  if (!iso) return "—";
+  return iso.slice(0, 10).split("-").reverse().join("/");
+}
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = "index.html"; return; }
+  currentUser = session.user;
+
+  const { data: contact, error } = await sb.from("contacts").select("*").eq("client_user_id", currentUser.id).single();
+  if (error || !contact) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;">Ton profil n\'est pas encore relié à un compte client. Contacte Pierre Créa Web.</div>';
+    return;
+  }
+  myContact = contact;
+  document.getElementById("header-client-name").textContent = contact.nom || contact.societe || "PCW";
+
+  chargerDemandes();
+  chargerMessages();
+  chargerProjet();
+  chargerDocuments();
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  window.location.href = "index.html";
+}
+
+function showPage(key) {
+  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.page === key));
+  document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + key));
+}
+
+// ---- DEMANDES ----
+async function creerDemande() {
+  const titre = document.getElementById("d-titre").value.trim();
+  const description = document.getElementById("d-description").value.trim();
+  const priorite = document.getElementById("d-priorite").value;
+  const msgEl = document.getElementById("demande-msg");
+  msgEl.innerHTML = "";
+  if (!titre) { msgEl.innerHTML = '<div class="error-msg">Merci d\'indiquer un titre.</div>'; return; }
+
+  const { error } = await sb.from("demandes").insert({
+    contact_id: myContact.id, titre, description, priorite,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+
+  msgEl.innerHTML = '<div class="success-msg">Demande envoyée !</div>';
+  document.getElementById("d-titre").value = "";
+  document.getElementById("d-description").value = "";
+  chargerDemandes();
+}
+
+async function chargerDemandes() {
+  const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
+  const el = document.getElementById("demandes-list");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucune demande pour le moment.</div>'; return; }
+  el.innerHTML = data.map(d => `
+    <div class="item">
+      <div class="item-title">${escapeHtml(d.titre)}
+        <span class="pill ${PILL_PRIORITE[d.priorite] || "pill-normal"}">${escapeHtml(d.priorite)}</span>
+        <span class="pill pill-statut">${escapeHtml(d.statut)}</span>
+      </div>
+      ${d.description ? `<div class="item-meta">${escapeHtml(d.description)}</div>` : ""}
+      <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
+    </div>`).join("");
+}
+
+// ---- MESSAGES ----
+async function chargerMessages() {
+  const { data, error } = await sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: true });
+  const el = document.getElementById("messages-thread");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucun message pour l\'instant.</div>'; return; }
+  el.innerHTML = data.map(m => `
+    <div class="msg-bubble ${m.expediteur === "client" ? "client" : "admin"}">
+      ${escapeHtml(m.contenu)}
+      <span class="msg-time">${m.date_creation ? m.date_creation.slice(0, 16).replace("T", " ") : ""}</span>
+    </div>`).join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+async function envoyerMessage() {
+  const input = document.getElementById("message-input");
+  const contenu = input.value.trim();
+  if (!contenu) return;
+  const { error } = await sb.from("messages").insert({
+    contact_id: myContact.id, expediteur: "client", contenu,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (!error) { input.value = ""; chargerMessages(); }
+}
+
+// ---- SUIVI DE PROJET ----
+async function chargerProjet() {
+  const { data, error } = await sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const el = document.getElementById("projet-content");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucun projet en cours.</div>'; return; }
+
+  el.innerHTML = data.map(p => {
+    const etape = p.etape_projet || "maquette";
+    const idx = ETAPES.indexOf(etape);
+    const pct = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) : 0;
+    return `
+    <div class="item">
+      <div class="item-title">${escapeHtml(p.titre || "Projet")}</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      <div class="progress-steps">
+        ${ETAPES.map((e, i) => `<span class="${i <= idx ? "done" : ""}">${ETAPES_LABELS[e]}</span>`).join("")}
+      </div>
+      ${p.date_livraison_estimee ? `<div class="item-meta" style="margin-top:8px;">Livraison estimée : ${fmtDateFR(p.date_livraison_estimee)}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+// ---- DEVIS & FACTURES ----
+async function chargerDocuments() {
+  const { data: devis } = await sb.from("devis").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const devisEl = document.getElementById("devis-list");
+  devisEl.innerHTML = (devis && devis.length) ? devis.map(d => `
+    <div class="item">
+      <div class="item-title">${escapeHtml(d.numero || "Devis")} <span class="pill pill-statut">${escapeHtml(d.statut || "")}</span></div>
+      <div class="item-meta">${d.montant_ttc ? d.montant_ttc + " € TTC" : ""} — ${fmtDateFR(d.date_creation)}</div>
+    </div>`).join("") : '<div class="empty-state">Aucun devis pour le moment.</div>';
+
+  const { data: factures } = await sb.from("factures").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const facturesEl = document.getElementById("factures-list");
+  facturesEl.innerHTML = (factures && factures.length) ? factures.map(f => `
+    <div class="item">
+      <div class="item-title">${escapeHtml(f.numero || "Facture")} <span class="pill pill-statut">${escapeHtml(f.statut || "")}</span></div>
+      <div class="item-meta">${f.montant_ttc ? f.montant_ttc + " € TTC" : ""} — ${fmtDateFR(f.date_creation)}</div>
+    </div>`).join("") : '<div class="empty-state">Aucune facture pour le moment.</div>';
+}
+
+init();
+</script>
+</body>
+</html>

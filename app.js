@@ -100,11 +100,16 @@ const STATUT_COLORS = {
   "Envoyée": "var(--warning)", "Payée": "var(--success)",
   "En retard": "var(--danger)", "Annulée": "var(--danger)",
   "Basse": "var(--muted)", "Normale": "var(--muted)", "Haute": "var(--warning)", "Urgente": "var(--danger)",
+  "Urgent": "var(--danger)", "Normal": "var(--muted)", "Faible": "var(--muted)",
+  "Traité": "var(--success)",
 };
+
+const STATUTS_DEMANDES = ["Nouveau", "En cours", "Traité"];
+const PRIORITES_DEMANDES = ["Urgent", "Normal", "Faible"];
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -232,7 +237,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -244,8 +249,10 @@ async function refreshCache() {
     fetchAll("temps_passe"),
     fetchAll("depenses"),
     fetchAll("cgv_templates", "ordre", true),
+    fetchAll("demandes"),
+    fetchAll("messages", "id", true),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages };
 }
 
 // ========================================================================
@@ -606,6 +613,8 @@ function renderPage(key) {
   else if (key === "tarification") renderGrille();
   else if (key === "temps") renderTemps();
   else if (key === "stats") renderStats();
+  else if (key === "demandes") renderDemandes();
+  else if (key === "messages") renderMessages();
 }
 function advanceDateBy(dateStr, freq) {
   const d = new Date(dateStr);
@@ -2362,6 +2371,94 @@ async function deleteRdvWithGoogleSync(id, renderFn) {
 }
 
 // ========================================================================
+//  PORTAIL CLIENT — DEMANDES
+// ========================================================================
+function renderDemandes() {
+  ensureFilterOptions("demande-filter-priorite", PRIORITES_DEMANDES);
+  ensureFilterOptions("demande-filter-statut", STATUTS_DEMANDES);
+  const fp = document.getElementById("demande-filter-priorite").value;
+  const fs = document.getElementById("demande-filter-statut").value;
+  const prioOrder = { "Urgent": 0, "Normal": 1, "Faible": 2 };
+  let rows = [...cache.demandes].sort((a, b) =>
+    (prioOrder[a.priorite] ?? 1) - (prioOrder[b.priorite] ?? 1) ||
+    (b.date_creation || "").localeCompare(a.date_creation || "")
+  );
+  if (fp) rows = rows.filter(d => d.priorite === fp);
+  if (fs) rows = rows.filter(d => d.statut === fs);
+  const tbody = document.getElementById("demandes-tbody");
+  tbody.innerHTML = rows.length ? rows.map(d => `
+    <tr>
+      <td>${statusSelectInline("demandes", d.id, d.priorite, PRIORITES_DEMANDES, STATUT_COLORS, "priorite")}</td>
+      <td>${escapeHtml(d.titre)}</td>
+      <td>${contactLabel(findContact(d.contact_id))}</td>
+      <td>${escapeHtml(d.description || "—")}</td>
+      <td>${d.date_creation ? d.date_creation.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+      <td>${statusSelectInline("demandes", d.id, d.statut, STATUTS_DEMANDES, STATUT_COLORS, "statut")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucune demande client</td></tr>`;
+}
+function escapeHtml(str) {
+  if (str == null) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ========================================================================
+//  PORTAIL CLIENT — MESSAGERIE
+// ========================================================================
+let selectedMessageContactId = null;
+function clientsWithPortailAccount() {
+  return cache.contacts.filter(c => c.client_user_id);
+}
+function lastMessageFor(contactId) {
+  const msgs = cache.messages.filter(m => m.contact_id === contactId);
+  return msgs.length ? msgs[msgs.length - 1] : null;
+}
+function renderMessages() {
+  const list = document.getElementById("messages-contacts-list");
+  const clients = clientsWithPortailAccount();
+  if (!clients.length) {
+    list.innerHTML = `<div class="page-note" style="margin:14px;">Aucun client n'a encore de compte sur le portail.</div>`;
+  } else {
+    list.innerHTML = clients.map(c => {
+      const last = lastMessageFor(c.id);
+      return `<div class="messages-contact-item ${c.id === selectedMessageContactId ? "active" : ""}" onclick="selectMessageContact(${c.id})">
+        <div class="mc-name">${contactLabel(c)}</div>
+        <div class="mc-preview">${last ? escapeHtml(last.contenu) : "Aucun message"}</div>
+      </div>`;
+    }).join("");
+  }
+  if (selectedMessageContactId) renderMessageThread(selectedMessageContactId);
+}
+function selectMessageContact(contactId) {
+  selectedMessageContactId = contactId;
+  document.getElementById("messages-compose").style.display = "flex";
+  renderMessages();
+}
+function renderMessageThread(contactId) {
+  const thread = document.getElementById("messages-thread");
+  const msgs = cache.messages.filter(m => m.contact_id === contactId);
+  thread.innerHTML = msgs.length ? msgs.map(m => `
+    <div class="msg-bubble ${m.expediteur === "admin" ? "admin" : "client"}">
+      ${escapeHtml(m.contenu)}
+      <span class="msg-time">${m.date_creation ? m.date_creation.slice(0, 16).replace("T", " ") : ""}</span>
+    </div>`).join("") : `<div class="page-note">Aucun message pour l'instant.</div>`;
+  thread.scrollTop = thread.scrollHeight;
+}
+async function sendAdminMessage() {
+  if (!selectedMessageContactId) return;
+  const input = document.getElementById("messages-input");
+  const contenu = input.value.trim();
+  if (!contenu) return;
+  const saved = await insertRow("messages", { contact_id: selectedMessageContactId, expediteur: "admin", contenu });
+  if (saved) {
+    input.value = "";
+    await refreshCache();
+    renderMessages();
+  }
+}
+
+// ========================================================================
 //  TARIFICATION (grille tarifaire)
 // ========================================================================
 const TARIF_CAT_COLORS = { "Prestation": "var(--accent)", "Option / Supplément": "var(--tertiary)" };
@@ -2811,6 +2908,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-send-relance").addEventListener("click", sendRelanceFromForm);
   document.getElementById("btn-refresh-google-cal").addEventListener("click", loadGoogleCalendarList);
   document.getElementById("btn-new-google-event").addEventListener("click", () => openRdvDialog(null));
+  document.getElementById("messages-send-btn").addEventListener("click", sendAdminMessage);
+  document.getElementById("messages-input").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminMessage(); }
+  });
+  document.getElementById("demande-filter-priorite").addEventListener("change", renderDemandes);
+  document.getElementById("demande-filter-statut").addEventListener("change", renderDemandes);
 
   document.getElementById("sc-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("sc-facture").addEventListener("click", () => openFactureDialog(null));
