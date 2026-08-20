@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Espace Client — Pierre Créa Web</title>
 <link rel="icon" href="../logo.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#0F2247">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PCW Client">
 <style>
   :root{
     --sky:#29a8f0; --indigo:#1e3a8a; --navy:#0f2247; --white:#fff;
@@ -33,19 +40,19 @@
 </style>
 </head>
 <body>
- 
+
 <div class="header">
   <img src="../logo.png" alt="PCW">
   <div class="wordmark"><div class="app-name">PCW</div><div class="app-sub">Espace Client</div></div>
 </div>
- 
+
 <div class="wrap">
   <div class="card">
     <div class="tab-toggle">
       <button id="tab-login" class="active" onclick="switchTab('login')">Connexion</button>
       <button id="tab-signup" onclick="switchTab('signup')">Créer un compte</button>
     </div>
- 
+
     <div id="form-login">
       <label for="login-email">Email</label>
       <input type="email" id="login-email" placeholder="toi@exemple.fr">
@@ -54,7 +61,7 @@
       <button class="btn-primary" onclick="login()">Se connecter</button>
       <div id="login-msg"></div>
     </div>
- 
+
     <div id="form-signup" style="display:none;">
       <label for="signup-nom">Nom / société</label>
       <input type="text" id="signup-nom" placeholder="Ton nom ou ta société">
@@ -67,13 +74,13 @@
     </div>
   </div>
 </div>
- 
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
- 
+
 function switchTab(tab) {
   const isLogin = tab === "login";
   document.getElementById("tab-login").classList.toggle("active", isLogin);
@@ -81,19 +88,19 @@ function switchTab(tab) {
   document.getElementById("form-login").style.display = isLogin ? "block" : "none";
   document.getElementById("form-signup").style.display = isLogin ? "none" : "block";
 }
- 
+
 async function login() {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
   const msgEl = document.getElementById("login-msg");
   msgEl.innerHTML = "";
   if (!email || !password) { msgEl.innerHTML = '<div class="error-msg">Merci de remplir email et mot de passe.</div>'; return; }
- 
+
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   window.location.href = "dashboard.html";
 }
- 
+
 async function signup() {
   const nom = document.getElementById("signup-nom").value.trim();
   const email = document.getElementById("signup-email").value.trim();
@@ -102,11 +109,11 @@ async function signup() {
   msgEl.innerHTML = "";
   if (!nom || !email || !password) { msgEl.innerHTML = '<div class="error-msg">Tous les champs sont requis.</div>'; return; }
   if (password.length < 6) { msgEl.innerHTML = '<div class="error-msg">Le mot de passe doit faire au moins 6 caractères.</div>'; return; }
- 
+
   const { data, error } = await sb.auth.signUp({ email, password });
   if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   if (!data.user) { msgEl.innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>'; return; }
- 
+
   // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique)
   const { data: claimed, error: claimError } = await sb
     .from("contacts")
@@ -114,12 +121,12 @@ async function signup() {
     .ilike("email", email)
     .is("client_user_id", null)
     .select();
- 
+
   if (!claimError && claimed && claimed.length > 0) {
     finishSignup(data.session);
     return;
   }
- 
+
   // 2) Sinon, crée sa propre fiche contact
   const { data: ownerId, error: ownerError } = await sb.rpc("owner_id");
   if (ownerError || !ownerId) {
@@ -136,16 +143,21 @@ async function signup() {
   }
   finishSignup(data.session);
 }
- 
+
 function finishSignup(session) {
   if (session) window.location.href = "dashboard.html";
   else document.getElementById("signup-msg").innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>';
 }
- 
+
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
   if (session) window.location.href = "dashboard.html";
 })();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
 </script>
 </body>
 </html>
