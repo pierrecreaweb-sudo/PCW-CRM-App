@@ -212,6 +212,35 @@
   }
   html[data-theme="dark"] .tl-type{color:#7fb2ff;}
 
+  .badge-unread{
+    background:var(--urgent); color:#fff; font-size:.65rem; font-weight:700;
+    min-width:16px; height:16px; border-radius:999px; display:inline-flex;
+    align-items:center; justify-content:center; padding:0 4px; margin-left:auto;
+  }
+  .tab{justify-content:flex-start;}
+  .tab .badge-unread{margin-left:auto;}
+
+  .upload-zone{
+    border:1.5px dashed var(--line); border-radius:var(--radius); padding:28px 20px;
+    text-align:center; cursor:pointer; transition:border-color .15s, background .15s; margin-bottom:16px;
+  }
+  .upload-zone:hover, .upload-zone.dragover{border-color:var(--sky); background:var(--cloud);}
+  .upload-zone svg{width:26px; height:26px; color:var(--slate); margin-bottom:8px;}
+  .upload-zone p{margin:0; font-size:.85rem; color:var(--slate);}
+  .upload-zone input{display:none;}
+  .file-item{
+    display:flex; align-items:center; gap:11px; padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .file-item:last-child{border-bottom:none;}
+  .file-icon{
+    width:34px; height:34px; border-radius:8px; background:var(--cloud); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .file-icon svg{width:16px; height:16px; color:var(--slate);}
+  .file-info{flex:1; min-width:0;}
+  .file-name{font-size:.86rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .file-meta{font-size:.74rem; color:var(--slate); font-family:'JetBrains Mono',monospace;}
+
   @media (max-width: 820px){
     .shell{flex-direction:column;}
     .sidebar{
@@ -251,6 +280,11 @@
       <div class="tab" data-page="messages" onclick="showPage('messages')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span>Messages</span>
+        <span class="badge-unread" id="badge-messages" style="display:none;">0</span>
+      </div>
+      <div class="tab" data-page="fichiers" onclick="showPage('fichiers')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Fichiers</span>
       </div>
       <div class="tab" data-page="projet" onclick="showPage('projet')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
@@ -340,6 +374,23 @@
         </div>
       </div>
 
+      <!-- FICHIERS -->
+      <div class="page" id="page-fichiers">
+        <div class="page-head">
+          <h1>Fichiers</h1>
+          <p>Envoie tes photos ou documents à PCW.</p>
+        </div>
+        <div class="card">
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <p>Glisse un fichier ici, ou clique pour en choisir un</p>
+            <input type="file" id="file-input" onchange="handleFileSelect(this.files)">
+          </div>
+          <div id="upload-msg"></div>
+          <div id="fichiers-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
       <!-- SUIVI DE PROJET -->
       <div class="page" id="page-projet">
         <div class="page-head">
@@ -390,6 +441,10 @@ function fmtDateFR(iso) {
   if (!iso) return "—";
   return iso.slice(0, 10).split("-").reverse().join("/");
 }
+function addDaysISO(iso, days) {
+  const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 function initialsOf(prenom, nom) {
   const a = (prenom || "").trim()[0] || "";
   const b = (nom || "").trim()[0] || "";
@@ -430,8 +485,10 @@ async function init() {
   chargerTableauDeBord();
   chargerDemandes();
   chargerMessages();
+  chargerFichiers();
   chargerProjet();
   chargerDocuments();
+  rafraichirBadgeMessages();
 }
 
 async function logout() {
@@ -442,6 +499,7 @@ async function logout() {
 function showPage(key) {
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.page === key));
   document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + key));
+  if (key === "messages") marquerMessagesLus();
 }
 
 // ---- TABLEAU DE BORD ----
@@ -468,6 +526,17 @@ async function chargerTableauDeBord() {
     projetSub = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) + "% terminé" : "—";
   }
 
+  let abonnementCard = "";
+  if (projet && projet.facturation_recurrente) {
+    abonnementCard = `
+    <div class="dash-card" onclick="showPage('documents')">
+      <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+      <div class="dc-label">Abonnement ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
+      <div class="dc-value">${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(0) + " €" : "—"}</div>
+      <div class="dc-sub">${projet.prochaine_facturation ? "Prochaine facture le " + fmtDateFR(projet.prochaine_facturation) : "Date non définie"}</div>
+    </div>`;
+  }
+
   document.getElementById("dash-grid").innerHTML = `
     <div class="dash-card" onclick="showPage('demandes')">
       <div class="dc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
@@ -492,7 +561,8 @@ async function chargerTableauDeBord() {
       <div class="dc-label">${prochaineFacture ? "Facture en attente" : "Factures"}</div>
       <div class="dc-value">${prochaineFacture ? Number(prochaineFacture.montant_ttc || 0).toFixed(0) + " €" : "À jour"}</div>
       <div class="dc-sub">${prochaineFacture ? (prochaineFacture.date_echeance ? "Échéance " + fmtDateFR(prochaineFacture.date_echeance) : prochaineFacture.numero || "") : "Aucune facture en attente"}</div>
-    </div>`;
+    </div>
+    ${abonnementCard}`;
 
   const lastDemandeEl = document.getElementById("dash-last-demande");
   lastDemandeEl.innerHTML = demandes.length ? `
@@ -554,6 +624,19 @@ async function chargerDemandes() {
 }
 
 // ---- MESSAGES ----
+async function rafraichirBadgeMessages() {
+  const { count } = await sb.from("messages").select("id", { count: "exact", head: true })
+    .eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false);
+  const badge = document.getElementById("badge-messages");
+  if (count && count > 0) { badge.textContent = count > 9 ? "9+" : count; badge.style.display = "inline-flex"; }
+  else { badge.style.display = "none"; }
+}
+
+async function marquerMessagesLus() {
+  await sb.from("messages").update({ lu: true }).eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false);
+  rafraichirBadgeMessages();
+}
+
 async function chargerMessages() {
   const { data, error } = await sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: true });
   const el = document.getElementById("messages-thread");
@@ -578,8 +661,72 @@ async function envoyerMessage() {
     contact_id: myContact.id, expediteur: "client", contenu,
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
-  if (!error) { input.value = ""; chargerMessages(); }
+  if (!error) { input.value = ""; chargerMessages(); chargerTableauDeBord(); }
 }
+
+// ---- FICHIERS ----
+function formatTaille(octets) {
+  if (!octets) return "";
+  if (octets < 1024) return octets + " o";
+  if (octets < 1024 * 1024) return (octets / 1024).toFixed(0) + " Ko";
+  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+}
+
+async function handleFileSelect(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  const msgEl = document.getElementById("upload-msg");
+  msgEl.innerHTML = '<div class="item-meta">Envoi en cours…</div>';
+
+  const cheminSafe = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const chemin = `${currentUser.id}/${cheminSafe}`;
+
+  const { error: uploadError } = await sb.storage.from("photos-clients").upload(chemin, file, { upsert: true });
+  if (uploadError) { msgEl.innerHTML = `<div class="error-msg">${uploadError.message}</div>`; return; }
+
+  const { error: insertError } = await sb.from("fichiers_clients").insert({
+    contact_id: myContact.id, nom_fichier: file.name, chemin,
+    type_mime: file.type, taille_octets: file.size,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (insertError) { msgEl.innerHTML = `<div class="error-msg">${insertError.message}</div>`; return; }
+
+  msgEl.innerHTML = '<div class="success-msg">Fichier envoyé !</div>';
+  document.getElementById("file-input").value = "";
+  chargerFichiers();
+}
+
+async function chargerFichiers() {
+  const { data, error } = await sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const el = document.getElementById("fichiers-list");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Aucun fichier envoyé pour le moment.</div>';
+    return;
+  }
+  el.innerHTML = data.map(f => `
+    <div class="file-item">
+      <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.nom_fichier)}</div>
+        <div class="file-meta">${formatTaille(f.taille_octets)} — ${fmtDateFR(f.date_creation)}</div>
+      </div>
+      <button class="btn-pdf" onclick="telechargerFichier('${f.chemin}')">Ouvrir</button>
+    </div>`).join("");
+}
+
+async function telechargerFichier(chemin) {
+  const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
+  if (error) { alert("Fichier introuvable."); return; }
+  window.open(data.signedUrl, "_blank");
+}
+
+document.getElementById("upload-zone").addEventListener("dragover", e => { e.preventDefault(); e.currentTarget.classList.add("dragover"); });
+document.getElementById("upload-zone").addEventListener("dragleave", e => { e.currentTarget.classList.remove("dragover"); });
+document.getElementById("upload-zone").addEventListener("drop", e => {
+  e.preventDefault(); e.currentTarget.classList.remove("dragover");
+  handleFileSelect(e.dataTransfer.files);
+});
 
 // ---- SUIVI DE PROJET ----
 async function chargerProjet() {
@@ -632,10 +779,19 @@ async function chargerDocuments() {
     const numero = r.numero || label;
     const montant = r.montant_ttc ? Number(r.montant_ttc).toFixed(2) + " € TTC" : "";
     const fnVoir = isDevis ? "voirDevisPDF" : "voirFacturePDF";
+    let echeanceHtml = "";
+    if (!isDevis && r.statut !== "Payée" && r.date_echeance) {
+      const today = new Date().toISOString().slice(0, 10);
+      const enRetard = r.date_echeance < today;
+      const bientot = !enRetard && r.date_echeance <= addDaysISO(today, 7);
+      const cls = enRetard ? "pill-urgent" : (bientot ? "pill-normal" : "pill-statut");
+      const texte = enRetard ? "En retard — échéance " : "Échéance ";
+      echeanceHtml = `<span class="pill ${cls}">${texte}${fmtDateFR(r.date_echeance)}</span>`;
+    }
     return `
     <div class="tl-item">
       <div class="tl-type">${label}</div>
-      <div class="item-title">${escapeHtml(numero)} <span class="pill pill-statut">${escapeHtml(r.statut || "")}</span></div>
+      <div class="item-title">${escapeHtml(numero)} <span class="pill pill-statut">${escapeHtml(r.statut || "")}</span>${echeanceHtml}</div>
       <div class="item-meta">${montant}${montant ? " — " : ""}${fmtDateFR(it.date)}</div>
       <div class="item-actions">
         <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "preview")'>Voir le PDF</button>
