@@ -725,7 +725,7 @@ async function handleFileSelect(files) {
   msgEl.innerHTML = '<div class="item-meta">Envoi en cours…</div>';
 
   const cheminSafe = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const chemin = `${currentUser.id}/${cheminSafe}`;
+  const chemin = `${myContact.id}/${cheminSafe}`;
 
   const { error: uploadError } = await sb.storage.from("photos-clients").upload(chemin, file, { upsert: true });
   if (uploadError) { msgEl.innerHTML = `<div class="error-msg">${uploadError.message}</div>`; return; }
