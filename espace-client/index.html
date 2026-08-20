@@ -114,17 +114,26 @@ async function signup() {
   if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   if (!data.user) { msgEl.innerHTML = '<div class="success-msg">Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.</div>'; return; }
 
-  // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique)
-  const { data: claimed, error: claimError } = await sb
+  // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique).
+  // .limit(1) évite toute ambiguïté s'il existe plusieurs fiches avec le même email.
+  const { data: existing } = await sb
     .from("contacts")
-    .update({ client_user_id: data.user.id })
+    .select("id")
     .ilike("email", email)
     .is("client_user_id", null)
-    .select();
+    .order("id", { ascending: true })
+    .limit(1);
 
-  if (!claimError && claimed && claimed.length > 0) {
-    finishSignup(data.session);
-    return;
+  if (existing && existing.length > 0) {
+    const { data: claimed, error: claimError } = await sb
+      .from("contacts")
+      .update({ client_user_id: data.user.id })
+      .eq("id", existing[0].id)
+      .select();
+    if (!claimError && claimed && claimed.length > 0) {
+      finishSignup(data.session);
+      return;
+    }
   }
 
   // 2) Sinon, crée sa propre fiche contact
