@@ -97,7 +97,8 @@ function drawFooter(doc) {
   doc.setTextColor(0); doc.setFontSize(11);
 }
 function pdfContactLines(contact) {
-  return [contact.nom, contact.societe, contact.email, contact.telephone, contact.adresse].filter(Boolean).flatMap(l => String(l).split("\n"));
+  const fullName = [contact.prenom, contact.nom].filter(Boolean).join(" ");
+  return [fullName, contact.societe, contact.email, contact.telephone, contact.adresse].filter(Boolean).flatMap(l => String(l).split("\n"));
 }
 
 async function generateDevisPDF(d, contact, mode) {
