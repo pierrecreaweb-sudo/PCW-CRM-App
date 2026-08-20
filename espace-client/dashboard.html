@@ -7,143 +7,288 @@
 <link rel="icon" href="../logo.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="../icon-192.png">
-<meta name="theme-color" content="#0F2247">
+<meta name="theme-color" content="#0B1B36">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PCW Client">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --sky:#29a8f0; --indigo:#1e3a8a; --navy:#0f2247; --white:#fff;
-    --bg:#f6f9fd; --border:#e2e8f0; --text:#0f2247; --muted:#64748b;
-    --urgent:#dc2626; --normal:#d97706; --faible:#16a34a;
-    --grad: linear-gradient(120deg, var(--sky) 0%, var(--indigo) 100%);
-    --radius:10px; --shadow:0 1px 3px rgba(15,34,71,.07),0 1px 2px rgba(15,34,71,.05);
+    --sky:#29a8f0; --indigo:#2946b0; --navy:#0b1b36; --paper:#fff;
+    --cloud:#f3f6fc; --line:#e3e8f2; --slate:#5b6b8c;
+    --urgent:#dc2626; --normal:#d97706; --faible:#15a26b;
+    --grad: linear-gradient(135deg, var(--sky) 0%, var(--indigo) 100%);
+    --radius:14px; --radius-sm:9px;
+    --shadow: 0 1px 2px rgba(11,27,54,.04), 0 8px 24px -12px rgba(11,27,54,.12);
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
-  .header{background:var(--white);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
-  .header .brand{display:flex;align-items:center;gap:12px;}
-  .header img{height:40px;width:40px;}
-  .header .wordmark{line-height:1.15;}
-  .header .app-name{font-weight:800;font-size:1rem;}
-  .header .app-sub{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
-  .header button{background:var(--white);border:1.5px solid var(--border);color:var(--navy);padding:8px 16px;border-radius:var(--radius);cursor:pointer;font-size:.85rem;font-weight:600;}
-  .tabs{display:flex;gap:6px;max-width:920px;margin:18px auto 0;padding:0 20px;overflow-x:auto;}
-  .tab{padding:9px 16px;border-radius:8px 8px 0 0;font-size:.85rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;}
-  .tab.active{background:var(--white);color:var(--navy);border:1px solid var(--border);border-bottom:none;}
-  .container{max-width:920px;margin:0 auto;padding:0 20px 60px;}
-  .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 24px;margin-bottom:20px;}
-  .card h2{margin-top:0;font-size:1.02rem;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);}
-  label{display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px;}
-  input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.95rem;font-family:inherit;}
-  textarea{resize:vertical;min-height:80px;}
-  .btn-primary{margin-top:18px;background:var(--grad);color:var(--white);border:none;padding:11px 20px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.92rem;}
-  .btn-primary:hover{opacity:.92;}
+  html{-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--cloud); color:var(--navy);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* ---------- SHELL ---------- */
+  .shell{display:flex; min-height:100vh;}
+  .sidebar{
+    width:236px; flex-shrink:0; background:var(--navy); color:#cbd5e1;
+    display:flex; flex-direction:column; padding:24px 16px;
+    position:sticky; top:0; height:100vh;
+  }
+  .brand{display:flex; align-items:center; gap:11px; padding:4px 8px 26px;}
+  .brand img{height:34px; width:34px; border-radius:8px;}
+  .brand .name{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1rem; color:#fff; letter-spacing:.01em;}
+  .brand .sub{font-size:.66rem; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:#7d93c2;}
+
+  nav.tabs{display:flex; flex-direction:column; gap:2px;}
+  .tab{
+    display:flex; align-items:center; gap:11px; padding:10px 12px;
+    border-radius:var(--radius-sm); font-size:.87rem; font-weight:500;
+    color:#a9b8d6; cursor:pointer; position:relative; transition:background .15s,color .15s;
+  }
+  .tab svg{width:18px;height:18px;flex-shrink:0;opacity:.85;}
+  .tab:hover{background:rgba(255,255,255,.06); color:#fff;}
+  .tab.active{background:rgba(255,255,255,.08); color:#fff;}
+  .tab.active::before{
+    content:""; position:absolute; left:-16px; top:8px; bottom:8px; width:3px;
+    border-radius:0 3px 3px 0; background:var(--grad);
+  }
+
+  .sidebar-footer{margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,.08);}
+  .profile{display:flex; align-items:center; gap:10px; padding:6px 8px 12px;}
+  .avatar{
+    width:34px; height:34px; border-radius:50%; background:var(--grad);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.8rem; color:#fff; flex-shrink:0;
+  }
+  .profile .who{line-height:1.25; min-width:0;}
+  .profile .who .n{font-size:.83rem; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .profile .who .r{font-size:.7rem; color:#7d93c2;}
+  .logout-link{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    color:#7d93c2; font-size:.78rem; padding:8px; cursor:pointer; border-radius:8px; font-family:inherit;
+  }
+  .logout-link:hover{background:rgba(255,255,255,.06); color:#fff;}
+
+  /* ---------- MAIN ---------- */
+  .main{flex:1; min-width:0; padding:40px 44px 70px;}
+  .container{max-width:760px; margin:0 auto;}
+  .page-head{margin-bottom:22px;}
+  .page-head h1{font-size:1.4rem; font-weight:700; margin:0 0 3px; letter-spacing:-.01em;}
+  .page-head p{margin:0; font-size:.86rem; color:var(--slate);}
   .page{display:none;}
-  .page.active{display:block;}
-  .item{border-bottom:1px solid var(--border);padding:14px 0;}
-  .item:last-child{border-bottom:none;}
-  .item-title{font-weight:600;margin-bottom:4px;}
-  .item-meta{font-size:.8rem;color:var(--muted);}
-  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
-  .pill-urgent{background:#fee2e2;color:var(--urgent);}
-  .pill-normal{background:#fef3c7;color:var(--normal);}
-  .pill-faible{background:#dcfce7;color:var(--faible);}
-  .pill-statut{background:var(--bg);color:var(--muted);}
-  .empty-state{text-align:center;color:var(--muted);padding:30px 10px;font-size:.9rem;}
-  .error-msg{color:var(--urgent);font-size:.85rem;margin-top:8px;}
-  .success-msg{color:var(--faible);font-size:.85rem;margin-top:8px;}
-  .progress-track{background:var(--bg);border:1px solid var(--border);border-radius:999px;height:10px;overflow:hidden;margin:10px 0 6px;}
-  .progress-fill{height:100%;background:var(--grad);transition:width .3s;}
-  .progress-steps{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);}
-  .progress-steps .done{color:var(--indigo);font-weight:600;}
-  .thread{max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
-  .msg-bubble{max-width:75%;padding:8px 12px;border-radius:12px;font-size:.85rem;line-height:1.4;}
-  .msg-bubble.client{align-self:flex-end;background:var(--grad);color:#fff;}
-  .msg-bubble.admin{align-self:flex-start;background:var(--bg);}
-  .msg-time{display:block;font-size:.65rem;opacity:.7;margin-top:3px;}
-  .compose{display:flex;gap:8px;}
-  .compose textarea{flex:1;min-height:44px;}
-  .item-actions{display:flex;gap:8px;margin-top:8px;}
-  .btn-pdf{background:var(--bg);border:1px solid var(--border);color:var(--navy);padding:6px 12px;border-radius:6px;font-size:.78rem;font-weight:600;cursor:pointer;}
-  .btn-pdf:hover{border-color:var(--sky);color:var(--sky);}
+  .page.active{display:block; animation:fadeIn .25s ease;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  .card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:24px; margin-bottom:18px;
+  }
+  .card h2{margin:0 0 16px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--slate);}
+
+  label{display:block; font-size:.78rem; font-weight:600; color:var(--slate); margin:14px 0 5px;}
+  label:first-of-type{margin-top:0;}
+  input,textarea,select{
+    width:100%; padding:10px 13px; border:1.5px solid var(--line); border-radius:9px;
+    font-size:.92rem; font-family:'Inter',sans-serif; color:var(--navy); background:var(--paper);
+    transition:border-color .15s; outline:none;
+  }
+  input:focus,textarea:focus,select:focus{border-color:var(--sky);}
+  textarea{resize:vertical; min-height:78px;}
+  select{cursor:pointer;}
+
+  .btn-primary{
+    margin-top:18px; background:var(--grad); color:#fff; border:none;
+    padding:11px 22px; border-radius:9px; font-weight:600; cursor:pointer; font-size:.88rem;
+    transition:opacity .15s, transform .1s;
+  }
+  .btn-primary:hover{opacity:.92;}
+  .btn-primary:active{transform:scale(.98);}
+
+  .item{border-bottom:1px solid var(--line); padding:15px 0;}
+  .item:last-child{border-bottom:none; padding-bottom:2px;}
+  .item:first-child{padding-top:2px;}
+  .item-title{font-weight:600; font-size:.92rem; margin-bottom:4px; display:flex; align-items:center; flex-wrap:wrap; gap:2px;}
+  .item-meta{font-size:.78rem; color:var(--slate); font-family:'JetBrains Mono',monospace;}
+  .item-desc{font-size:.83rem; color:var(--slate); margin:4px 0 6px; font-family:'Inter',sans-serif;}
+
+  .pill{
+    display:inline-block; padding:2.5px 9px; border-radius:999px; font-size:.66rem;
+    font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-left:6px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .pill-urgent{background:#fde8e8; color:var(--urgent);}
+  .pill-normal{background:#fdf1de; color:var(--normal);}
+  .pill-faible{background:#dff5ea; color:var(--faible);}
+  .pill-statut{background:var(--cloud); color:var(--slate);}
+
+  .empty-state{
+    text-align:center; color:var(--slate); padding:36px 20px; font-size:.85rem;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+  }
+  .empty-state svg{width:30px; height:30px; opacity:.35;}
+  .error-msg{color:var(--urgent); font-size:.82rem; margin-top:9px;}
+  .success-msg{color:var(--faible); font-size:.82rem; margin-top:9px;}
+
+  .progress-track{background:var(--cloud); border:1px solid var(--line); border-radius:999px; height:9px; overflow:hidden; margin:12px 0 8px;}
+  .progress-fill{height:100%; background:var(--grad); transition:width .4s ease;}
+  .progress-steps{display:flex; justify-content:space-between; font-size:.68rem; color:var(--slate); font-family:'JetBrains Mono',monospace;}
+  .progress-steps .done{color:var(--indigo); font-weight:600;}
+
+  .thread{max-height:440px; overflow-y:auto; display:flex; flex-direction:column; gap:9px; margin-bottom:14px; padding-right:2px;}
+  .msg-bubble{max-width:76%; padding:9px 13px; border-radius:13px; font-size:.85rem; line-height:1.45;}
+  .msg-bubble.client{align-self:flex-end; background:var(--grad); color:#fff; border-bottom-right-radius:4px;}
+  .msg-bubble.admin{align-self:flex-start; background:var(--cloud); border-bottom-left-radius:4px;}
+  .msg-time{display:block; font-size:.63rem; opacity:.65; margin-top:4px; font-family:'JetBrains Mono',monospace;}
+  .compose{display:flex; gap:9px;}
+  .compose textarea{flex:1; min-height:46px;}
+
+  .item-actions{display:flex; gap:8px; margin-top:9px;}
+  .btn-pdf{
+    background:var(--cloud); border:1px solid var(--line); color:var(--navy);
+    padding:6px 13px; border-radius:7px; font-size:.76rem; font-weight:600; cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .btn-pdf:hover{border-color:var(--sky); color:var(--sky);}
+
+  @media (max-width: 820px){
+    .shell{flex-direction:column;}
+    .sidebar{
+      width:100%; height:auto; position:sticky; top:0; z-index:20;
+      flex-direction:row; align-items:center; padding:10px 12px; gap:4px; overflow-x:auto;
+    }
+    .brand{padding:4px 10px 4px 2px; flex-shrink:0;}
+    nav.tabs{flex-direction:row; flex:1;}
+    .tab{flex-direction:column; gap:3px; font-size:.66rem; padding:7px 10px; white-space:nowrap;}
+    .tab.active::before{left:8px; right:8px; top:auto; bottom:-2px; height:3px; width:auto; border-radius:3px 3px 0 0;}
+    .sidebar-footer{margin-top:0; padding-top:0; border-top:none; border-left:1px solid rgba(255,255,255,.08); padding-left:8px; flex-shrink:0;}
+    .profile{padding:0 4px;}
+    .profile .who{display:none;}
+    .logout-link{display:none;}
+    .main{padding:22px 16px 50px;}
+  }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="brand">
-    <img src="../logo.png" alt="PCW">
-    <div class="wordmark"><div class="app-name" id="header-client-name">PCW</div><div class="app-sub">Espace Client</div></div>
-  </div>
-  <button onclick="logout()">Déconnexion</button>
-</div>
-
-<div class="tabs">
-  <div class="tab active" data-page="demandes" onclick="showPage('demandes')">Demandes</div>
-  <div class="tab" data-page="messages" onclick="showPage('messages')">Messages</div>
-  <div class="tab" data-page="projet" onclick="showPage('projet')">Suivi de projet</div>
-  <div class="tab" data-page="documents" onclick="showPage('documents')">Devis & Factures</div>
-</div>
-
-<div class="container">
-
-  <!-- DEMANDES -->
-  <div class="page active" id="page-demandes">
-    <div class="card">
-      <h2>Nouvelle demande</h2>
-      <label for="d-titre">Titre</label>
-      <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
-      <label for="d-description">Description</label>
-      <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
-      <label for="d-priorite">Priorité</label>
-      <select id="d-priorite">
-        <option value="Normal">Normal</option>
-        <option value="Urgent">Urgent</option>
-        <option value="Faible">Faible</option>
-      </select>
-      <button class="btn-primary" onclick="creerDemande()">Envoyer la demande</button>
-      <div id="demande-msg"></div>
+<div class="shell">
+  <div class="sidebar">
+    <div class="brand">
+      <img src="../logo.png" alt="PCW">
+      <div><div class="name">PCW</div><div class="sub">Espace Client</div></div>
     </div>
-    <div class="card">
-      <h2>Mes demandes</h2>
-      <div id="demandes-list"><div class="empty-state">Chargement...</div></div>
-    </div>
-  </div>
 
-  <!-- MESSAGES -->
-  <div class="page" id="page-messages">
-    <div class="card">
-      <h2>Messages</h2>
-      <div class="thread" id="messages-thread"><div class="empty-state">Chargement...</div></div>
-      <div class="compose">
-        <textarea id="message-input" placeholder="Écrire un message..."></textarea>
-        <button class="btn-primary" style="margin-top:0;" onclick="envoyerMessage()">Envoyer</button>
+    <nav class="tabs">
+      <div class="tab active" data-page="demandes" onclick="showPage('demandes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Demandes</span>
       </div>
+      <div class="tab" data-page="messages" onclick="showPage('messages')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Messages</span>
+      </div>
+      <div class="tab" data-page="projet" onclick="showPage('projet')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+        <span>Suivi de projet</span>
+      </div>
+      <div class="tab" data-page="documents" onclick="showPage('documents')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h3"/></svg>
+        <span>Devis & Factures</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="profile">
+        <div class="avatar" id="avatar-initials">PC</div>
+        <div class="who">
+          <div class="n" id="header-client-name">PCW</div>
+          <div class="r">Client</div>
+        </div>
+      </div>
+      <button class="logout-link" onclick="logout()">Se déconnecter</button>
     </div>
   </div>
 
-  <!-- SUIVI DE PROJET -->
-  <div class="page" id="page-projet">
-    <div class="card">
-      <h2>Suivi de projet</h2>
-      <div id="projet-content"><div class="empty-state">Chargement...</div></div>
+  <div class="main">
+    <div class="container">
+
+      <!-- DEMANDES -->
+      <div class="page active" id="page-demandes">
+        <div class="page-head">
+          <h1>Mes demandes</h1>
+          <p>Envoie une demande de modification ou une question à PCW.</p>
+        </div>
+        <div class="card">
+          <h2>Nouvelle demande</h2>
+          <label for="d-titre">Titre</label>
+          <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
+          <label for="d-description">Description</label>
+          <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
+          <label for="d-priorite">Priorité</label>
+          <select id="d-priorite">
+            <option value="Normal">Normal</option>
+            <option value="Urgent">Urgent</option>
+            <option value="Faible">Faible</option>
+          </select>
+          <button class="btn-primary" onclick="creerDemande()">Envoyer la demande</button>
+          <div id="demande-msg"></div>
+        </div>
+        <div class="card">
+          <h2>Historique</h2>
+          <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="page" id="page-messages">
+        <div class="page-head">
+          <h1>Messages</h1>
+          <p>Discute directement avec PCW.</p>
+        </div>
+        <div class="card">
+          <div class="thread" id="messages-thread"><div class="empty-state">Chargement…</div></div>
+          <div class="compose">
+            <textarea id="message-input" placeholder="Écrire un message..."></textarea>
+            <button class="btn-primary" style="margin-top:0;" onclick="envoyerMessage()">Envoyer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUIVI DE PROJET -->
+      <div class="page" id="page-projet">
+        <div class="page-head">
+          <h1>Suivi de projet</h1>
+          <p>Où en est ton projet, en un coup d'œil.</p>
+        </div>
+        <div class="card">
+          <div id="projet-content"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- DEVIS & FACTURES -->
+      <div class="page" id="page-documents">
+        <div class="page-head">
+          <h1>Devis & Factures</h1>
+          <p>Tous tes documents, à consulter ou télécharger.</p>
+        </div>
+        <div class="card">
+          <h2>Devis</h2>
+          <div id="devis-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+        <div class="card">
+          <h2>Factures</h2>
+          <div id="factures-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
     </div>
   </div>
-
-  <!-- DEVIS & FACTURES -->
-  <div class="page" id="page-documents">
-    <div class="card">
-      <h2>Devis</h2>
-      <div id="devis-list"><div class="empty-state">Chargement...</div></div>
-    </div>
-    <div class="card">
-      <h2>Factures</h2>
-      <div id="factures-list"><div class="empty-state">Chargement...</div></div>
-    </div>
-  </div>
-
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -170,6 +315,11 @@ function fmtDateFR(iso) {
   if (!iso) return "—";
   return iso.slice(0, 10).split("-").reverse().join("/");
 }
+function initialsOf(name) {
+  if (!name) return "PC";
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "PC";
+}
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
@@ -178,11 +328,13 @@ async function init() {
 
   const { data: contact, error } = await sb.from("contacts").select("*").eq("client_user_id", currentUser.id).single();
   if (error || !contact) {
-    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;">Ton profil n\'est pas encore relié à un compte client. Contacte Pierre Créa Web.</div>';
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#5b6b8c;font-family:Inter,sans-serif;">Ton profil n\'est pas encore relié à un compte client. Contacte Pierre Créa Web.</div>';
     return;
   }
   myContact = contact;
-  document.getElementById("header-client-name").textContent = contact.nom || contact.societe || "PCW";
+  const displayName = contact.nom || contact.societe || "PCW";
+  document.getElementById("header-client-name").textContent = displayName;
+  document.getElementById("avatar-initials").textContent = initialsOf(displayName);
 
   chargerDemandes();
   chargerMessages();
@@ -225,14 +377,17 @@ async function chargerDemandes() {
   const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
   const el = document.getElementById("demandes-list");
   if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
-  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucune demande pour le moment.</div>'; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Aucune demande pour le moment.</div>';
+    return;
+  }
   el.innerHTML = data.map(d => `
     <div class="item">
       <div class="item-title">${escapeHtml(d.titre)}
         <span class="pill ${PILL_PRIORITE[d.priorite] || "pill-normal"}">${escapeHtml(d.priorite)}</span>
         <span class="pill pill-statut">${escapeHtml(d.statut)}</span>
       </div>
-      ${d.description ? `<div class="item-meta">${escapeHtml(d.description)}</div>` : ""}
+      ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
       <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
     </div>`).join("");
 }
@@ -242,7 +397,10 @@ async function chargerMessages() {
   const { data, error } = await sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: true });
   const el = document.getElementById("messages-thread");
   if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
-  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucun message pour l\'instant.</div>'; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Aucun message pour l\'instant.</div>';
+    return;
+  }
   el.innerHTML = data.map(m => `
     <div class="msg-bubble ${m.expediteur === "client" ? "client" : "admin"}">
       ${escapeHtml(m.contenu)}
@@ -267,7 +425,10 @@ async function chargerProjet() {
   const { data, error } = await sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
   const el = document.getElementById("projet-content");
   if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
-  if (!data || data.length === 0) { el.innerHTML = '<div class="empty-state">Aucun projet en cours.</div>'; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>Aucun projet en cours.</div>';
+    return;
+  }
 
   el.innerHTML = data.map(p => {
     const etape = p.etape_projet || "maquette";
@@ -280,7 +441,7 @@ async function chargerProjet() {
       <div class="progress-steps">
         ${ETAPES.map((e, i) => `<span class="${i <= idx ? "done" : ""}">${ETAPES_LABELS[e]}</span>`).join("")}
       </div>
-      ${p.date_livraison_estimee ? `<div class="item-meta" style="margin-top:8px;">Livraison estimée : ${fmtDateFR(p.date_livraison_estimee)}</div>` : ""}
+      ${p.date_livraison_estimee ? `<div class="item-meta" style="margin-top:10px;">Livraison estimée : ${fmtDateFR(p.date_livraison_estimee)}</div>` : ""}
     </div>`;
   }).join("");
 }
@@ -297,7 +458,7 @@ async function chargerDocuments() {
         <button class="btn-pdf" onclick='voirDevisPDF(${d.id}, "preview")'>Voir le PDF</button>
         <button class="btn-pdf" onclick='voirDevisPDF(${d.id}, "download")'>Télécharger</button>
       </div>
-    </div>`).join("") : '<div class="empty-state">Aucun devis pour le moment.</div>';
+    </div>`).join("") : '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Aucun devis pour le moment.</div>';
 
   const { data: factures } = await sb.from("factures").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
   const facturesEl = document.getElementById("factures-list");
@@ -309,7 +470,7 @@ async function chargerDocuments() {
         <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "preview")'>Voir le PDF</button>
         <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "download")'>Télécharger</button>
       </div>
-    </div>`).join("") : '<div class="empty-state">Aucune facture pour le moment.</div>';
+    </div>`).join("") : '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Aucune facture pour le moment.</div>';
 }
 
 async function voirDevisPDF(id, mode) {
