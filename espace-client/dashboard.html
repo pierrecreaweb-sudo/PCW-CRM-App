@@ -396,6 +396,7 @@ let myContact = null;
 const ETAPES = ["maquette", "developpement", "revisions", "mise_en_ligne", "termine"];
 const ETAPES_LABELS = { maquette: "Maquette", developpement: "Développement", revisions: "Révisions", mise_en_ligne: "Mise en ligne", termine: "Terminé" };
 const PILL_PRIORITE = { Urgent: "var(--danger)", Normal: "var(--warning)", Faible: "var(--success)" };
+const PILL_STATUT_DEMANDE = { "Nouveau": "var(--info)", "En cours": "var(--warning)", "Traité": "var(--success)" };
 
 function escapeHtml(str) {
   if (str == null) return "";
@@ -653,7 +654,7 @@ async function chargerTableauDeBord() {
     <div class="item" style="cursor:pointer;" onclick="showPage('demandes')">
       <div class="item-title">${escapeHtml(demandes[0].titre)}
         <span class="badge" style="background:${PILL_PRIORITE[demandes[0].priorite] || "var(--muted)"};">${escapeHtml(demandes[0].priorite)}</span>
-        <span class="badge subtle">${escapeHtml(demandes[0].statut)}</span>
+        <span class="badge" style="background:${PILL_STATUT_DEMANDE[demandes[0].statut] || "var(--muted)"};">${escapeHtml(demandes[0].statut)}</span>
       </div>
       <div class="item-meta">${fmtDateFR(demandes[0].date_creation)}</div>
     </div>` : '<div class="empty-state">Aucune demande pour le moment.</div>';
@@ -705,7 +706,7 @@ async function chargerDemandes() {
       <div class="item">
         <div class="item-title">${escapeHtml(d.titre)}
           <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
-          <span class="badge subtle">${escapeHtml(d.statut)}</span>
+          <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
         </div>
         ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
         <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
@@ -720,7 +721,7 @@ async function chargerDemandes() {
       <div class="item">
         <div class="item-title">${escapeHtml(d.titre)}
           <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
-          <span class="badge subtle">${escapeHtml(d.statut)}</span>
+          <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
         </div>
         ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
         <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
