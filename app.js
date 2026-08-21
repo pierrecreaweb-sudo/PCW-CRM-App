@@ -1261,6 +1261,115 @@ function renderGenericKanban(kanbanId, rows, statuts, { table, statutField, card
 }
 
 let contactView = "tableau";
+
+// ========================================================================
+//  RÉORGANISATION DU MENU (sections et items, glissés via flèches)
+// ========================================================================
+const NAV_ORDER_KEY = "pcw_nav_order_v1";
+function getNavOrder() {
+  try { return JSON.parse(localStorage.getItem(NAV_ORDER_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveNavOrder(order) {
+  localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(order));
+}
+function applyNavOrder() {
+  const order = getNavOrder();
+  const sidebar = document.getElementById("sidebar");
+  if (order.sections) {
+    order.sections.forEach(key => {
+      const el = sidebar.querySelector(`.nav-section[data-section="${key}"]`);
+      if (el) sidebar.insertBefore(el, document.querySelector(".sidebar-footer"));
+    });
+  }
+  document.querySelectorAll(".nav-section").forEach(section => {
+    const key = section.dataset.section;
+    const itemOrder = order.items && order.items[key];
+    if (!itemOrder) return;
+    const body = section.querySelector(".nav-section-body");
+    itemOrder.forEach(page => {
+      const el = body.querySelector(`.nav-item[data-page="${page}"]`);
+      if (el) body.appendChild(el);
+    });
+  });
+}
+function currentSectionOrder() {
+  return Array.from(document.querySelectorAll(".nav-section")).map(s => s.dataset.section);
+}
+function currentItemOrder(section) {
+  return Array.from(section.querySelectorAll(".nav-item")).map(i => i.dataset.page);
+}
+function persistCurrentOrder() {
+  const order = { sections: currentSectionOrder(), items: {} };
+  document.querySelectorAll(".nav-section").forEach(section => {
+    order.items[section.dataset.section] = currentItemOrder(section);
+  });
+  saveNavOrder(order);
+}
+function injectReorderControls() {
+  document.querySelectorAll(".nav-section").forEach(section => {
+    const label = section.querySelector(".nav-section-label.collapsible");
+    if (label && !label.querySelector(".reorder-btns")) {
+      const btns = document.createElement("span");
+      btns.className = "reorder-btns";
+      btns.innerHTML = `<button class="reorder-btn" data-move="section-up" type="button">▲</button><button class="reorder-btn" data-move="section-down" type="button">▼</button>`;
+      label.insertBefore(btns, label.querySelector(".nav-section-caret"));
+      btns.querySelectorAll("button").forEach(btn => btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        moveSection(section, btn.dataset.move === "section-up" ? -1 : 1);
+      }));
+    }
+    section.querySelectorAll(".nav-item").forEach(item => {
+      if (item.querySelector(".reorder-btns")) return;
+      const btns = document.createElement("span");
+      btns.className = "reorder-btns";
+      btns.innerHTML = `<button class="reorder-btn" data-move="item-up" type="button">▲</button><button class="reorder-btn" data-move="item-down" type="button">▼</button>`;
+      item.appendChild(btns);
+      btns.querySelectorAll("button").forEach(btn => btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        moveItem(item, btn.dataset.move === "item-up" ? -1 : 1);
+      }));
+    });
+  });
+}
+function moveSection(section, dir) {
+  const sibling = dir === -1 ? section.previousElementSibling : section.nextElementSibling;
+  if (!sibling || !sibling.classList.contains("nav-section")) return;
+  if (dir === -1) section.parentNode.insertBefore(section, sibling);
+  else section.parentNode.insertBefore(sibling, section);
+  persistCurrentOrder();
+  updateReorderButtonStates();
+}
+function moveItem(item, dir) {
+  const sibling = dir === -1 ? item.previousElementSibling : item.nextElementSibling;
+  if (!sibling || !sibling.classList.contains("nav-item")) return;
+  if (dir === -1) item.parentNode.insertBefore(item, sibling);
+  else item.parentNode.insertBefore(sibling, item);
+  persistCurrentOrder();
+  updateReorderButtonStates();
+}
+function updateReorderButtonStates() {
+  const sections = document.querySelectorAll(".nav-section");
+  sections.forEach((section, i) => {
+    const btns = section.querySelector(".nav-section-label .reorder-btns");
+    if (!btns) return;
+    btns.querySelector('[data-move="section-up"]').disabled = i === 0;
+    btns.querySelector('[data-move="section-down"]').disabled = i === sections.length - 1;
+    const items = section.querySelectorAll(".nav-item");
+    items.forEach((item, j) => {
+      const ibtns = item.querySelector(".reorder-btns");
+      if (!ibtns) return;
+      ibtns.querySelector('[data-move="item-up"]').disabled = j === 0;
+      ibtns.querySelector('[data-move="item-down"]').disabled = j === items.length - 1;
+    });
+  });
+}
+function toggleReorderMode() {
+  const sidebar = document.getElementById("sidebar");
+  const btn = document.getElementById("reorder-mode-btn");
+  const isOn = sidebar.classList.toggle("reorder-mode");
+  btn.classList.toggle("active", isOn);
+  if (isOn) { injectReorderControls(); updateReorderButtonStates(); }
+}
 function getCollapsedNavSections() {
   try { return JSON.parse(localStorage.getItem("pcw_collapsed_nav_sections")) || []; } catch (e) { return []; }
 }
@@ -2785,8 +2894,12 @@ function renderMessages() {
 function selectMessageContact(contactId) {
   selectedMessageContactId = contactId;
   document.getElementById("messages-compose").style.display = "flex";
+  document.getElementById("messages-layout").classList.add("mobile-thread-open");
   renderMessages();
   marquerMessagesLusAdmin(contactId);
+}
+function backToMessagesList() {
+  document.getElementById("messages-layout").classList.remove("mobile-thread-open");
 }
 function renderMessageThread(contactId) {
   const thread = document.getElementById("messages-thread");
@@ -3416,7 +3529,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (localStorage.getItem("pcw_sidebar_collapsed") === "1") document.getElementById("sidebar").classList.add("collapsed");
   document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
   document.querySelectorAll(".nav-item").forEach(el => el.addEventListener("click", () => showPage(el.dataset.page)));
+  try { applyNavOrder(); } catch (e) { console.error("applyNavOrder", e); }
   try { applyCollapsedNavSections(); } catch (e) { console.error("applyCollapsedNavSections", e); }
+  document.getElementById("reorder-mode-btn").addEventListener("click", toggleReorderMode);
 
   try {
 
@@ -3453,6 +3568,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-new-demande-admin").addEventListener("click", openDemandeAdminDialog);
   document.getElementById("templates-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleTemplateMenu(); });
   document.getElementById("btn-new-template").addEventListener("click", () => openTemplateDialog(null));
+  document.getElementById("messages-back-btn").addEventListener("click", backToMessagesList);
   document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".template-wrap");
     if (wrap && !wrap.contains(e.target)) document.getElementById("template-menu").classList.remove("open");

@@ -95,6 +95,14 @@
   .nav-section-body{max-height:600px;overflow:hidden;transition:max-height .25s ease;}
   .nav-section.collapsed .nav-section-body{max-height:0;}
   .sidebar.collapsed .nav-section-caret{display:none;}
+  .reorder-btns{display:none;gap:2px;margin-left:auto;flex-shrink:0;}
+  .sidebar.reorder-mode .reorder-btns{display:flex;}
+  .sidebar.reorder-mode .nav-item,.sidebar.reorder-mode .nav-section-label.collapsible{cursor:default;}
+  .reorder-btn{background:rgba(255,255,255,.08);border:none;color:var(--sidebar-text);width:20px;height:20px;border-radius:5px;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .reorder-btn:hover{background:rgba(255,255,255,.18);color:#fff;}
+  .reorder-btn:disabled{opacity:.25;cursor:default;}
+  .reorder-btn:disabled:hover{background:rgba(255,255,255,.08);}
+  #reorder-mode-btn.active{background:var(--accent);color:#fff;}
   .sidebar-footer{margin-top:auto;padding:16px 22px 0;border-top:1px solid #1B2740;}
   .sidebar-footer button{background:none;border:none;color:var(--sidebar-text);font-size:12.5px;padding:8px 0;transition:.15s;}
   .sidebar-footer button:hover{color:#fff;}
@@ -162,6 +170,7 @@
   .messages-contact-item .mc-name{font-weight:600;}
   .messages-contact-item .mc-preview{font-size:11.5px;opacity:.75;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .messages-thread-wrap{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .messages-back-btn{display:none;align-items:center;gap:6px;background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;padding:0 0 10px;cursor:pointer;}
   .messages-thread{flex:1;overflow-y:auto;border:1px solid var(--border, #E4E7EC);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;}
   .msg-bubble{max-width:70%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4;}
   .msg-bubble.admin{align-self:flex-end;background:var(--accent);color:#fff;}
@@ -343,6 +352,13 @@
     .panel{max-width:100%;}
     .table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .table-scroll table.data{min-width:600px;}
+
+    .messages-layout{flex-direction:column;height:calc(100vh - 150px);gap:0;}
+    .messages-contacts{width:100%;height:100%;border-radius:10px;}
+    .messages-thread-wrap{display:none;}
+    .messages-back-btn{display:flex;}
+    .messages-layout.mobile-thread-open .messages-contacts{display:none;}
+    .messages-layout.mobile-thread-open .messages-thread-wrap{display:flex;height:100%;}
     .content{padding:16px;overflow-x:hidden;}
     .cards-row{overflow-x:visible;}
 
@@ -481,6 +497,7 @@
     <div class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <div class="logo"><img src="logo.png" alt="PCW" style="width:40px;height:40px;vertical-align:middle;margin-right:8px;border-radius:50%;flex-shrink:0;"><span class="logo-text">PCW<br><span style="font-weight:normal;font-size:12px;color:var(--sidebar-text);">Gestion Client</span></span></div>
+        <button id="reorder-mode-btn" class="sidebar-collapse-btn" title="Réorganiser le menu" aria-label="Réorganiser le menu" style="font-size:14px;">⇅</button>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Réduire / déplier le menu" aria-label="Réduire ou déplier le menu">☰</button>
       </div>
       <div class="nav-section" data-section="pilotage">
@@ -927,9 +944,10 @@
         <!-- MESSAGERIE -->
         <div class="page" id="page-messages">
           <div class="page-title">Messages</div>
-          <div class="messages-layout">
+          <div class="messages-layout" id="messages-layout">
             <div class="messages-contacts" id="messages-contacts-list"></div>
             <div class="messages-thread-wrap">
+              <button class="messages-back-btn" id="messages-back-btn">← Retour aux conversations</button>
               <div class="messages-thread" id="messages-thread">
                 <div class="page-note">Sélectionne un client à gauche pour voir la conversation.</div>
               </div>
