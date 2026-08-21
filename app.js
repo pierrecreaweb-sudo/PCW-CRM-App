@@ -1890,6 +1890,8 @@ function openDevisDialog(id) {
     beforeSave: (v) => {
       v.date_validite = addDaysISO(todayStr(), 30);
       v.lignes = [];
+      const e = v.evenement_id ? findEvenement(Number(v.evenement_id)) : null;
+      v.contact_id = e ? e.contact_id : null;
     },
     onSaved: async (saved) => {
       await refreshCache();
