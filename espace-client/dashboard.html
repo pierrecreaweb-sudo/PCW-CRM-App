@@ -506,21 +506,25 @@ function showPage(key) {
 }
 
 // ---- NOTIFICATIONS ----
-const DISMISSED_NOTIFS_KEY = "pcw_client_dismissed_notifs";
-function getDismissedNotifs() {
-  try { return JSON.parse(localStorage.getItem(DISMISSED_NOTIFS_KEY)) || []; } catch (e) { return []; }
+async function getDismissedNotifs() {
+  const { data } = await sb.from("client_dismissed_notifs").select("notif_id").eq("contact_id", myContact.id);
+  return (data || []).map(d => d.notif_id);
 }
-function dismissNotif(id) {
-  const list = getDismissedNotifs();
-  if (!list.includes(id)) { list.push(id); localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list)); }
-}
-function clearAllNotifs() {
-  computeNotifications().then(items => {
-    const list = getDismissedNotifs();
-    items.forEach(it => { if (!list.includes(it.id)) list.push(it.id); });
-    localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list));
-    refreshNotifs();
+async function dismissNotif(id) {
+  await sb.from("client_dismissed_notifs").insert({
+    contact_id: myContact.id, notif_id: id,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
+}
+async function clearAllNotifs() {
+  const items = await computeNotifications();
+  const dismissed = await getDismissedNotifs();
+  const rows = items.filter(it => !dismissed.includes(it.id)).map(it => ({
+    contact_id: myContact.id, notif_id: it.id,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  }));
+  if (rows.length) await sb.from("client_dismissed_notifs").insert(rows);
+  refreshNotifs();
 }
 
 async function computeNotifications() {
@@ -580,7 +584,7 @@ async function computeNotifications() {
     }
   });
 
-  const dismissed = getDismissedNotifs();
+  const dismissed = await getDismissedNotifs();
   const filtered = items.filter(it => !dismissed.includes(it.id));
   filtered.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
   return filtered;
@@ -616,7 +620,7 @@ async function renderNotifPanelContent() {
   }));
   panel.querySelectorAll(".notif-dismiss").forEach(btn => btn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    dismissNotif(items[Number(btn.dataset.dismissI)].id);
+    await dismissNotif(items[Number(btn.dataset.dismissI)].id);
     await refreshNotifs();
     renderNotifPanelContent();
   }));
