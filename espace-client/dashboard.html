@@ -85,7 +85,7 @@
   .stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;min-width:150px;flex:1;box-shadow:var(--shadow-sm);transition:.18s;}
   .stat-card.clickable{cursor:pointer;}
   .stat-card.clickable:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow-md);}
-  .stat-card .num{font-size:26px;font-weight:800;letter-spacing:-.01em;}
+  .stat-card .num{font-size:20px;font-weight:800;letter-spacing:-.01em;}
   .stat-card .label{font-size:12px;color:var(--muted);margin-top:3px;font-weight:500;}
   .stat-icon-wrap{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
   .stat-icon-wrap svg{width:18px;height:18px;}
@@ -666,7 +666,7 @@ async function chargerTableauDeBord() {
     abonnementCard = `
     <div class="stat-card clickable" onclick="showPage('paiements')">
       <div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div>
-      <div class="num" style="font-size:15px;">${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(0) + " €" : "—"}</div>
+      <div class="num">${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(0) + " €" : "—"}</div>
       <div class="label">Abonnement ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
     </div>`;
   }
@@ -684,7 +684,7 @@ async function chargerTableauDeBord() {
     </div>
     <div class="stat-card clickable" onclick="showPage('projet')">
       <div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-bar-chart"></use></svg></div>
-      <div class="num" style="font-size:15px;">${escapeHtml(projetLabel)}</div>
+      <div class="num">${escapeHtml(projetLabel)}</div>
       <div class="label">${projetSub}</div>
     </div>
     <div class="stat-card clickable" onclick="showPage('paiements')">
@@ -1020,7 +1020,7 @@ async function chargerProjet() {
       <div class="cards-row" style="margin-bottom:20px;">
         <div class="stat-card">
           <div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#${ETAPES_ICONS[etape]}"></use></svg></div>
-          <div class="num" style="font-size:16px;">${ETAPES_LABELS[etape]}</div>
+          <div class="num">${ETAPES_LABELS[etape]}</div>
           <div class="label">Étape actuelle</div>
         </div>
         <div class="stat-card">
@@ -1030,7 +1030,7 @@ async function chargerProjet() {
         </div>
         <div class="stat-card">
           <div class="stat-icon-wrap" style="background:${p.date_livraison_estimee ? "var(--tertiary)" : "var(--muted)"};color:#fff;"><svg><use href="#icon-calendar"></use></svg></div>
-          <div class="num" style="font-size:16px;">${p.date_livraison_estimee ? fmtDateFR(p.date_livraison_estimee) : "—"}</div>
+          <div class="num">${p.date_livraison_estimee ? fmtDateFR(p.date_livraison_estimee) : "—"}</div>
           <div class="label">Livraison estimée</div>
         </div>
       </div>
