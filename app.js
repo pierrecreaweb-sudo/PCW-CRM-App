@@ -1170,6 +1170,13 @@ function openEventRecap(id) {
 //  CONTACTS
 // ========================================================================
 let contactView = "tableau";
+let showDuplicatesOnly = false;
+function toggleDuplicatesFilter() {
+  showDuplicatesOnly = !showDuplicatesOnly;
+  const btn = document.getElementById("btn-show-duplicates");
+  if (btn) btn.classList.toggle("active", showDuplicatesOnly);
+  renderContacts();
+}
 function bindContactViewTabs() {
   const wrap = document.getElementById("contact-view-tabs");
   if (!wrap || wrap.dataset.bound) return;
@@ -1231,6 +1238,11 @@ function renderContacts() {
   let rows = [...cache.contacts];
   if (fCat) rows = rows.filter(c => c.categorie === fCat);
   if (search) rows = rows.filter(c => (contactLabel(c) + " " + (c.societe || "") + " " + (c.email || "")).toLowerCase().includes(search));
+  if (showDuplicatesOnly) {
+    const emailCounts = {};
+    cache.contacts.forEach(c => { if (c.email) { const k = c.email.toLowerCase().trim(); emailCounts[k] = (emailCounts[k] || 0) + 1; } });
+    rows = rows.filter(c => c.email && emailCounts[c.email.toLowerCase().trim()] > 1);
+  }
 
   if (contactView === "kanban") { renderContactKanban(rows); return; }
 
@@ -1246,6 +1258,7 @@ function renderContacts() {
       <td class="row-actions">
         <button title="Envoyer un email" onclick="openQuickEmailDialog(${c.id})"><svg class="nav-icon" style="width:14px;height:14px;vertical-align:-2px;"><use href="#icon-mail"></use></svg></button>
         <button title="Historique devis / factures" onclick="openContactHistory(${c.id})">📁</button>
+        <button title="Fusionner avec un autre contact" onclick="openMergeContactDialog(${c.id})">🔀</button>
         <button onclick="openContactDialog(${c.id})">✎</button>
         <button onclick="confirmDelete('contacts', ${c.id}, renderContacts)">🗑</button>
       </td>
@@ -1286,7 +1299,63 @@ function openContactDialog(id) {
       { key: "provenance", label: "Provenance", type: "select-other", options: PROVENANCES, value: row.provenance, allowEmpty: true },
       { key: "notes", label: "Notes", type: "textarea", value: row.notes },
     ],
+    beforeSave: (values) => {
+      if (!values.email) return true;
+      const doublon = cache.contacts.find(c => c.id !== id && c.email && c.email.toLowerCase().trim() === values.email.toLowerCase().trim());
+      if (doublon) {
+        const continuer = confirm(
+          `⚠️ Un contact existe déjà avec cet email : "${contactLabel(doublon)}" (${doublon.email}).\n\n` +
+          `Créer un doublon risque de disperser ses devis/factures/projets sur deux fiches différentes, ` +
+          `et peut empêcher son compte client de retrouver ses documents.\n\n` +
+          `Continuer quand même ?`
+        );
+        if (!continuer) return false;
+      }
+      return true;
+    },
     onSaved: refreshAll,
+  });
+}
+
+// ========================================================================
+//  FUSION DE CONTACTS EN DOUBLON
+// ========================================================================
+const CONTACT_FK_TABLES = ["evenements", "devis", "factures", "rdv", "demandes", "messages", "fichiers_clients", "prospects"];
+function openMergeContactDialog(sourceId) {
+  const source = findContact(sourceId);
+  if (!source) return;
+  const autres = cache.contacts.filter(c => c.id !== sourceId);
+  if (!autres.length) { showToast("Aucun autre contact vers lequel fusionner"); return; }
+  const html = `
+    <div class="field">
+      <label>Fusionner "${escapeAttr(contactLabel(source))}" vers :</label>
+      <select id="merge-target-select">
+        ${autres.map(c => `<option value="${c.id}">${escapeAttr(contactLabel(c))}${c.email ? " — " + escapeAttr(c.email) : ""}</option>`).join("")}
+      </select>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:10px;">
+      Tous les projets, devis, factures, RDV, demandes, messages et fichiers de "${escapeAttr(contactLabel(source))}"
+      seront transférés vers le contact sélectionné, puis cette fiche sera supprimée. Cette action est irréversible.
+    </div>`;
+  openRawModal("Fusionner ce contact", html, async () => {
+    const targetId = Number(document.getElementById("merge-target-select").value);
+    if (!targetId) return;
+    for (const table of CONTACT_FK_TABLES) {
+      const { error } = await sb.from(table).update({ contact_id: targetId }).eq("contact_id", sourceId);
+      if (error) { showToast("Erreur pendant la fusion (" + table + ") : " + error.message); return; }
+    }
+    // Si la fiche source était reliée à un compte client et que la cible ne l'est pas encore, on transfère le lien.
+    if (source.client_user_id) {
+      const target = findContact(targetId);
+      if (target && !target.client_user_id) {
+        await sb.from("contacts").update({ client_user_id: source.client_user_id }).eq("id", targetId);
+      }
+    }
+    const { error: delError } = await sb.from("contacts").delete().eq("id", sourceId);
+    if (delError) { showToast("Fusion partielle : impossible de supprimer l'ancienne fiche (" + delError.message + ")"); }
+    else { showToast("Fusion effectuée avec succès"); }
+    closeModal();
+    await refreshAll();
   });
 }
 
@@ -2964,7 +3033,10 @@ async function saveModal() {
     values[f.key] = val;
   });
   if (missingRequired) { showToast("Merci de remplir les champs obligatoires"); return; }
-  if (beforeSave) beforeSave(values);
+  if (beforeSave) {
+    const result = await beforeSave(values);
+    if (result === false) return;
+  }
 
   let saved;
   if (id) saved = await updateRow(table, id, values);
