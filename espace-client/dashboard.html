@@ -1073,17 +1073,79 @@ async function chargerDocuments() {
       const texte = enRetard ? "En retard — échéance " : "Échéance ";
       echeanceHtml = `<span class="badge" style="background:${color};">${texte}${fmtDateFR(r.date_echeance)}</span>`;
     }
+    const enAttenteSignature = isDevis && ["En attente", "Envoyé"].includes(r.statut);
+    const signatureInfo = isDevis && r.signature_nom ? `<div class="item-meta" style="margin-top:4px;">✔ Signé par ${escapeHtml(r.signature_nom)} le ${r.signature_date ? r.signature_date.slice(0, 16).replace("T", " ") : ""}</div>` : "";
+    const peutPayer = !isDevis && r.statut !== "Payée" && r.statut !== "Annulée";
     return `
     <div class="tl-item">
       <div class="tl-type">${label}</div>
       <div class="item-title">${escapeHtml(numero)} <span class="badge subtle">${escapeHtml(r.statut || "")}</span>${echeanceHtml}</div>
       <div class="item-meta">${montant}${montant ? " — " : ""}${fmtDateFR(it.date)}</div>
+      ${signatureInfo}
       <div class="item-actions">
         <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "preview")'>Voir le PDF</button>
         <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "download")'>Télécharger</button>
+        ${enAttenteSignature ? `<button class="btn-pdf" style="background:var(--success);color:#fff;" onclick="ouvrirSignature(${r.id})">✔ Accepter</button>
+        <button class="btn-pdf" style="color:var(--danger);" onclick="refuserDevis(${r.id})">✕ Refuser</button>` : ""}
+        ${peutPayer ? `<button class="btn-pdf" style="background:var(--accent);color:#fff;" onclick="payerFacture(${r.id})">💳 Payer maintenant</button>` : ""}
       </div>
+      ${enAttenteSignature ? `<div id="signature-panel-${r.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-alt, var(--cloud));border-radius:10px;">
+        <label style="font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px;">Tape ton nom complet pour signer</label>
+        <input type="text" id="signature-nom-${r.id}" placeholder="Prénom Nom" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;margin-bottom:10px;">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" id="signature-check-${r.id}" style="margin-top:2px;">
+          <span>Je certifie avoir lu ce devis et j'en accepte le contenu.</span>
+        </label>
+        <button class="btn-pdf" style="background:var(--success);color:#fff;" onclick="confirmerSignature(${r.id})">Confirmer ma signature</button>
+        <button class="btn-pdf" onclick="document.getElementById('signature-panel-${r.id}').style.display='none';">Annuler</button>
+      </div>` : ""}
     </div>`;
   }).join("");
+}
+
+function ouvrirSignature(id) {
+  const panel = document.getElementById("signature-panel-" + id);
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+async function confirmerSignature(id) {
+  const nom = document.getElementById("signature-nom-" + id).value.trim();
+  const checked = document.getElementById("signature-check-" + id).checked;
+  if (!nom) { alert("Merci d'indiquer ton nom complet."); return; }
+  if (!checked) { alert("Merci de cocher la case de certification."); return; }
+  const { error } = await sb.from("devis").update({
+    statut: "Accepté",
+    signature_nom: nom,
+    signature_date: new Date().toISOString(),
+    signature_ua: navigator.userAgent,
+  }).eq("id", id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  chargerDocuments();
+  refreshNotifs();
+}
+
+async function refuserDevis(id) {
+  if (!confirm("Confirmer le refus de ce devis ?")) return;
+  const { error } = await sb.from("devis").update({ statut: "Refusé" }).eq("id", id);
+  if (!error) { chargerDocuments(); refreshNotifs(); }
+}
+
+async function payerFacture(id) {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = "Chargement…";
+  try {
+    const { data, error } = await sb.functions.invoke("create-checkout-session", { body: { facture_id: id } });
+    if (error || !data || !data.url) {
+      alert("Le paiement en ligne n'est pas encore configuré. Contacte PCW pour régler cette facture.");
+      btn.disabled = false; btn.textContent = "💳 Payer maintenant";
+      return;
+    }
+    window.location.href = data.url;
+  } catch (e) {
+    alert("Le paiement en ligne n'est pas encore disponible pour le moment.");
+    btn.disabled = false; btn.textContent = "💳 Payer maintenant";
+  }
 }
 
 async function voirDevisPDF(id, mode) {

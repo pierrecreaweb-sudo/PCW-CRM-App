@@ -160,6 +160,18 @@ async function generateDevisPDF(d, contact, mode) {
     doc.setFontSize(10);
     d.cgv.forEach((c2, i) => { const t = doc.splitTextToSize((i + 1) + ". " + c2, 175); doc.text(t, 20, y); y += t.length * 5 + 1; if (y > 255) { doc.addPage(); y = 20; } });
   }
+  if (d.signature_nom) {
+    if (y > 240) { doc.addPage(); y = 20; }
+    y += 4;
+    doc.setDrawColor(224, 227, 235); doc.setFillColor(240, 250, 244);
+    doc.roundedRect(16, y, 179, 22, 2.5, 2.5, "FD"); doc.setDrawColor(0);
+    doc.setFontSize(9.5); doc.setTextColor(63, 167, 114);
+    doc.text("✔ DEVIS SIGNÉ ÉLECTRONIQUEMENT", 21, y + 9);
+    doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(`Par ${d.signature_nom}, le ${pdfFmtDateFR(d.signature_date)} à ${(d.signature_date || "").slice(11, 16)}`, 21, y + 16);
+    doc.setTextColor(0);
+    y += 28;
+  }
   drawFooter(doc);
   if (mode === "preview") window.open(doc.output("bloburl"), "_blank");
   else doc.save((d.numero || "devis").replace(/\s+/g, "_") + ".pdf");
