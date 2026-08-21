@@ -169,6 +169,14 @@
   .msg-bubble .msg-time{display:block;font-size:10px;opacity:.7;margin-top:3px;}
   .messages-compose{display:flex;gap:8px;margin-top:10px;}
   .messages-compose textarea{flex:1;resize:vertical;border-radius:8px;border:1px solid var(--border, #E4E7EC);padding:8px 10px;font:inherit;}
+  .template-menu{display:none;position:absolute;bottom:calc(100% + 8px);left:0;width:280px;max-height:280px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);z-index:41;}
+  .template-menu.open{display:block;}
+  .template-menu-item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px;}
+  .template-menu-item:last-child{border-bottom:none;}
+  .template-menu-item:hover{background:var(--surface-alt);}
+  .template-menu-item .tm-title{font-weight:700;margin-bottom:2px;}
+  .template-menu-item .tm-preview{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .template-menu-empty{padding:14px;font-size:12px;color:var(--muted);text-align:center;}
   .nav-badge{
     background:#e5484d; color:#fff; font-size:10px; font-weight:700; line-height:1;
     min-width:15px; height:15px; border-radius:999px; display:inline-flex; align-items:center;
@@ -518,6 +526,7 @@
         <div class="nav-section-body">
           <div class="nav-item" data-page="demandes"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>Demandes</span></div>
           <div class="nav-item" data-page="messages"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Messages</span><span class="nav-badge" id="nav-badge-messages" style="display:none;">0</span></div>
+          <div class="nav-item" data-page="templates"><svg class="nav-icon"><use href="#icon-list"></use></svg><span>Templates</span></div>
           <div class="nav-item" data-page="fichiers"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Fichiers</span></div>
           <div class="nav-item" data-page="paiements"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Paiements</span></div>
         </div>
@@ -924,12 +933,30 @@
               <div class="messages-thread" id="messages-thread">
                 <div class="page-note">Sélectionne un client à gauche pour voir la conversation.</div>
               </div>
-              <div class="messages-compose" id="messages-compose" style="display:none;">
+              <div class="messages-compose" id="messages-compose" style="display:none;position:relative;">
+                <div class="template-wrap" style="position:relative;">
+                  <button class="btn secondary" id="templates-btn" title="Insérer un template" type="button">📋</button>
+                  <div class="template-menu" id="template-menu"></div>
+                </div>
                 <textarea id="messages-input" placeholder="Écrire un message…" rows="2"></textarea>
                 <button class="btn" id="messages-send-btn">Envoyer</button>
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- TEMPLATES DE RÉPONSE -->
+        <div class="page" id="page-templates">
+          <div class="page-title">Templates de réponse</div>
+          <div class="page-note">Réponses prêtes à l'emploi, insérables en un clic depuis la messagerie.</div>
+          <div class="page-toolbar">
+            <div></div>
+            <button class="btn" id="btn-new-template">＋ Nouveau template</button>
+          </div>
+          <table class="data">
+            <thead><tr><th>Titre</th><th>Contenu</th><th></th></tr></thead>
+            <tbody id="templates-tbody"></tbody>
+          </table>
         </div>
 
         <!-- FICHIERS CLIENTS -->

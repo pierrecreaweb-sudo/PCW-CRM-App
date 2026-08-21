@@ -125,7 +125,7 @@ function etapeSelectInline(id, value) {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [], admin_dismissed_notifs: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [], admin_dismissed_notifs: [], message_templates: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -253,7 +253,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients, dismissedNotifs] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients, dismissedNotifs, messageTemplates] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -269,8 +269,9 @@ async function refreshCache() {
     fetchAll("messages", "id", true),
     fetchAll("fichiers_clients", "id", true),
     fetchAll("admin_dismissed_notifs", "id", true),
+    fetchAll("message_templates", "id", true),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients, admin_dismissed_notifs: dismissedNotifs };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients, admin_dismissed_notifs: dismissedNotifs, message_templates: messageTemplates };
   updateNavBadgeMessages();
 }
 
@@ -385,6 +386,7 @@ async function onLoggedIn(user) {
   document.getElementById("app-screen").style.display = "block";
   document.getElementById("user-email-lbl").textContent = user.email;
   await refreshCache();
+  initMessagesRealtime();
   await autoExpireDevis();
   await autoMarkLateFactures();
   await seedDefaultTarification();
@@ -655,6 +657,7 @@ function renderPage(key) {
   else if (key === "demandes") renderDemandes();
   else if (key === "messages") renderMessages();
   else if (key === "fichiers") renderFichiersClients();
+  else if (key === "templates") renderTemplates();
   else if (key === "paiements") renderPaiements();
 }
 function advanceDateBy(dateStr, freq) {
@@ -2808,6 +2811,73 @@ async function sendAdminMessage() {
   }
 }
 
+// ---- Temps réel : nouveaux messages sans avoir à recharger ----
+let messagesRealtimeChannel = null;
+function initMessagesRealtime() {
+  if (messagesRealtimeChannel) return;
+  messagesRealtimeChannel = sb.channel("admin-messages-realtime")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload) => {
+      const row = payload.new;
+      if (cache.messages.some(m => m.id === row.id)) return;
+      cache.messages.push(row);
+      updateNavBadgeMessages();
+      if (currentPage === "messages") renderMessages();
+      if (row.expediteur === "client" && row.contact_id === selectedMessageContactId) {
+        await marquerMessagesLusAdmin(selectedMessageContactId);
+      }
+    })
+    .subscribe();
+}
+
+// ========================================================================
+//  TEMPLATES DE RÉPONSE RAPIDE
+// ========================================================================
+function renderTemplates() {
+  const tbody = document.getElementById("templates-tbody");
+  tbody.innerHTML = cache.message_templates.length ? cache.message_templates.map(t => `
+    <tr>
+      <td><strong>${escapeHtml(t.titre)}</strong></td>
+      <td>${escapeHtml((t.contenu || "").slice(0, 90))}${(t.contenu || "").length > 90 ? "…" : ""}</td>
+      <td class="row-actions">
+        <button onclick="openTemplateDialog(${t.id})">✎</button>
+        <button onclick="confirmDelete('message_templates', ${t.id}, renderTemplates)">🗑</button>
+      </td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="3">Aucun template pour l'instant</td></tr>`;
+}
+function openTemplateDialog(id) {
+  const row = id ? cache.message_templates.find(t => t.id === id) : {};
+  openModal({
+    title: id ? "Modifier le template" : "Nouveau template",
+    table: "message_templates", id,
+    fields: [
+      { key: "titre", label: "Titre (repère interne)", type: "text", value: row.titre, placeholder: "Ex : Demande de photos" },
+      { key: "contenu", label: "Contenu du message", type: "textarea", value: row.contenu, placeholder: "Le texte inséré tel quel dans la conversation…" },
+    ],
+    beforeSave: (values) => { values.date_creation = nowStr(); return true; },
+    onSaved: async () => { await refreshCache(); renderTemplates(); },
+  });
+}
+function toggleTemplateMenu() {
+  const menu = document.getElementById("template-menu");
+  const isOpen = menu.classList.contains("open");
+  if (isOpen) { menu.classList.remove("open"); return; }
+  menu.innerHTML = cache.message_templates.length ? cache.message_templates.map(t => `
+    <div class="template-menu-item" data-id="${t.id}">
+      <div class="tm-title">${escapeHtml(t.titre)}</div>
+      <div class="tm-preview">${escapeHtml(t.contenu || "")}</div>
+    </div>`).join("") : `<div class="template-menu-empty">Aucun template. Crée-en depuis la page "Templates".</div>`;
+  menu.querySelectorAll(".template-menu-item").forEach(el => el.addEventListener("click", () => {
+    const t = cache.message_templates.find(x => x.id === Number(el.dataset.id));
+    if (t) {
+      const input = document.getElementById("messages-input");
+      input.value = t.contenu;
+      input.focus();
+    }
+    menu.classList.remove("open");
+  }));
+  menu.classList.add("open");
+}
+
 // ========================================================================
 //  MESSAGES NON LUS — badge de navigation
 // ========================================================================
@@ -3381,6 +3451,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("demande-filter-priorite").addEventListener("change", renderDemandes);
   document.getElementById("demande-filter-statut").addEventListener("change", renderDemandes);
   document.getElementById("btn-new-demande-admin").addEventListener("click", openDemandeAdminDialog);
+  document.getElementById("templates-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleTemplateMenu(); });
+  document.getElementById("btn-new-template").addEventListener("click", () => openTemplateDialog(null));
+  document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".template-wrap");
+    if (wrap && !wrap.contains(e.target)) document.getElementById("template-menu").classList.remove("open");
+  });
 
   document.getElementById("sc-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("sc-facture").addEventListener("click", () => openFactureDialog(null));
