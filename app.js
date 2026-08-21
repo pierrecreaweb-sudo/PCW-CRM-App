@@ -2659,7 +2659,9 @@ function renderOptionsUI(form, type, checkedCsv) {
     const priceLbl = g && g.pu_ttc != null ? ` <span style="color:var(--muted);font-weight:normal;">(${g.pu_ttc} €${modePaiementSuffix(g.mode_paiement)})</span>` : "";
     return `<label><input type="checkbox" data-opt="${escapeAttr(o)}" ${checked.includes(o) ? "checked" : ""}>${o}${priceLbl}</label>`;
   }).join("") + `</div>`;
-  syncRecurringFromOptions(form, checked);
+  // On ne resynchronise le montant récurrent que lorsque l'utilisateur coche/décoche
+  // une case lui-même — jamais à l'ouverture du formulaire, sinon ça écraserait
+  // silencieusement un montant récurrent déjà saisi/corrigé manuellement.
   container.querySelectorAll("[data-opt]").forEach(cb => {
     cb.addEventListener("change", () => {
       const picked = Array.from(container.querySelectorAll("[data-opt]")).filter(x => x.checked).map(x => x.dataset.opt);
