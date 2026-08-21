@@ -499,6 +499,11 @@ function computeNotifications() {
       label: "Devis refusé par le client : " + (d.numero || ""), sub: contactLabel(devisContact(d)),
       date: d.date_creation || "", fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
   });
+  cache.factures.filter(f => (f.notes || "").includes("générée automatiquement")).forEach(f => {
+    items.push({ id: "facture-auto-" + f.id, urgent: false, color: "var(--tertiary)", icon: "icon-repeat",
+      label: "Facture d'abonnement générée : " + (f.numero || ""), sub: contactLabel(findContact(f.contact_id)) + " · " + Number(f.montant_ttc || 0).toFixed(2) + " €",
+      date: f.date_facture || "", fn: () => showPage("factures") });
+  });
 
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
     items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
@@ -539,10 +544,10 @@ function computeNotifications() {
       sub: contactLabel(findContact(r.contact_id)) + (r.heure ? " · " + r.heure : ""),
       fn: () => { showPage("rdv"); setTimeout(() => openRdvDialog(r.id), 150); } });
   });
-  cache.evenements.filter(e => e.facturation_recurrente && e.prochaine_facturation && e.prochaine_facturation <= addDaysISO(today, 7)).forEach(e => {
-    items.push({ id: "recurrent-" + e.id + "-" + e.prochaine_facturation, urgent: e.prochaine_facturation <= today, color: "var(--success)", icon: "icon-repeat", date: e.prochaine_facturation,
-      label: "Facturation récurrente à renouveler : " + eventLabel(e),
-      sub: "Échéance le " + fmtDateFR(e.prochaine_facturation),
+  tousLesAbonnements(cache.evenements).filter(a => a.prochaine && a.prochaine <= addDaysISO(today, 7)).forEach(a => {
+    items.push({ id: "recurrent-" + a.evenement.id + "-" + a.slot + "-" + a.prochaine, urgent: a.prochaine <= today, color: "var(--success)", icon: "icon-repeat", date: a.prochaine,
+      label: "Facturation récurrente à renouveler : " + eventLabel(a.evenement) + " (" + a.frequence + ")",
+      sub: "Échéance le " + fmtDateFR(a.prochaine),
       fn: () => { showPage("dashboard"); } });
   });
 
@@ -670,21 +675,41 @@ function renderPage(key) {
   else if (key === "templates") renderTemplates();
   else if (key === "paiements") renderPaiements();
 }
+// Aplatit un projet en 0, 1 ou 2 "abonnements" (un projet peut avoir un
+// abonnement mensuel ET un abonnement annuel en parallèle).
+function abonnementsOf(e) {
+  const list = [];
+  if (e.facturation_recurrente && e.montant_recurrent) {
+    list.push({ evenement: e, slot: 1, montant: Number(e.montant_recurrent), frequence: e.frequence_facturation || "Mensuelle", prochaine: e.prochaine_facturation });
+  }
+  if (e.facturation_recurrente_2 && e.montant_recurrent_2) {
+    list.push({ evenement: e, slot: 2, montant: Number(e.montant_recurrent_2), frequence: e.frequence_facturation_2 || "Annuelle", prochaine: e.prochaine_facturation_2 });
+  }
+  return list;
+}
+function tousLesAbonnements(evenements) {
+  return evenements.flatMap(abonnementsOf);
+}
+
 function advanceDateBy(dateStr, freq) {
   const d = new Date(dateStr);
   if (freq === "Annuelle") d.setFullYear(d.getFullYear() + 1); else d.setMonth(d.getMonth() + 1);
   return isoOf(d);
 }
-function createRecurringInvoiceFor(evenementId) {
+function createRecurringInvoiceFor(evenementId, slot) {
+  slot = slot || 1;
   const e = findEvenement(evenementId); if (!e) return;
+  const montant = slot === 2 ? e.montant_recurrent_2 : e.montant_recurrent;
+  const frequence = slot === 2 ? e.frequence_facturation_2 : e.frequence_facturation;
+  const prochaine = slot === 2 ? e.prochaine_facturation_2 : e.prochaine_facturation;
   openModal({
-    title: "Nouvelle facture récurrente — " + eventLabel(e),
+    title: "Nouvelle facture récurrente (" + frequence + ") — " + eventLabel(e),
     table: "factures", id: null,
-    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: e.montant_recurrent, date_facture: todayStr() }),
+    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: montant, date_facture: todayStr() }),
     onRender: factureOnRender,
     onSaved: async () => {
-      const next = advanceDateBy(e.prochaine_facturation || todayStr(), e.frequence_facturation);
-      await updateRow("evenements", e.id, { prochaine_facturation: next });
+      const next = advanceDateBy(prochaine || todayStr(), frequence);
+      await updateRow("evenements", e.id, slot === 2 ? { prochaine_facturation_2: next } : { prochaine_facturation: next });
       await refreshAll();
       showToast("Facture créée · prochaine échéance : " + fmtDateFR(next));
     },
@@ -869,17 +894,17 @@ function renderDashboard() {
   wrap.querySelectorAll(".stat-card").forEach(el => el.addEventListener("click", () => cards[Number(el.dataset.i)][4]()));
   renderDashboardChart();
 
-  const recurring = cache.evenements.filter(e => e.facturation_recurrente && e.prochaine_facturation && e.prochaine_facturation <= addDaysISO(today, 7));
+  const recurring = tousLesAbonnements(cache.evenements).filter(a => a.prochaine && a.prochaine <= addDaysISO(today, 7));
   const recPanel = document.getElementById("dash-recurring-panel");
   if (recurring.length) {
     recPanel.style.display = "block";
-    document.getElementById("dash-recurring-tbody").innerHTML = recurring.sort((a, b) => (a.prochaine_facturation || "").localeCompare(b.prochaine_facturation || "")).map(e => `
+    document.getElementById("dash-recurring-tbody").innerHTML = recurring.sort((a, b) => (a.prochaine || "").localeCompare(b.prochaine || "")).map(a => `
       <tr>
-        <td>${eventLabel(e)}</td>
-        <td>${contactLabel(findContact(e.contact_id))}</td>
-        <td class="${e.prochaine_facturation <= today ? "due-today" : ""}">${fmtDateFR(e.prochaine_facturation)}</td>
-        <td>${e.montant_recurrent ? e.montant_recurrent + " €" : "—"}</td>
-        <td><button class="btn secondary" style="padding:5px 10px;font-size:11.5px;" onclick="createRecurringInvoiceFor(${e.id})">＋ Créer la facture</button></td>
+        <td>${eventLabel(a.evenement)} <span class="badge subtle">${a.frequence}</span></td>
+        <td>${contactLabel(findContact(a.evenement.contact_id))}</td>
+        <td class="${a.prochaine <= today ? "due-today" : ""}">${fmtDateFR(a.prochaine)}</td>
+        <td>${a.montant} €</td>
+        <td><button class="btn secondary" style="padding:5px 10px;font-size:11.5px;" onclick="createRecurringInvoiceFor(${a.evenement.id}, ${a.slot})">＋ Créer la facture</button></td>
       </tr>`).join("");
   } else { recPanel.style.display = "none"; }
 
@@ -2335,7 +2360,7 @@ function renderFactures() {
       </td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="8">Aucune facture — crée-la ici ou depuis un devis (🧾)</td></tr>`;
 }
-const TYPES_FACTURE = ["Facture unique", "Facture d'acompte (30%)", "Facture de solde"];
+const TYPES_FACTURE = ["Facture unique", "Facture d'acompte (30%)", "Facture de solde", "Facture d'abonnement"];
 const ACOMPTE_PERCENT = 30;
 function computeMontantParType(devisId, type, excludeFactureId) {
   const d = findDevis(Number(devisId));
@@ -2661,10 +2686,14 @@ function openEvenementDialog(id, defaultDate) {
       { key: "date_livraison_estimee", label: "Date de livraison estimée (visible par le client)", type: "date", value: row.date_livraison_estimee },
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
       { key: "facture_id", label: "Facture liée", type: "select-raw", optionsHtml: `<option value="">—</option>` + factureOptionsHtml(row.facture_id), value: row.facture_id, numeric: true },
-      { key: "facturation_recurrente", label: "Facturation récurrente (mensuelle/annuelle)", type: "checkbox", value: row.facturation_recurrente },
-      { key: "frequence_facturation", label: "Fréquence", type: "select", options: ["Mensuelle", "Annuelle"], value: row.frequence_facturation || "Mensuelle" },
-      { key: "montant_recurrent", label: "Montant à refacturer à chaque échéance (€)", type: "number", value: row.montant_recurrent },
-      { key: "prochaine_facturation", label: "Prochaine date de facturation", type: "date", value: row.prochaine_facturation },
+      { key: "facturation_recurrente", label: "Facturation récurrente #1", type: "checkbox", value: row.facturation_recurrente },
+      { key: "frequence_facturation", label: "Fréquence #1", type: "select", options: ["Mensuelle", "Annuelle"], value: row.frequence_facturation || "Mensuelle" },
+      { key: "montant_recurrent", label: "Montant à refacturer à chaque échéance #1 (€)", type: "number", value: row.montant_recurrent },
+      { key: "prochaine_facturation", label: "Prochaine date de facturation #1", type: "date", value: row.prochaine_facturation },
+      { key: "facturation_recurrente_2", label: "Deuxième abonnement en parallèle (ex : mensuel + annuel)", type: "checkbox", value: row.facturation_recurrente_2 },
+      { key: "frequence_facturation_2", label: "Fréquence #2", type: "select", options: ["Mensuelle", "Annuelle"], value: row.frequence_facturation_2 || "Annuelle" },
+      { key: "montant_recurrent_2", label: "Montant à refacturer à chaque échéance #2 (€)", type: "number", value: row.montant_recurrent_2 },
+      { key: "prochaine_facturation_2", label: "Prochaine date de facturation #2", type: "date", value: row.prochaine_facturation_2 },
       { key: "derniere_action", label: "Dernière action", type: "text", value: row.derniere_action },
       { key: "prochain_rdv", label: "Prochain RDV", type: "date", value: row.prochain_rdv },
       { key: "notes", label: "Notes", type: "textarea", value: row.notes },
@@ -3097,23 +3126,23 @@ function renderPaiements() {
     </tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="5">Aucune facture impayée 🎉</td></tr>`;
 
-  const recurrents = cache.evenements.filter(e => e.facturation_recurrente);
+  const recurrents = tousLesAbonnements(cache.evenements);
   const recTbody = document.getElementById("recurrents-tbody");
   recTbody.innerHTML = recurrents.length ? recurrents
-    .sort((a, b) => (a.prochaine_facturation || "9999").localeCompare(b.prochaine_facturation || "9999"))
-    .map(e => {
-      const contact = findContact(e.contact_id);
+    .sort((a, b) => (a.prochaine || "9999").localeCompare(b.prochaine || "9999"))
+    .map(a => {
+      const contact = findContact(a.evenement.contact_id);
       let flagClass = "payments-flag-ok";
-      if (e.prochaine_facturation) {
-        if (e.prochaine_facturation < today) flagClass = "payments-flag-late";
-        else if (e.prochaine_facturation <= addDays(today, 7)) flagClass = "payments-flag-soon";
+      if (a.prochaine) {
+        if (a.prochaine < today) flagClass = "payments-flag-late";
+        else if (a.prochaine <= addDays(today, 7)) flagClass = "payments-flag-soon";
       }
       return `<tr>
         <td>${contactLabel(contact)}</td>
-        <td>${escapeAttr(eventLabel(e))}</td>
-        <td>${e.montant_recurrent ? Number(e.montant_recurrent).toFixed(2) + " €" : "—"}</td>
-        <td>${escapeAttr(e.frequence_facturation || "—")}</td>
-        <td class="${flagClass}">${e.prochaine_facturation ? e.prochaine_facturation.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+        <td>${escapeAttr(eventLabel(a.evenement))}</td>
+        <td>${a.montant.toFixed(2)} €</td>
+        <td>${escapeAttr(a.frequence)}</td>
+        <td class="${flagClass}">${a.prochaine ? a.prochaine.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
       </tr>`;
     }).join("") : `<tr class="empty-row"><td colspan="5">Aucun abonnement récurrent</td></tr>`;
 }
