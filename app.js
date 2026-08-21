@@ -824,7 +824,6 @@ function renderDashboardChart() {
 function renderDashboard() {
   renderDashboardGreeting();
   const today = todayStr();
-  const prospectsActifs = cache.contacts.filter(c => c.categorie === "Prospect").length;
   const devisEnAttente = cache.devis.filter(d => d.statut === "En attente").length;
   const facturesImpayees = cache.factures.filter(f => ["Envoyée", "En retard"].includes(f.statut)).length;
   const rdvAvenir = cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé").length;
@@ -834,7 +833,6 @@ function renderDashboard() {
   const messagesNonLus = cache.messages.filter(m => m.expediteur === "client" && !m.lu).length;
 
   const cards = [
-    ["icon-target", "var(--accent)", prospectsActifs, "Prospects actifs", () => goToFilter("contacts", "contact-filter-categorie", "Prospect")],
     ["icon-file-text", "var(--info)", devisEnAttente, "Devis en attente", () => goToFilter("devis", "devis-filter-statut", "En attente")],
     ["icon-receipt", "var(--warning)", facturesImpayees, "Factures impayées", () => goToFilter("factures", "facture-filter-statut", "Envoyée")],
     ["icon-clock", "var(--tertiary)", rdvAvenir, "RDV à venir", () => showPage("rdv")],
