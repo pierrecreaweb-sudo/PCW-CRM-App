@@ -88,6 +88,13 @@
   .nav-item.active .nav-icon{opacity:1;}
   .nav-section-label{color:#4C5975;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:16px 22px 6px;}
   .nav-section-label:first-of-type{padding-top:4px;}
+  .nav-section-label.collapsible{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding-right:16px;}
+  .nav-section-label.collapsible:hover{color:#8894B0;}
+  .nav-section-caret{width:11px;height:11px;flex-shrink:0;transition:transform .15s;}
+  .nav-section.collapsed .nav-section-caret{transform:rotate(90deg);}
+  .nav-section-body{max-height:600px;overflow:hidden;transition:max-height .25s ease;}
+  .nav-section.collapsed .nav-section-body{max-height:0;}
+  .sidebar.collapsed .nav-section-caret{display:none;}
   .sidebar-footer{margin-top:auto;padding:16px 22px 0;border-top:1px solid #1B2740;}
   .sidebar-footer button{background:none;border:none;color:var(--sidebar-text);font-size:12.5px;padding:8px 0;transition:.15s;}
   .sidebar-footer button:hover{color:#fff;}
@@ -396,6 +403,9 @@
     <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/>
     </symbol>
+    <symbol id="icon-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 6l6 6-6 6"/>
+    </symbol>
     <symbol id="icon-kanban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/>
     </symbol>
@@ -465,29 +475,53 @@
         <div class="logo"><img src="logo.png" alt="PCW" style="width:40px;height:40px;vertical-align:middle;margin-right:8px;border-radius:50%;flex-shrink:0;"><span class="logo-text">PCW<br><span style="font-weight:normal;font-size:12px;color:var(--sidebar-text);">Gestion Client</span></span></div>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Réduire / déplier le menu" aria-label="Réduire ou déplier le menu">☰</button>
       </div>
-      <div class="nav-section-label">Pilotage</div>
-      <div class="nav-item" data-page="dashboard"><svg class="nav-icon"><use href="#icon-home"></use></svg><span>Dashboard</span></div>
-      <div class="nav-item" data-page="todo"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>To Do List</span></div>
-      <div class="nav-section-label">Clients</div>
-      <div class="nav-item" data-page="prospects"><svg class="nav-icon"><use href="#icon-target"></use></svg><span>Suivi Clients</span></div>
-      <div class="nav-item" data-page="contacts"><svg class="nav-icon"><use href="#icon-user"></use></svg><span>Contacts</span></div>
-      <div class="nav-section-label">Ventes</div>
-      <div class="nav-item" data-page="devis"><svg class="nav-icon"><use href="#icon-file-text"></use></svg><span>Devis</span></div>
-      <div class="nav-item" data-page="factures"><svg class="nav-icon"><use href="#icon-receipt"></use></svg><span>Facturation</span></div>
-      <div class="nav-item" data-page="relances"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Relances</span></div>
-      <div class="nav-item" data-page="tarification"><svg class="nav-icon"><use href="#icon-tag"></use></svg><span>Tarification</span></div>
-      <div class="nav-section-label">Organisation</div>
-      <div class="nav-item" data-page="evenements"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Projets</span></div>
-      <div class="nav-item" data-page="rdv"><svg class="nav-icon"><use href="#icon-clock"></use></svg><span>RDV</span></div>
-      <div class="nav-item" data-page="calendrier"><svg class="nav-icon"><use href="#icon-calendar"></use></svg><span>Calendrier</span></div>
-      <div class="nav-item" data-page="temps"><svg class="nav-icon"><use href="#icon-stopwatch"></use></svg><span>Temps passé</span></div>
-      <div class="nav-section-label">Analyse</div>
-      <div class="nav-item" data-page="stats"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Statistiques</span></div>
-      <div class="nav-section-label">Portail Client</div>
-      <div class="nav-item" data-page="demandes"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>Demandes</span></div>
-      <div class="nav-item" data-page="messages"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Messages</span><span class="nav-badge" id="nav-badge-messages" style="display:none;">0</span></div>
-      <div class="nav-item" data-page="fichiers"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Fichiers</span></div>
-      <div class="nav-item" data-page="paiements"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Paiements</span></div>
+      <div class="nav-section" data-section="pilotage">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('pilotage')"><span>Pilotage</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="dashboard"><svg class="nav-icon"><use href="#icon-home"></use></svg><span>Dashboard</span></div>
+          <div class="nav-item" data-page="todo"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>To Do List</span></div>
+        </div>
+      </div>
+      <div class="nav-section" data-section="clients">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('clients')"><span>Clients</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="prospects"><svg class="nav-icon"><use href="#icon-target"></use></svg><span>Suivi Clients</span></div>
+          <div class="nav-item" data-page="contacts"><svg class="nav-icon"><use href="#icon-user"></use></svg><span>Contacts</span></div>
+        </div>
+      </div>
+      <div class="nav-section" data-section="ventes">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('ventes')"><span>Ventes</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="devis"><svg class="nav-icon"><use href="#icon-file-text"></use></svg><span>Devis</span></div>
+          <div class="nav-item" data-page="factures"><svg class="nav-icon"><use href="#icon-receipt"></use></svg><span>Facturation</span></div>
+          <div class="nav-item" data-page="relances"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Relances</span></div>
+          <div class="nav-item" data-page="tarification"><svg class="nav-icon"><use href="#icon-tag"></use></svg><span>Tarification</span></div>
+        </div>
+      </div>
+      <div class="nav-section" data-section="organisation">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('organisation')"><span>Organisation</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="evenements"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Projets</span></div>
+          <div class="nav-item" data-page="rdv"><svg class="nav-icon"><use href="#icon-clock"></use></svg><span>RDV</span></div>
+          <div class="nav-item" data-page="calendrier"><svg class="nav-icon"><use href="#icon-calendar"></use></svg><span>Calendrier</span></div>
+          <div class="nav-item" data-page="temps"><svg class="nav-icon"><use href="#icon-stopwatch"></use></svg><span>Temps passé</span></div>
+        </div>
+      </div>
+      <div class="nav-section" data-section="analyse">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('analyse')"><span>Analyse</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="stats"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Statistiques</span></div>
+        </div>
+      </div>
+      <div class="nav-section" data-section="portail">
+        <div class="nav-section-label collapsible" onclick="toggleNavSection('portail')"><span>Portail Client</span><svg class="nav-section-caret"><use href="#icon-caret"></use></svg></div>
+        <div class="nav-section-body">
+          <div class="nav-item" data-page="demandes"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>Demandes</span></div>
+          <div class="nav-item" data-page="messages"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Messages</span><span class="nav-badge" id="nav-badge-messages" style="display:none;">0</span></div>
+          <div class="nav-item" data-page="fichiers"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Fichiers</span></div>
+          <div class="nav-item" data-page="paiements"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Paiements</span></div>
+        </div>
+      </div>
       <div class="sidebar-footer">
         <div style="color:#C7CAD1;font-size:11.5px;margin-bottom:6px;" id="user-email-lbl"></div>
         <button id="google-connect-btn" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><svg class="nav-icon" style="width:14px;height:14px;"><use href="#icon-mail"></use></svg><span id="google-connect-lbl">Connecter Google</span></button>
@@ -569,13 +603,20 @@
               <select class="filter" id="todo-filter-priorite"><option value="">Toutes priorités</option></select>
               <select class="filter" id="todo-sort"><option value="echeance">Trier par échéance</option><option value="priorite">Trier par priorité</option><option value="statut">Trier par statut</option></select>
             </div>
-            <button class="btn" id="btn-new-todo">＋ Nouvelle tâche</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="cat-tabs" id="todo-view-tabs" style="margin:0;">
+                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+              </div>
+              <button class="btn" id="btn-new-todo">＋ Nouvelle tâche</button>
+            </div>
           </div>
           <div class="page-note">Une tâche avec une échéance à 7 jours ou moins passe automatiquement en <strong>Urgente</strong> (affichée en rouge).</div>
-          <table class="data">
+          <table class="data" id="todo-table-view">
             <thead><tr><th>Titre</th><th>Lié à</th><th>Priorité</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
             <tbody id="todo-tbody"></tbody>
           </table>
+          <div id="todo-kanban-view" class="kanban-board" style="display:none;"></div>
 
           <div class="page-title" style="margin-top:34px;font-size:19px;">Tâches terminées</div>
           <table class="data">
@@ -653,12 +694,17 @@
             </div>
             <button class="btn secondary" id="btn-export-devis"><svg class="nav-icon" style="width:13px;height:13px;"><use href="#icon-download"></use></svg>Exporter (CSV)</button>
             <button class="btn secondary" id="btn-cgv-manager">CGV</button>
+            <div class="cat-tabs" id="devis-view-tabs" style="margin:0;">
+              <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+              <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+            </div>
             <button class="btn" id="btn-new-devis">＋ Nouveau devis</button>
           </div>
-          <table class="data">
+          <table class="data" id="devis-table-view">
             <thead><tr><th>N°</th><th>Projet</th><th>Contact</th><th>Date projet</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
             <tbody id="devis-tbody"></tbody>
           </table>
+          <div id="devis-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- FACTURATION -->
@@ -670,12 +716,17 @@
               <select class="filter" id="facture-filter-statut"><option value="">Tous les statuts</option></select>
             </div>
             <button class="btn secondary" id="btn-export-factures"><svg class="nav-icon" style="width:13px;height:13px;"><use href="#icon-download"></use></svg>Exporter (CSV)</button>
+            <div class="cat-tabs" id="facture-view-tabs" style="margin:0;">
+              <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+              <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+            </div>
             <button class="btn" id="btn-new-facture">＋ Nouvelle facture</button>
           </div>
-          <table class="data">
+          <table class="data" id="facture-table-view">
             <thead><tr><th>N°</th><th>Contact</th><th>Devis lié</th><th>Type</th><th>Date</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
             <tbody id="facture-tbody"></tbody>
           </table>
+          <div id="facture-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- PROJETS -->
@@ -687,12 +738,19 @@
               <select class="filter" id="evenement-filter-mois"><option value="">Tous les mois</option></select>
               <select class="filter" id="evenement-filter-statut"><option value="">Tous les statuts</option></select>
             </div>
-            <button class="btn" id="btn-new-evenement">＋ Nouveau projet</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="cat-tabs" id="evenement-view-tabs" style="margin:0;">
+                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+              </div>
+              <button class="btn" id="btn-new-evenement">＋ Nouveau projet</button>
+            </div>
           </div>
-          <table class="data">
+          <table class="data" id="evenement-table-view">
             <thead><tr><th>Nom</th><th>Date</th><th>Contact</th><th>Provenance</th><th>Type de projet</th><th>Formule</th><th>Statut</th><th>Étape portail</th><th>Devis</th><th>Facture</th><th>Dernière action</th><th></th></tr></thead>
             <tbody id="evenement-tbody"></tbody>
           </table>
+          <div id="evenement-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- RDV -->
@@ -700,12 +758,17 @@
           <div class="page-title">Rendez-vous</div>
           <div class="page-toolbar">
             <select class="filter" id="rdv-filter-statut"><option value="">Tous les statuts</option></select>
+            <div class="cat-tabs" id="rdv-view-tabs" style="margin:0;">
+              <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+              <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+            </div>
             <button class="btn" id="btn-new-rdv">＋ Nouveau RDV</button>
           </div>
-          <table class="data">
+          <table class="data" id="rdv-table-view">
             <thead><tr><th>Date</th><th>Heure</th><th>Objet</th><th>Contact</th><th>Statut</th><th></th></tr></thead>
             <tbody id="rdv-tbody"></tbody>
           </table>
+          <div id="rdv-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- TEMPS PASSÉ -->
@@ -837,12 +900,19 @@
               <select class="filter" id="demande-filter-priorite"><option value="">Toutes priorités</option></select>
               <select class="filter" id="demande-filter-statut"><option value="">Tous statuts</option></select>
             </div>
-            <button class="btn" id="btn-new-demande-admin">＋ Demander quelque chose à un client</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="cat-tabs" id="demande-view-tabs" style="margin:0;">
+                <button type="button" class="cat-tab active" data-view="tableau"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-list"></use></svg> Tableau</button>
+                <button type="button" class="cat-tab" data-view="kanban"><svg class="nav-icon" style="width:13px;height:13px;vertical-align:-2px;"><use href="#icon-kanban"></use></svg> Kanban</button>
+              </div>
+              <button class="btn" id="btn-new-demande-admin">＋ Demander quelque chose à un client</button>
+            </div>
           </div>
-          <table class="data">
+          <table class="data" id="demande-table-view">
             <thead><tr><th>Sens</th><th>Priorité</th><th>Titre</th><th>Client</th><th>Description</th><th>Date</th><th>Statut</th></tr></thead>
             <tbody id="demandes-tbody"></tbody>
           </table>
+          <div id="demande-kanban-view" class="kanban-board" style="display:none;"></div>
         </div>
 
         <!-- MESSAGERIE -->

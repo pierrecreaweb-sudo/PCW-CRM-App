@@ -945,6 +945,7 @@ function factureOptionsHtml(selectedId) {
 function renderTodo() {
   ensureFilterOptions("todo-filter-statut", STATUTS_TODO);
   ensureFilterOptions("todo-filter-priorite", PRIORITES);
+  bindViewTabsGeneric("todo", "todo-view-tabs", "todo-table-view", "todo-kanban-view", renderTodo);
   const sortSel = document.getElementById("todo-sort");
   if (!sortSel.dataset.bound) { sortSel.addEventListener("change", renderTodo); sortSel.dataset.bound = "1"; }
   const fStatut = document.getElementById("todo-filter-statut").value;
@@ -961,6 +962,15 @@ function renderTodo() {
     if (sort === "statut") return (statutRank[a.statut] ?? 9) - (statutRank[b.statut] ?? 9);
     return (a.date_echeance || "9999").localeCompare(b.date_echeance || "9999");
   });
+
+  if (getView("todo") === "kanban") {
+    renderGenericKanban("todo-kanban-view", rows, STATUTS_TODO, {
+      table: "todos", cardTitle: t => t.titre, cardSub: t => todoLieALabel(t),
+      onClickFn: "openTodoDialog", colorField: null,
+    });
+    renderTodoTerminees(); renderTodoRdvAvenir(); renderTodoRdvPasses();
+    return;
+  }
 
   const tbody = document.getElementById("todo-tbody");
   tbody.innerHTML = rows.length ? rows.map(t => {
@@ -1189,7 +1199,82 @@ function openEventRecap(id) {
 // ========================================================================
 //  CONTACTS
 // ========================================================================
+let viewState = {};
+function getView(page) { return viewState[page] || "tableau"; }
+function bindViewTabsGeneric(page, tabsId, tableId, kanbanId, rerenderFn) {
+  const wrap = document.getElementById(tabsId);
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      viewState[page] = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById(tableId).style.display = viewState[page] === "tableau" ? "table" : "none";
+      document.getElementById(kanbanId).style.display = viewState[page] === "kanban" ? "flex" : "none";
+      rerenderFn();
+    });
+  });
+}
+function renderGenericKanban(kanbanId, rows, statuts, { table, statutField, cardTitle, cardSub, onClickFn, colorField }) {
+  statutField = statutField || "statut";
+  const wrap = document.getElementById(kanbanId);
+  wrap.innerHTML = statuts.map(statut => {
+    const items = rows.filter(r => r[statutField] === statut);
+    const color = STATUT_COLORS[statut] || "var(--muted)";
+    const cards = items.map(r => {
+      const cColor = colorField ? (STATUT_COLORS[r[colorField]] || color) : color;
+      return `<div class="kanban-card" draggable="true" data-id="${r.id}" onclick="${onClickFn}(${r.id})" style="border-left:3px solid ${cColor};">
+        <div class="kc-title">${escapeHtml(cardTitle(r) || "")}</div>
+        <div class="kc-sub">${escapeHtml(cardSub(r) || "")}</div>
+      </div>`;
+    }).join("");
+    return `<div class="kanban-col" data-statut="${escapeAttr(statut)}" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards}</div>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll(".kanban-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", card.dataset.id); });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("click", (e) => { if (card.classList.contains("dragging")) e.preventDefault(); });
+  });
+  wrap.querySelectorAll(".kanban-col").forEach(col => {
+    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault(); col.classList.remove("drag-over");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      const newStatut = col.dataset.statut;
+      await updateRow(table, id, { [statutField]: newStatut });
+      await refreshCache();
+      showToast("Statut mis à jour : " + newStatut);
+      renderPage(currentPage);
+    });
+  });
+}
+
 let contactView = "tableau";
+function getCollapsedNavSections() {
+  try { return JSON.parse(localStorage.getItem("pcw_collapsed_nav_sections")) || []; } catch (e) { return []; }
+}
+function toggleNavSection(key) {
+  const el = document.querySelector(`.nav-section[data-section="${key}"]`);
+  if (!el) return;
+  el.classList.toggle("collapsed");
+  const collapsed = getCollapsedNavSections();
+  const isCollapsed = el.classList.contains("collapsed");
+  const idx = collapsed.indexOf(key);
+  if (isCollapsed && idx === -1) collapsed.push(key);
+  if (!isCollapsed && idx !== -1) collapsed.splice(idx, 1);
+  localStorage.setItem("pcw_collapsed_nav_sections", JSON.stringify(collapsed));
+}
+function applyCollapsedNavSections() {
+  getCollapsedNavSections().forEach(key => {
+    const el = document.querySelector(`.nav-section[data-section="${key}"]`);
+    if (el) el.classList.add("collapsed");
+  });
+}
 let showDuplicatesOnly = false;
 function toggleDuplicatesFilter() {
   showDuplicatesOnly = !showDuplicatesOnly;
@@ -1624,6 +1709,7 @@ function exportFacturesCSV() {
 function renderDevis() {
   ensureFilterOptions("devis-filter-statut", STATUTS_DEVIS);
   bindSearch("devis-search", renderDevis);
+  bindViewTabsGeneric("devis", "devis-view-tabs", "devis-table-view", "devis-kanban-view", renderDevis);
   const last = lastDevisNumero();
   document.getElementById("devis-last").innerHTML = last ? `Dernier devis créé : <strong>${last}</strong>` : "Aucun devis pour l'instant.";
   const expiredCount = cache.devis.filter(d => d.statut === "Expiré").length;
@@ -1635,6 +1721,14 @@ function renderDevis() {
   let rows = [...cache.devis].sort((a, b) => (b.date_creation || "").localeCompare(a.date_creation || ""));
   if (filter) rows = rows.filter(d => d.statut === filter);
   if (search) rows = rows.filter(d => (contactLabel(devisContact(d)) + " " + (d.numero || "")).toLowerCase().includes(search));
+
+  if (getView("devis") === "kanban") {
+    renderGenericKanban("devis-kanban-view", rows, STATUTS_DEVIS, {
+      table: "devis", cardTitle: d => (d.numero || "Devis") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : ""),
+      cardSub: d => contactLabel(devisContact(d)), onClickFn: "openDevisEditor",
+    });
+    return;
+  }
 
   const tbody = document.getElementById("devis-tbody");
   tbody.innerHTML = rows.length ? rows.map(d => {
@@ -2073,11 +2167,20 @@ function nextFactureNumero() {
 function renderFactures() {
   ensureFilterOptions("facture-filter-statut", STATUTS_FACTURE);
   bindSearch("facture-search", renderFactures);
+  bindViewTabsGeneric("factures", "facture-view-tabs", "facture-table-view", "facture-kanban-view", renderFactures);
   const search = (document.getElementById("facture-search").value || "").toLowerCase();
   const filter = document.getElementById("facture-filter-statut").value;
   let rows = [...cache.factures].sort((a, b) => (b.date_creation || "").localeCompare(a.date_creation || ""));
   if (filter) rows = rows.filter(f => f.statut === filter);
   if (search) rows = rows.filter(f => (contactLabel(findContact(f.contact_id)) + " " + (f.numero || "")).toLowerCase().includes(search));
+
+  if (getView("factures") === "kanban") {
+    renderGenericKanban("facture-kanban-view", rows, STATUTS_FACTURE, {
+      table: "factures", cardTitle: f => (f.numero || "Facture") + (f.montant_ttc ? " — " + f.montant_ttc + " €" : ""),
+      cardSub: f => contactLabel(findContact(f.contact_id)), onClickFn: "openFactureDialog",
+    });
+    return;
+  }
 
   const tbody = document.getElementById("facture-tbody");
   tbody.innerHTML = rows.length ? rows.map(f => {
@@ -2325,6 +2428,7 @@ function renderEvenements() {
   ensureFilterOptions("evenement-filter-type", TYPES_EVENEMENT);
   ensureFilterOptions("evenement-filter-statut", STATUTS_EVENEMENT);
   ensureFilterOptions("evenement-filter-mois", MOIS_FR.map((m, i) => ({ value: String(i + 1).padStart(2, "0"), label: m })));
+  bindViewTabsGeneric("evenements", "evenement-view-tabs", "evenement-table-view", "evenement-kanban-view", renderEvenements);
   const fType = document.getElementById("evenement-filter-type").value;
   const fMois = document.getElementById("evenement-filter-mois").value;
   const fStatut = document.getElementById("evenement-filter-statut").value;
@@ -2333,6 +2437,15 @@ function renderEvenements() {
   if (fType) rows = rows.filter(e => e.type_evenement === fType);
   if (fStatut) rows = rows.filter(e => e.statut === fStatut);
   if (fMois) rows = rows.filter(e => ((e.date_fin || e.mois_seul || "") + "").slice(5, 7) === fMois);
+
+  if (getView("evenements") === "kanban") {
+    renderGenericKanban("evenement-kanban-view", rows, STATUTS_EVENEMENT, {
+      table: "evenements", cardTitle: e => e.titre || "Projet",
+      cardSub: e => contactLabel(findContact(e.contact_id)) + (e.type_evenement ? " · " + e.type_evenement : ""),
+      onClickFn: "openEvenementDialog",
+    });
+    return;
+  }
 
   const tbody = document.getElementById("evenement-tbody");
   tbody.innerHTML = rows.length ? rows.map(e => {
@@ -2441,9 +2554,20 @@ function openEvenementDialog(id, defaultDate) {
 // ========================================================================
 function renderRdv() {
   ensureFilterOptions("rdv-filter-statut", STATUTS_RDV);
+  bindViewTabsGeneric("rdv", "rdv-view-tabs", "rdv-table-view", "rdv-kanban-view", renderRdv);
   const filter = document.getElementById("rdv-filter-statut").value;
   let rows = [...cache.rdv].sort((a, b) => ((a.date_rdv || "9999") + (a.heure || "")).localeCompare((b.date_rdv || "9999") + (b.heure || "")));
   if (filter) rows = rows.filter(r => r.statut === filter);
+
+  if (getView("rdv") === "kanban") {
+    renderGenericKanban("rdv-kanban-view", rows, STATUTS_RDV, {
+      table: "rdv", cardTitle: r => r.objet || "RDV",
+      cardSub: r => contactLabel(findContact(r.contact_id)) + (r.date_rdv ? " · " + fmtDateFR(r.date_rdv) + (r.heure ? " " + r.heure : "") : ""),
+      onClickFn: "openRdvDialog",
+    });
+    return;
+  }
+
   const tbody = document.getElementById("rdv-tbody");
   tbody.innerHTML = rows.length ? rows.map(r => `
     <tr>
@@ -2498,9 +2622,25 @@ async function deleteRdvWithGoogleSync(id, renderFn) {
 // ========================================================================
 //  PORTAIL CLIENT — DEMANDES
 // ========================================================================
+let demandeView = "tableau";
+function bindDemandeViewTabs() {
+  const wrap = document.getElementById("demande-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      demandeView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("demande-table-view").style.display = demandeView === "tableau" ? "table" : "none";
+      document.getElementById("demande-kanban-view").style.display = demandeView === "kanban" ? "flex" : "none";
+      renderDemandes();
+    });
+  });
+}
 function renderDemandes() {
   ensureFilterOptions("demande-filter-priorite", PRIORITES_DEMANDES);
   ensureFilterOptions("demande-filter-statut", STATUTS_DEMANDES);
+  bindDemandeViewTabs();
   const fp = document.getElementById("demande-filter-priorite").value;
   const fs = document.getElementById("demande-filter-statut").value;
   const prioOrder = { "Urgent": 0, "Normal": 1, "Faible": 2 };
@@ -2510,6 +2650,9 @@ function renderDemandes() {
   );
   if (fp) rows = rows.filter(d => d.priorite === fp);
   if (fs) rows = rows.filter(d => d.statut === fs);
+
+  if (demandeView === "kanban") { renderDemandeKanban(rows); return; }
+
   const tbody = document.getElementById("demandes-tbody");
   tbody.innerHTML = rows.length ? rows.map(d => `
     <tr>
@@ -2521,6 +2664,62 @@ function renderDemandes() {
       <td>${d.date_creation ? d.date_creation.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
       <td>${statusSelectInline("demandes", d.id, d.statut, STATUTS_DEMANDES, STATUT_COLORS, "statut")}</td>
     </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucune demande</td></tr>`;
+}
+function renderDemandeKanban(rows) {
+  const wrap = document.getElementById("demande-kanban-view");
+  wrap.innerHTML = STATUTS_DEMANDES.map(statut => {
+    const items = rows.filter(d => d.statut === statut);
+    const color = STATUT_COLORS[statut] || "var(--muted)";
+    const cards = items.map(d => {
+      const prioColor = STATUT_COLORS[d.priorite] || "var(--muted)";
+      return `<div class="kanban-card" draggable="true" data-id="${d.id}" onclick="openDemandeAdminDialogEdit(${d.id})" style="border-left:3px solid ${prioColor};">
+        <div class="kc-title">${escapeHtml(d.titre)}</div>
+        <div class="kc-sub">${contactLabel(findContact(d.contact_id))}${d.sens === "admin" ? " · → Client" : " · ← Client"}</div>
+        <div class="kc-badges">${badgeSubtle(d.priorite, prioColor)}</div>
+      </div>`;
+    }).join("");
+    return `<div class="kanban-col" data-statut="${escapeAttr(statut)}" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards}</div>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll(".kanban-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", card.dataset.id); });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("click", (e) => { if (card.classList.contains("dragging")) e.preventDefault(); });
+  });
+  wrap.querySelectorAll(".kanban-col").forEach(col => {
+    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault(); col.classList.remove("drag-over");
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      const newStatut = col.dataset.statut;
+      const d = cache.demandes.find(x => x.id === id);
+      if (d && d.statut !== newStatut) {
+        await updateRow("demandes", id, { statut: newStatut });
+        await refreshCache();
+        showToast("Statut mis à jour : " + newStatut);
+        renderDemandes();
+      }
+    });
+  });
+}
+function openDemandeAdminDialogEdit(id) {
+  const d = cache.demandes.find(x => x.id === id);
+  if (!d) return;
+  openModal({
+    title: "Modifier la demande",
+    table: "demandes", id,
+    fields: [
+      { key: "titre", label: "Titre", type: "text", value: d.titre },
+      { key: "description", label: "Description", type: "textarea", value: d.description },
+      { key: "priorite", label: "Priorité", type: "select", options: PRIORITES_DEMANDES, value: d.priorite },
+      { key: "statut", label: "Statut", type: "select", options: STATUTS_DEMANDES, value: d.statut },
+    ],
+    onSaved: refreshAll,
+  });
 }
 function escapeHtml(str) {
   if (str == null) return "";
@@ -3144,6 +3343,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (localStorage.getItem("pcw_sidebar_collapsed") === "1") document.getElementById("sidebar").classList.add("collapsed");
   document.getElementById("sidebar-overlay").addEventListener("click", closeMobileMenu);
   document.querySelectorAll(".nav-item").forEach(el => el.addEventListener("click", () => showPage(el.dataset.page)));
+  try { applyCollapsedNavSections(); } catch (e) { console.error("applyCollapsedNavSections", e); }
 
   try {
 
