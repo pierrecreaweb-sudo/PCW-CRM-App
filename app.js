@@ -27,7 +27,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ---- 2) CONSTANTES ----
-const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application Essentielle", "Application Métier Standard", "Application Métier Complète", "Audit Express", "Audit Complet"];
+const TYPES_EVENEMENT = ["Site Web One Page", "Site Vitrine", "Site Vitrine +", "Pack SEO Démarrage", "Suivi SEO", "Gestion Google/Meta Ads", "Pack SEO + Ads Complet", "Application sur mesure", "Audit Express", "Audit Complet"];
 const STATUTS_PROSPECT = ["Nouveau", "Contacté", "Qualifié", "Devis envoyé", "Converti", "Perdu"];
 const STATUTS_DEVIS = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
 const STATUTS_FACTURE = ["Brouillon", "Envoyée", "Payée", "En retard", "Annulée"];
@@ -51,7 +51,7 @@ const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";
 
 // Options de projet, proposées selon le type de projet sélectionné
 const TYPES_SITE = ["Site Web One Page", "Site Vitrine", "Site Vitrine +"];
-const TYPES_APP = ["Application Essentielle", "Application Métier Standard", "Application Métier Complète"];
+const TYPES_APP = ["Application sur mesure"];
 const OPTIONS_SITE = ["Nom de domaine", "Hébergement", "Maintenance & mise à jour", "Page supplémentaire", "Rédaction de contenu"];
 const OPTIONS_APP = ["Module supplémentaire", "Accès multi-utilisateurs", "Maintenance & évolutions", "Hébergement base de données"];
 function optionsListForType(type) {
