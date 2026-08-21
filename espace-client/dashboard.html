@@ -1133,7 +1133,8 @@ async function chargerDocuments() {
         <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "download")'>Télécharger</button>
         ${enAttenteSignature ? `<button class="btn-pdf" style="background:var(--success);color:#fff;" onclick="ouvrirSignature(${r.id})">✔ Accepter</button>
         <button class="btn-pdf" style="color:var(--danger);" onclick="refuserDevis(${r.id})">✕ Refuser</button>` : ""}
-        ${peutPayer ? `<button class="btn-pdf" style="background:var(--accent);color:#fff;" onclick="payerFacture(${r.id})">💳 Payer maintenant</button>` : ""}
+        ${peutPayer ? `<button class="btn-pdf" style="background:var(--accent);color:#fff;" onclick="payerFacture(${r.id})">💳 Payer maintenant</button>
+        <span class="item-meta" style="align-self:center;">(des frais de traitement s'ajoutent au paiement par carte)</span>` : ""}
       </div>
       ${enAttenteSignature ? `<div id="signature-panel-${r.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-alt, var(--cloud));border-radius:10px;">
         <label style="font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px;">Tape ton nom complet pour signer</label>
