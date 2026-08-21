@@ -203,6 +203,16 @@
   .kanban-card .kc-badges{display:flex;gap:5px;flex-wrap:wrap;}
 
   .content-topbar{display:flex;justify-content:flex-end;padding:16px 34px 0;}
+  .global-search-wrap{position:relative;flex:1;max-width:420px;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow-sm);margin-right:14px;}
+  .global-search-wrap svg{width:16px;height:16px;color:var(--muted);flex-shrink:0;}
+  .global-search-wrap input{border:none;outline:none;background:transparent;flex:1;font-size:13.5px;color:var(--text);font-family:'Inter',sans-serif;}
+  .global-search-results{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);max-height:360px;overflow-y:auto;z-index:40;}
+  .global-search-results.open{display:block;}
+  .gsr-item{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;align-items:center;}
+  .gsr-item:last-child{border-bottom:none;}
+  .gsr-item:hover{background:var(--surface-alt, var(--cloud));}
+  .gsr-item .gsr-type{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;flex-shrink:0;}
+  .gsr-empty{padding:14px;font-size:12.5px;color:var(--muted);text-align:center;}
   .notif-wrap{position:relative;}
   .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
   .notif-bell:hover{border-color:var(--accent);}
@@ -287,6 +297,11 @@
 
   <div class="main">
     <div class="content-topbar">
+      <div class="global-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
+        <input type="text" id="global-search-input" placeholder="Rechercher une demande, un message, une facture…" autocomplete="off">
+        <div class="global-search-results" id="global-search-results"></div>
+      </div>
       <div class="notif-wrap" id="notif-wrap">
         <div class="notif-bell" id="notif-bell-btn">
           <svg viewBox="0 0 24 24"><use href="#icon-bell"></use></svg>
@@ -316,10 +331,6 @@
       <div class="page" id="page-demandes">
         <div class="page-title">Demandes</div>
         <div class="page-sub">Ce que PCW te demande, et tes propres demandes.</div>
-        <div class="cat-tabs" id="demande-client-view-tabs" style="margin-bottom:16px;">
-          <button type="button" class="cat-tab active" data-view="liste">Liste</button>
-          <button type="button" class="cat-tab" data-view="kanban">Kanban</button>
-        </div>
         <div id="demandes-liste-wrap">
           <div class="panel" id="panel-demandes-admin" style="display:none;">
             <h3>Demandes de PCW</h3>
@@ -345,7 +356,6 @@
             <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
           </div>
         </div>
-        <div id="demandes-kanban-view" class="kanban-board" style="display:none;"></div>
       </div>
 
       <!-- MESSAGES -->
@@ -404,18 +414,8 @@
       <div class="page" id="page-documents">
         <div class="page-title">Devis & Factures</div>
         <div class="page-sub">Tous tes documents, dans l'ordre chronologique.</div>
-        <div class="cat-tabs" id="documents-view-tabs" style="margin-bottom:16px;">
-          <button type="button" class="cat-tab active" data-view="liste">Chronologique</button>
-          <button type="button" class="cat-tab" data-view="kanban">Kanban</button>
-        </div>
         <div class="panel" id="documents-liste-wrap">
           <div class="timeline" id="documents-timeline"><div class="empty-state">Chargement…</div></div>
-        </div>
-        <div id="documents-kanban-view" style="display:none;">
-          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px;">Devis</h3>
-          <div id="devis-kanban-client" class="kanban-board" style="margin-bottom:22px;"></div>
-          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px;">Factures</h3>
-          <div id="factures-kanban-client" class="kanban-board"></div>
         </div>
       </div>
 
@@ -492,6 +492,7 @@ async function init() {
   chargerPaiements();
   rafraichirBadgeMessages();
   refreshNotifs();
+  initMessagesRealtime();
 }
 
 async function logout() {
@@ -755,7 +756,6 @@ function toggleArchive(id) {
 }
 
 async function chargerDemandes() {
-  bindDemandeClientViewTabs();
   const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
   const elClient = document.getElementById("demandes-list");
   const elAdmin = document.getElementById("demandes-admin-list");
@@ -799,43 +799,7 @@ async function chargerDemandes() {
 
 async function marquerDemandeAdminTraitee(id) {
   const { error } = await sb.from("demandes").update({ statut: "Traité" }).eq("id", id);
-  if (!error) { chargerDemandes(); refreshNotifs(); renderDemandesKanban(); }
-}
-
-let demandeClientView = "liste";
-function bindDemandeClientViewTabs() {
-  const wrap = document.getElementById("demande-client-view-tabs");
-  if (!wrap || wrap.dataset.bound) return;
-  wrap.dataset.bound = "1";
-  wrap.querySelectorAll(".cat-tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      demandeClientView = btn.dataset.view;
-      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
-      document.getElementById("demandes-liste-wrap").style.display = demandeClientView === "liste" ? "block" : "none";
-      document.getElementById("demandes-kanban-view").style.display = demandeClientView === "kanban" ? "flex" : "none";
-      if (demandeClientView === "kanban") renderDemandesKanban();
-    });
-  });
-}
-async function renderDemandesKanban() {
-  const { data } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
-  const rows = data || [];
-  const statuts = ["Nouveau", "En cours", "Traité"];
-  const wrap = document.getElementById("demandes-kanban-view");
-  wrap.innerHTML = statuts.map(statut => {
-    const items = rows.filter(d => d.statut === statut);
-    const color = PILL_STATUT_DEMANDE[statut] || "var(--muted)";
-    const cards = items.map(d => `
-      <div class="kanban-card" style="border-left:3px solid ${PILL_PRIORITE[d.priorite] || "var(--muted)"};">
-        <div class="kc-title">${escapeHtml(d.titre)}</div>
-        <div class="kc-sub">${d.sens === "admin" ? "→ Demande de PCW" : "← Ta demande"}</div>
-        ${d.sens === "admin" && d.statut !== "Traité" ? `<div class="kc-badges"><button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer traité</button></div>` : ""}
-      </div>`).join("");
-    return `<div class="kanban-col" style="border-top:3px solid ${color};">
-      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
-      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
-    </div>`;
-  }).join("");
+  if (!error) { chargerDemandes(); refreshNotifs(); }
 }
 
 // ---- MESSAGES ----
@@ -878,6 +842,20 @@ async function envoyerMessage() {
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
   if (!error) { input.value = ""; chargerMessages(); chargerTableauDeBord(); }
+}
+
+// ---- Temps réel : nouveaux messages sans avoir à recharger ----
+let messagesRealtimeChannel = null;
+function initMessagesRealtime() {
+  if (messagesRealtimeChannel) return;
+  messagesRealtimeChannel = sb.channel("client-messages-realtime")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `contact_id=eq.${myContact.id}` }, async (payload) => {
+      const row = payload.new;
+      const activePage = document.getElementById("page-messages").classList.contains("active");
+      if (activePage) { chargerMessages(); if (row.expediteur === "admin") marquerMessagesLus(); }
+      else { rafraichirBadgeMessages(); refreshNotifs(); }
+    })
+    .subscribe();
 }
 
 // ---- FICHIERS ----
@@ -1062,67 +1040,11 @@ async function chargerProjet() {
 }
 
 // ---- DEVIS & FACTURES ----
-const STATUT_DEVIS_COLORS = { "En attente": "var(--info)", "Envoyé": "var(--warning)", "Accepté": "var(--success)", "Refusé": "var(--danger)", "Expiré": "var(--muted)" };
-const STATUT_FACTURE_COLORS = { "Brouillon": "var(--muted)", "Envoyée": "var(--warning)", "Payée": "var(--success)", "En retard": "var(--danger)", "Annulée": "var(--muted)" };
-let lastDevisData = [], lastFacturesData = [];
-
-let documentsView = "liste";
-function bindDocumentsViewTabs() {
-  const wrap = document.getElementById("documents-view-tabs");
-  if (!wrap || wrap.dataset.bound) return;
-  wrap.dataset.bound = "1";
-  wrap.querySelectorAll(".cat-tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      documentsView = btn.dataset.view;
-      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
-      document.getElementById("documents-liste-wrap").style.display = documentsView === "liste" ? "block" : "none";
-      document.getElementById("documents-kanban-view").style.display = documentsView === "kanban" ? "block" : "none";
-      if (documentsView === "kanban") renderDocumentsKanban();
-    });
-  });
-}
-function renderDocumentsKanban() {
-  const statutsDevis = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
-  const statutsFactures = ["Brouillon", "Envoyée", "Payée", "En retard", "Annulée"];
-
-  document.getElementById("devis-kanban-client").innerHTML = statutsDevis.map(statut => {
-    const items = lastDevisData.filter(d => d.statut === statut);
-    const color = STATUT_DEVIS_COLORS[statut] || "var(--muted)";
-    const cards = items.map(d => `
-      <div class="kanban-card" onclick='voirDevisPDF(${d.id}, "preview")' style="cursor:pointer;">
-        <div class="kc-title">${escapeHtml(d.numero || "Devis")}</div>
-        <div class="kc-sub">${d.montant_ttc ? Number(d.montant_ttc).toFixed(2) + " €" : ""}</div>
-      </div>`).join("");
-    return `<div class="kanban-col" style="border-top:3px solid ${color};">
-      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
-      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
-    </div>`;
-  }).join("");
-
-  document.getElementById("factures-kanban-client").innerHTML = statutsFactures.map(statut => {
-    const items = lastFacturesData.filter(f => f.statut === statut);
-    const color = STATUT_FACTURE_COLORS[statut] || "var(--muted)";
-    const cards = items.map(f => `
-      <div class="kanban-card" onclick='voirFacturePDF(${f.id}, "preview")' style="cursor:pointer;">
-        <div class="kc-title">${escapeHtml(f.numero || "Facture")}</div>
-        <div class="kc-sub">${f.montant_ttc ? Number(f.montant_ttc).toFixed(2) + " €" : ""}</div>
-      </div>`).join("");
-    return `<div class="kanban-col" style="border-top:3px solid ${color};">
-      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
-      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
-    </div>`;
-  }).join("");
-}
-
 async function chargerDocuments() {
-  bindDocumentsViewTabs();
   const [{ data: devis }, { data: factures }] = await Promise.all([
     sb.from("devis").select("*").eq("contact_id", myContact.id),
     sb.from("factures").select("*").eq("contact_id", myContact.id),
   ]);
-  lastDevisData = devis || [];
-  lastFacturesData = factures || [];
-  if (documentsView === "kanban") renderDocumentsKanban();
 
   const items = [
     ...(devis || []).map(d => ({ type: "devis", date: d.date_creation, row: d })),
@@ -1180,6 +1102,62 @@ async function voirFacturePDF(id, mode) {
   }
   await generateFacturePDF(f, myContact, devisRef, mode);
 }
+
+// ---- RECHERCHE GLOBALE ----
+async function runGlobalSearch(qRaw) {
+  const box = document.getElementById("global-search-results");
+  const q = (qRaw || "").trim().toLowerCase();
+  if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
+
+  const [{ data: demandesData }, { data: messagesData }, { data: devisData }, { data: facturesData }, { data: fichiersData }] = await Promise.all([
+    sb.from("demandes").select("*").eq("contact_id", myContact.id),
+    sb.from("messages").select("*").eq("contact_id", myContact.id),
+    sb.from("devis").select("*").eq("contact_id", myContact.id),
+    sb.from("factures").select("*").eq("contact_id", myContact.id),
+    sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id),
+  ]);
+
+  const results = [];
+  (demandesData || []).forEach(d => {
+    const hay = [d.titre, d.description].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Demande", label: d.titre, sub: d.statut || "", fn: () => showPage("demandes") });
+  });
+  (messagesData || []).forEach(m => {
+    if ((m.contenu || "").toLowerCase().includes(q)) results.push({ type: "Message", label: m.contenu.slice(0, 60), sub: m.expediteur === "admin" ? "PCW" : "Toi", fn: () => showPage("messages") });
+  });
+  (devisData || []).forEach(d => {
+    if ((d.numero || "").toLowerCase().includes(q)) results.push({ type: "Devis", label: d.numero || "Devis", sub: d.statut || "", fn: () => showPage("documents") });
+  });
+  (facturesData || []).forEach(f => {
+    if ((f.numero || "").toLowerCase().includes(q)) results.push({ type: "Facture", label: f.numero || "Facture", sub: f.statut || "", fn: () => showPage("documents") });
+  });
+  (fichiersData || []).forEach(f => {
+    if ((f.nom_fichier || "").toLowerCase().includes(q)) results.push({ type: "Fichier", label: f.nom_fichier, sub: "", fn: () => showPage("fichiers") });
+  });
+
+  box.classList.add("open");
+  if (!results.length) { box.innerHTML = `<div class="gsr-empty">Aucun résultat pour « ${escapeHtml(qRaw)} »</div>`; return; }
+  box.innerHTML = results.slice(0, 15).map((r, i) => `
+    <div class="gsr-item" data-i="${i}">
+      <span>${escapeHtml(r.label)}${r.sub ? `<br><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(r.sub)}</span>` : ""}</span>
+      <span class="gsr-type">${r.type}</span>
+    </div>`).join("");
+  box.querySelectorAll(".gsr-item").forEach(el => el.addEventListener("click", () => {
+    results[Number(el.dataset.i)].fn();
+    document.getElementById("global-search-input").value = "";
+    box.classList.remove("open");
+  }));
+}
+let globalSearchDebounce = null;
+document.getElementById("global-search-input").addEventListener("input", (e) => {
+  clearTimeout(globalSearchDebounce);
+  const val = e.target.value;
+  globalSearchDebounce = setTimeout(() => runGlobalSearch(val), 200);
+});
+document.addEventListener("click", (e) => {
+  const wrap = document.querySelector(".global-search-wrap");
+  if (wrap && !wrap.contains(e.target)) document.getElementById("global-search-results").classList.remove("open");
+});
 
 init();
 
