@@ -471,6 +471,22 @@ function computeNotifications() {
   const today = todayStr();
   const items = [];
 
+  cache.messages.filter(m => m.expediteur === "client" && !m.lu).forEach(m => {
+    items.push({ id: "msg-client-" + m.id, urgent: true, color: "var(--info)", icon: "icon-mail",
+      label: "Nouveau message de " + contactLabel(findContact(m.contact_id)), sub: m.contenu, date: m.date_creation || "",
+      fn: () => { showPage("messages"); setTimeout(() => selectMessageContact(m.contact_id), 150); } });
+  });
+  cache.demandes.filter(d => d.sens !== "admin" && d.statut === "Nouveau").forEach(d => {
+    items.push({ id: "demande-client-" + d.id, urgent: d.priorite === "Urgent", color: d.priorite === "Urgent" ? "var(--danger)" : "var(--accent)", icon: "icon-check-square",
+      label: "Nouvelle demande : " + d.titre, sub: contactLabel(findContact(d.contact_id)) + (d.priorite ? " · " + d.priorite : ""), date: d.date_creation || "",
+      fn: () => showPage("demandes") });
+  });
+  cache.demandes.filter(d => d.sens === "admin" && d.statut === "Traité").forEach(d => {
+    items.push({ id: "demande-admin-traitee-" + d.id, urgent: false, color: "var(--success)", icon: "icon-check-square",
+      label: "Demande traitée par le client : " + d.titre, sub: contactLabel(findContact(d.contact_id)), date: d.date_creation || "",
+      fn: () => showPage("demandes") });
+  });
+
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
     items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
       label: "Facture en retard : " + (f.numero || ""),
@@ -814,6 +830,8 @@ function renderDashboard() {
   const rdvAvenir = cache.rdv.filter(r => (r.date_rdv || "") >= today && r.statut !== "Annulé").length;
   const evenementsAvenir = cache.evenements.filter(e => (e.date_fin || "") >= today).length;
   const todosOuvertes = cache.todos.filter(t => t.statut !== "Terminé").length;
+  const demandesOuvertes = cache.demandes.filter(d => d.statut !== "Traité" && d.sens !== "admin").length;
+  const messagesNonLus = cache.messages.filter(m => m.expediteur === "client" && !m.lu).length;
 
   const cards = [
     ["icon-target", "var(--accent)", prospectsActifs, "Prospects actifs", () => goToFilter("contacts", "contact-filter-categorie", "Prospect")],
@@ -822,6 +840,8 @@ function renderDashboard() {
     ["icon-clock", "var(--tertiary)", rdvAvenir, "RDV à venir", () => showPage("rdv")],
     ["icon-folder", "var(--success)", evenementsAvenir, "Projets à venir", () => showPage("evenements")],
     ["icon-check-square", "var(--accent-dark)", todosOuvertes, "Tâches en cours", () => showPage("todo")],
+    ["icon-check-square", "var(--danger)", demandesOuvertes, "Demandes en cours", () => showPage("demandes")],
+    ["icon-mail", "var(--info)", messagesNonLus, "Messages non lus", () => showPage("messages")],
   ];
   const wrap = document.getElementById("dash-cards");
   wrap.innerHTML = cards.map((c, i) => `
