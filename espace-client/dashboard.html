@@ -237,6 +237,7 @@
   .sidebar-toggle-btn{background:none;border:none;color:var(--sidebar-text);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;flex-shrink:0;}
   .sidebar-toggle-btn:hover{background:var(--sidebar-active);color:#fff;}
   .sidebar-toggle-btn svg{width:18px;height:18px;}
+  .mobile-menu-btn{display:none;}
   .sidebar-overlay{display:none;}
 
   /* Desktop : ouvert par défaut, la classe .desktop-collapsed le réduit en rail d'icônes */
@@ -264,6 +265,8 @@
     .sidebar.mobile-open ~ .sidebar-overlay{display:block;position:fixed;inset:0;background:rgba(4,8,16,.5);z-index:110;}
     .content{padding:16px 14px 50px;}
     .content-topbar{padding:14px 14px 0;}
+    .mobile-menu-btn{display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);flex-shrink:0;margin-right:12px;color:var(--text);}
+    .mobile-menu-btn svg{width:19px;height:19px;}
     .cards-row{gap:10px;}
     .stat-card{min-width:130px;padding:14px 15px;}
     .item-title{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
@@ -334,6 +337,9 @@
 
   <div class="main">
     <div class="content-topbar">
+      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu" type="button">
+        <svg viewBox="0 0 24 24"><use href="#icon-menu"></use></svg>
+      </button>
       <div class="global-search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
         <input type="text" id="global-search-input" placeholder="Rechercher une demande, un message, une facture…" autocomplete="off">
@@ -550,6 +556,7 @@ function toggleSidebar() {
   else sidebar.classList.toggle("desktop-collapsed");
 }
 document.getElementById("sidebar-toggle-btn").addEventListener("click", toggleSidebar);
+document.getElementById("mobile-menu-btn").addEventListener("click", toggleSidebar);
 document.getElementById("sidebar-overlay").addEventListener("click", toggleSidebar);
 
 // ---- NOTIFICATIONS ----
@@ -685,17 +692,19 @@ function toggleNotifPanel() {
 
 // ---- TABLEAU DE BORD ----
 async function chargerTableauDeBord() {
-  const [demandesRes, messagesRes, projetRes, facturesRes] = await Promise.all([
+  const [demandesRes, messagesRes, projetRes, facturesRes, abosRes] = await Promise.all([
     sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false }),
     sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }),
     sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }).limit(1),
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").order("date_echeance", { ascending: true }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
   ]);
 
   const demandes = demandesRes.data || [];
   const messages = messagesRes.data || [];
   const projet = (projetRes.data || [])[0] || null;
   const facturesEnAttente = facturesRes.data || [];
+  const abonnements = abosRes.data || [];
 
   const enCours = demandes.filter(d => d.statut !== "Traité").length;
   const prochaineFacture = facturesEnAttente[0] || null;
@@ -708,12 +717,13 @@ async function chargerTableauDeBord() {
   }
 
   let abonnementCard = "";
-  if (projet && projet.facturation_recurrente) {
+  if (abonnements.length) {
+    const total = abonnements.reduce((s, a) => s + Number(a.montant_recurrent || 0), 0);
     abonnementCard = `
     <div class="stat-card clickable" onclick="showPage('paiements')">
       <div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div>
-      <div class="num">${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(0) + " €" : "—"}</div>
-      <div class="label">Abonnement ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
+      <div class="num">${total.toFixed(0)} €</div>
+      <div class="label">${abonnements.length > 1 ? abonnements.length + " abonnements récurrents" : "Abonnement " + escapeHtml(abonnements[0].frequence_facturation || "récurrent")}</div>
     </div>`;
   }
 
@@ -998,17 +1008,17 @@ async function chargerPaiements() {
     </div>`;
 
   const aboCard = document.getElementById("abo-card");
-  const projet = (projets || [])[0];
-  if (projet) {
+  if (projets && projets.length) {
     aboCard.style.display = "block";
-    document.getElementById("abo-content").innerHTML = `
-      <div class="abo-box">
+    document.querySelector("#abo-card h3").textContent = projets.length > 1 ? "Abonnements récurrents" : "Abonnement récurrent";
+    document.getElementById("abo-content").innerHTML = projets.map(projet => `
+      <div class="abo-box" style="margin-bottom:10px;">
         <div class="abo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#icon-repeat"></use></svg></div>
         <div>
           <div class="abo-title">${escapeHtml(projet.titre || "Abonnement")} — ${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(2) + " €" : "—"} / ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
           <div class="abo-sub">${projet.prochaine_facturation ? "Prochaine facture le " + fmtDateFR(projet.prochaine_facturation) : "Date non définie"}</div>
         </div>
-      </div>`;
+      </div>`).join("");
   } else {
     aboCard.style.display = "none";
   }
