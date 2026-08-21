@@ -489,6 +489,16 @@ function computeNotifications() {
       label: "Demande traitée par le client : " + d.titre, sub: contactLabel(findContact(d.contact_id)), date: d.date_creation || "",
       fn: () => showPage("demandes") });
   });
+  cache.devis.filter(d => d.statut === "Accepté" && d.signature_nom).forEach(d => {
+    items.push({ id: "devis-signe-" + d.id, urgent: false, color: "var(--success)", icon: "icon-file-text",
+      label: "Devis signé électroniquement : " + (d.numero || ""), sub: "Par " + d.signature_nom + " · " + contactLabel(devisContact(d)),
+      date: d.signature_date || "", fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
+  });
+  cache.devis.filter(d => d.statut === "Refusé").forEach(d => {
+    items.push({ id: "devis-refuse-" + d.id, urgent: true, color: "var(--danger)", icon: "icon-file-text",
+      label: "Devis refusé par le client : " + (d.numero || ""), sub: contactLabel(devisContact(d)),
+      date: d.date_creation || "", fn: () => { showPage("devis"); setTimeout(() => openDevisEditor(d.id), 150); } });
+  });
 
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
     items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
@@ -1839,7 +1849,7 @@ function renderDevis() {
 
   if (getView("devis") === "kanban") {
     renderGenericKanban("devis-kanban-view", rows, STATUTS_DEVIS, {
-      table: "devis", cardTitle: d => (d.numero || "Devis") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : ""),
+      table: "devis", cardTitle: d => (d.numero || "Devis") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : "") + (d.signature_nom ? " ✔️" : ""),
       cardSub: d => contactLabel(devisContact(d)), onClickFn: "openDevisEditor",
     });
     return;
@@ -1849,7 +1859,7 @@ function renderDevis() {
   tbody.innerHTML = rows.length ? rows.map(d => {
     const e = devisEvent(d);
     return `<tr>
-      <td>${d.numero || "—"}${d.finalise ? " ✅" : ""}</td>
+      <td>${d.numero || "—"}${d.finalise ? " ✅" : ""}${d.signature_nom ? ` <span title="Signé électroniquement par ${escapeAttr(d.signature_nom)}" style="color:var(--success);">✔️</span>` : ""}</td>
       <td>${e ? eventLabel(e) : "—"}</td>
       <td>${contactLabel(devisContact(d))}</td>
       <td>${fmtDateFR(devisDateEvt(d))}</td>
@@ -1906,7 +1916,10 @@ function openDevisEditor(id) {
     `<strong>Projet :</strong> ${e ? eventLabel(e) : "—"}` +
     `<div style="margin-top:8px;"><label style="font-size:12px;color:var(--muted);">Statut : </label>
       <select id="ed-statut" style="padding:5px 8px;border:1px solid var(--border);border-radius:5px;color:#1A1D24;background:#fff;">
-      ${STATUTS_DEVIS.map(s => `<option value="${s}" ${s === d.statut ? "selected" : ""}>${s}</option>`).join("")}</select></div>`;
+      ${STATUTS_DEVIS.map(s => `<option value="${s}" ${s === d.statut ? "selected" : ""}>${s}</option>`).join("")}</select></div>` +
+    (d.signature_nom ? `<div style="margin-top:10px;padding:9px 12px;background:#F0FAF4;border:1px solid #CDEEDA;border-radius:8px;font-size:12.5px;color:#166534;">
+      ✔ Signé électroniquement par <strong>${escapeAttr(d.signature_nom)}</strong> le ${d.signature_date ? fmtDateFR(d.signature_date.slice(0, 10)) + " à " + d.signature_date.slice(11, 16) : ""}
+    </div>` : "");
   document.getElementById("ed-emetteur").innerHTML =
     `<strong>${EMETTEUR.nom}</strong><br>${EMETTEUR.adresse}<br>${EMETTEUR.siret}<br>${EMETTEUR.email}<br>Tél : ${EMETTEUR.telephone}<br>${EMETTEUR.site}`;
   const logoEl = document.getElementById("ed-logo");
