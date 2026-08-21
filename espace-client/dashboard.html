@@ -190,6 +190,18 @@
   .archive-list.open{display:block;}
   .archive-list .item{opacity:.72;}
 
+  .cat-tabs{display:flex;gap:8px;flex-wrap:wrap;}
+  .cat-tab{border:1px solid var(--border);background:var(--card);padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s;}
+  .cat-tab:hover{border-color:var(--accent);color:var(--text);}
+  .cat-tab.active{color:#fff;border-color:transparent;background:var(--accent);}
+  .kanban-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;}
+  .kanban-col{background:var(--cloud, var(--bg));border-radius:12px;padding:12px;min-width:220px;flex:1;max-width:260px;}
+  .kanban-col h4{margin:0 0 10px;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+  .kanban-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;font-size:12.5px;box-shadow:var(--shadow-sm);}
+  .kanban-card .kc-title{font-weight:700;margin-bottom:3px;}
+  .kanban-card .kc-sub{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
+  .kanban-card .kc-badges{display:flex;gap:5px;flex-wrap:wrap;}
+
   .content-topbar{display:flex;justify-content:flex-end;padding:16px 34px 0;}
   .notif-wrap{position:relative;}
   .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
@@ -304,29 +316,36 @@
       <div class="page" id="page-demandes">
         <div class="page-title">Demandes</div>
         <div class="page-sub">Ce que PCW te demande, et tes propres demandes.</div>
-        <div class="panel" id="panel-demandes-admin" style="display:none;">
-          <h3>Demandes de PCW</h3>
-          <div id="demandes-admin-list"></div>
+        <div class="cat-tabs" id="demande-client-view-tabs" style="margin-bottom:16px;">
+          <button type="button" class="cat-tab active" data-view="liste">Liste</button>
+          <button type="button" class="cat-tab" data-view="kanban">Kanban</button>
         </div>
-        <div class="panel">
-          <h3>Nouvelle demande</h3>
-          <label for="d-titre">Titre</label>
-          <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
-          <label for="d-description">Description</label>
-          <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
-          <label for="d-priorite">Priorité</label>
-          <select id="d-priorite">
-            <option value="Normal">Normal</option>
-            <option value="Urgent">Urgent</option>
-            <option value="Faible">Faible</option>
-          </select>
-          <button class="btn" onclick="creerDemande()">Envoyer la demande</button>
-          <div id="demande-msg"></div>
+        <div id="demandes-liste-wrap">
+          <div class="panel" id="panel-demandes-admin" style="display:none;">
+            <h3>Demandes de PCW</h3>
+            <div id="demandes-admin-list"></div>
+          </div>
+          <div class="panel">
+            <h3>Nouvelle demande</h3>
+            <label for="d-titre">Titre</label>
+            <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
+            <label for="d-description">Description</label>
+            <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
+            <label for="d-priorite">Priorité</label>
+            <select id="d-priorite">
+              <option value="Normal">Normal</option>
+              <option value="Urgent">Urgent</option>
+              <option value="Faible">Faible</option>
+            </select>
+            <button class="btn" onclick="creerDemande()">Envoyer la demande</button>
+            <div id="demande-msg"></div>
+          </div>
+          <div class="panel">
+            <h3>Mes demandes</h3>
+            <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
+          </div>
         </div>
-        <div class="panel">
-          <h3>Mes demandes</h3>
-          <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
-        </div>
+        <div id="demandes-kanban-view" class="kanban-board" style="display:none;"></div>
       </div>
 
       <!-- MESSAGES -->
@@ -385,8 +404,18 @@
       <div class="page" id="page-documents">
         <div class="page-title">Devis & Factures</div>
         <div class="page-sub">Tous tes documents, dans l'ordre chronologique.</div>
-        <div class="panel">
+        <div class="cat-tabs" id="documents-view-tabs" style="margin-bottom:16px;">
+          <button type="button" class="cat-tab active" data-view="liste">Chronologique</button>
+          <button type="button" class="cat-tab" data-view="kanban">Kanban</button>
+        </div>
+        <div class="panel" id="documents-liste-wrap">
           <div class="timeline" id="documents-timeline"><div class="empty-state">Chargement…</div></div>
+        </div>
+        <div id="documents-kanban-view" style="display:none;">
+          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px;">Devis</h3>
+          <div id="devis-kanban-client" class="kanban-board" style="margin-bottom:22px;"></div>
+          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px;">Factures</h3>
+          <div id="factures-kanban-client" class="kanban-board"></div>
         </div>
       </div>
 
@@ -722,6 +751,7 @@ function toggleArchive(id) {
 }
 
 async function chargerDemandes() {
+  bindDemandeClientViewTabs();
   const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
   const elClient = document.getElementById("demandes-list");
   const elAdmin = document.getElementById("demandes-admin-list");
@@ -765,7 +795,43 @@ async function chargerDemandes() {
 
 async function marquerDemandeAdminTraitee(id) {
   const { error } = await sb.from("demandes").update({ statut: "Traité" }).eq("id", id);
-  if (!error) { chargerDemandes(); refreshNotifs(); }
+  if (!error) { chargerDemandes(); refreshNotifs(); renderDemandesKanban(); }
+}
+
+let demandeClientView = "liste";
+function bindDemandeClientViewTabs() {
+  const wrap = document.getElementById("demande-client-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      demandeClientView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("demandes-liste-wrap").style.display = demandeClientView === "liste" ? "block" : "none";
+      document.getElementById("demandes-kanban-view").style.display = demandeClientView === "kanban" ? "flex" : "none";
+      if (demandeClientView === "kanban") renderDemandesKanban();
+    });
+  });
+}
+async function renderDemandesKanban() {
+  const { data } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
+  const rows = data || [];
+  const statuts = ["Nouveau", "En cours", "Traité"];
+  const wrap = document.getElementById("demandes-kanban-view");
+  wrap.innerHTML = statuts.map(statut => {
+    const items = rows.filter(d => d.statut === statut);
+    const color = PILL_STATUT_DEMANDE[statut] || "var(--muted)";
+    const cards = items.map(d => `
+      <div class="kanban-card" style="border-left:3px solid ${PILL_PRIORITE[d.priorite] || "var(--muted)"};">
+        <div class="kc-title">${escapeHtml(d.titre)}</div>
+        <div class="kc-sub">${d.sens === "admin" ? "→ Demande de PCW" : "← Ta demande"}</div>
+        ${d.sens === "admin" && d.statut !== "Traité" ? `<div class="kc-badges"><button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer traité</button></div>` : ""}
+      </div>`).join("");
+    return `<div class="kanban-col" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
+    </div>`;
+  }).join("");
 }
 
 // ---- MESSAGES ----
@@ -992,11 +1058,67 @@ async function chargerProjet() {
 }
 
 // ---- DEVIS & FACTURES ----
+const STATUT_DEVIS_COLORS = { "En attente": "var(--info)", "Envoyé": "var(--warning)", "Accepté": "var(--success)", "Refusé": "var(--danger)", "Expiré": "var(--muted)" };
+const STATUT_FACTURE_COLORS = { "Brouillon": "var(--muted)", "Envoyée": "var(--warning)", "Payée": "var(--success)", "En retard": "var(--danger)", "Annulée": "var(--muted)" };
+let lastDevisData = [], lastFacturesData = [];
+
+let documentsView = "liste";
+function bindDocumentsViewTabs() {
+  const wrap = document.getElementById("documents-view-tabs");
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = "1";
+  wrap.querySelectorAll(".cat-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      documentsView = btn.dataset.view;
+      wrap.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("documents-liste-wrap").style.display = documentsView === "liste" ? "block" : "none";
+      document.getElementById("documents-kanban-view").style.display = documentsView === "kanban" ? "block" : "none";
+      if (documentsView === "kanban") renderDocumentsKanban();
+    });
+  });
+}
+function renderDocumentsKanban() {
+  const statutsDevis = ["En attente", "Envoyé", "Accepté", "Refusé", "Expiré"];
+  const statutsFactures = ["Brouillon", "Envoyée", "Payée", "En retard", "Annulée"];
+
+  document.getElementById("devis-kanban-client").innerHTML = statutsDevis.map(statut => {
+    const items = lastDevisData.filter(d => d.statut === statut);
+    const color = STATUT_DEVIS_COLORS[statut] || "var(--muted)";
+    const cards = items.map(d => `
+      <div class="kanban-card" onclick='voirDevisPDF(${d.id}, "preview")' style="cursor:pointer;">
+        <div class="kc-title">${escapeHtml(d.numero || "Devis")}</div>
+        <div class="kc-sub">${d.montant_ttc ? Number(d.montant_ttc).toFixed(2) + " €" : ""}</div>
+      </div>`).join("");
+    return `<div class="kanban-col" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("factures-kanban-client").innerHTML = statutsFactures.map(statut => {
+    const items = lastFacturesData.filter(f => f.statut === statut);
+    const color = STATUT_FACTURE_COLORS[statut] || "var(--muted)";
+    const cards = items.map(f => `
+      <div class="kanban-card" onclick='voirFacturePDF(${f.id}, "preview")' style="cursor:pointer;">
+        <div class="kc-title">${escapeHtml(f.numero || "Facture")}</div>
+        <div class="kc-sub">${f.montant_ttc ? Number(f.montant_ttc).toFixed(2) + " €" : ""}</div>
+      </div>`).join("");
+    return `<div class="kanban-col" style="border-top:3px solid ${color};">
+      <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${statut} <span>${items.length}</span></h4>
+      <div class="kanban-col-body">${cards || '<div class="empty-state" style="padding:10px;font-size:12px;">Vide</div>'}</div>
+    </div>`;
+  }).join("");
+}
+
 async function chargerDocuments() {
+  bindDocumentsViewTabs();
   const [{ data: devis }, { data: factures }] = await Promise.all([
     sb.from("devis").select("*").eq("contact_id", myContact.id),
     sb.from("factures").select("*").eq("contact_id", myContact.id),
   ]);
+  lastDevisData = devis || [];
+  lastFacturesData = factures || [];
+  if (documentsView === "kanban") renderDocumentsKanban();
 
   const items = [
     ...(devis || []).map(d => ({ type: "devis", date: d.date_creation, row: d })),
