@@ -481,6 +481,19 @@ const ETAPES_LABELS = { maquette: "Maquette", developpement: "Développement", r
 const PILL_PRIORITE = { Urgent: "var(--danger)", Normal: "var(--warning)", Faible: "var(--success)" };
 const PILL_STATUT_DEMANDE = { "Nouveau": "var(--info)", "En cours": "var(--warning)", "Traité": "var(--success)" };
 
+// Aplatit un projet en 0, 1 ou 2 "abonnements" (un projet peut avoir un
+// abonnement mensuel ET un abonnement annuel en parallèle).
+function abonnementsDe(e) {
+  const list = [];
+  if (e.facturation_recurrente && e.montant_recurrent) {
+    list.push({ titre: e.titre, montant: Number(e.montant_recurrent), frequence: e.frequence_facturation || "Mensuelle", prochaine: e.prochaine_facturation });
+  }
+  if (e.facturation_recurrente_2 && e.montant_recurrent_2) {
+    list.push({ titre: e.titre, montant: Number(e.montant_recurrent_2), frequence: e.frequence_facturation_2 || "Annuelle", prochaine: e.prochaine_facturation_2 });
+  }
+  return list;
+}
+
 function escapeHtml(str) {
   if (str == null) return "";
   const div = document.createElement("div");
@@ -591,7 +604,7 @@ async function computeNotifications() {
     sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("sens", "admin").neq("statut", "Traité"),
     sb.from("devis").select("*").eq("contact_id", myContact.id).in("statut", ["En attente", "Envoyé"]),
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée"),
-    sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
   ]);
 
   (demandesAdmin || []).forEach(d => {
@@ -697,7 +710,7 @@ async function chargerTableauDeBord() {
     sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }),
     sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }).limit(1),
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").order("date_echeance", { ascending: true }),
-    sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
   ]);
 
   const demandes = demandesRes.data || [];
@@ -717,13 +730,14 @@ async function chargerTableauDeBord() {
   }
 
   let abonnementCard = "";
-  if (abonnements.length) {
-    const total = abonnements.reduce((s, a) => s + Number(a.montant_recurrent || 0), 0);
+  const abonnementsProjet = abonnements.flatMap(abonnementsDe);
+  if (abonnementsProjet.length) {
+    const total = abonnementsProjet.reduce((s, a) => s + a.montant, 0);
     abonnementCard = `
     <div class="stat-card clickable" onclick="showPage('paiements')">
       <div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div>
       <div class="num">${total.toFixed(0)} €</div>
-      <div class="label">${abonnements.length > 1 ? abonnements.length + " abonnements récurrents" : "Abonnement " + escapeHtml(abonnements[0].frequence_facturation || "récurrent")}</div>
+      <div class="label">${abonnementsProjet.length > 1 ? abonnementsProjet.length + " abonnements récurrents" : "Abonnement " + escapeHtml(abonnementsProjet[0].frequence || "récurrent")}</div>
     </div>`;
   }
 
@@ -983,7 +997,7 @@ async function chargerPaiements() {
   const today = new Date().toISOString().slice(0, 10);
   const [{ data: factures }, { data: projets }] = await Promise.all([
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée").order("date_echeance", { ascending: true }),
-    sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
   ]);
 
   const list = factures || [];
@@ -1008,15 +1022,16 @@ async function chargerPaiements() {
     </div>`;
 
   const aboCard = document.getElementById("abo-card");
-  if (projets && projets.length) {
+  const abonnementsListe = (projets || []).flatMap(abonnementsDe);
+  if (abonnementsListe.length) {
     aboCard.style.display = "block";
-    document.querySelector("#abo-card h3").textContent = projets.length > 1 ? "Abonnements récurrents" : "Abonnement récurrent";
-    document.getElementById("abo-content").innerHTML = projets.map(projet => `
+    document.querySelector("#abo-card h3").textContent = abonnementsListe.length > 1 ? "Abonnements récurrents" : "Abonnement récurrent";
+    document.getElementById("abo-content").innerHTML = abonnementsListe.map(a => `
       <div class="abo-box" style="margin-bottom:10px;">
         <div class="abo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#icon-repeat"></use></svg></div>
         <div>
-          <div class="abo-title">${escapeHtml(projet.titre || "Abonnement")} — ${projet.montant_recurrent ? Number(projet.montant_recurrent).toFixed(2) + " €" : "—"} / ${escapeHtml(projet.frequence_facturation || "récurrent")}</div>
-          <div class="abo-sub">${projet.prochaine_facturation ? "Prochaine facture le " + fmtDateFR(projet.prochaine_facturation) : "Date non définie"}</div>
+          <div class="abo-title">${escapeHtml(a.titre || "Abonnement")} — ${a.montant.toFixed(2)} € / ${escapeHtml(a.frequence)}</div>
+          <div class="abo-sub">${a.prochaine ? "Prochaine facture le " + fmtDateFR(a.prochaine) : "Date non définie"}</div>
         </div>
       </div>`).join("");
   } else {
