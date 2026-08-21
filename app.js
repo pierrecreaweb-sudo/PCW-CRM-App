@@ -1328,28 +1328,41 @@ function openMergeContactDialog(sourceId) {
   if (!autres.length) { showToast("Aucun autre contact vers lequel fusionner"); return; }
   const html = `
     <div class="field">
-      <label>Fusionner "${escapeAttr(contactLabel(source))}" vers :</label>
+      <label>Fusionner "${escapeAttr(contactLabel(source))}"${source.client_user_id ? " (a un compte client)" : ""} vers :</label>
       <select id="merge-target-select">
-        ${autres.map(c => `<option value="${c.id}">${escapeAttr(contactLabel(c))}${c.email ? " — " + escapeAttr(c.email) : ""}</option>`).join("")}
+        ${autres.map(c => `<option value="${c.id}">${escapeAttr(contactLabel(c))}${c.email ? " — " + escapeAttr(c.email) : ""}${c.client_user_id ? " ⚡ a un compte client" : ""}</option>`).join("")}
       </select>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-top:10px;">
       Tous les projets, devis, factures, RDV, demandes, messages et fichiers de "${escapeAttr(contactLabel(source))}"
       seront transférés vers le contact sélectionné, puis cette fiche sera supprimée. Cette action est irréversible.
+      ${source.client_user_id ? "<br><br>⚡ Cette fiche a un compte client relié — s'il fusionne vers une fiche qui en a déjà un autre, tu seras prévenu(e) avant de valider." : ""}
     </div>`;
   openRawModal("Fusionner ce contact", html, async () => {
     const targetId = Number(document.getElementById("merge-target-select").value);
     if (!targetId) return;
+    const target = findContact(targetId);
+
+    // Sécurité : si la fiche source ET la fiche cible sont TOUTES LES DEUX reliées
+    // à un compte client différent, on ne fusionne pas automatiquement — l'un des
+    // deux liens serait perdu silencieusement. On demande confirmation explicite.
+    if (source.client_user_id && target && target.client_user_id && target.client_user_id !== source.client_user_id) {
+      const choix = confirm(
+        `⚠️ Attention : "${contactLabel(source)}" ET "${contactLabel(target)}" ont chacun leur propre compte client relié.\n\n` +
+        `Fusionner va GARDER le compte de "${contactLabel(target)}" et SUPPRIMER l'accès au compte de "${contactLabel(source)}" ` +
+        `(son compte existera toujours mais ne sera plus relié à aucune fiche).\n\n` +
+        `Continuer quand même ?`
+      );
+      if (!choix) return;
+    }
+
     for (const table of CONTACT_FK_TABLES) {
       const { error } = await sb.from(table).update({ contact_id: targetId }).eq("contact_id", sourceId);
       if (error) { showToast("Erreur pendant la fusion (" + table + ") : " + error.message); return; }
     }
     // Si la fiche source était reliée à un compte client et que la cible ne l'est pas encore, on transfère le lien.
-    if (source.client_user_id) {
-      const target = findContact(targetId);
-      if (target && !target.client_user_id) {
-        await sb.from("contacts").update({ client_user_id: source.client_user_id }).eq("id", targetId);
-      }
+    if (source.client_user_id && target && !target.client_user_id) {
+      await sb.from("contacts").update({ client_user_id: source.client_user_id }).eq("id", targetId);
     }
     const { error: delError } = await sb.from("contacts").delete().eq("id", sourceId);
     if (delError) { showToast("Fusion partielle : impossible de supprimer l'ancienne fiche (" + delError.message + ")"); }
