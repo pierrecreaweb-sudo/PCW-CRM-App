@@ -179,6 +179,17 @@
   .project-name{font-size:15px;font-weight:800;margin-bottom:4px;}
   .project-sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
 
+  .archive-toggle{
+    display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--muted);
+    font-size:12px;font-weight:600;padding:10px 0 2px;cursor:pointer;width:100%;text-align:left;
+  }
+  .archive-toggle:hover{color:var(--accent-dark);}
+  .archive-toggle svg{width:13px;height:13px;transition:transform .15s;}
+  .archive-toggle.open svg{transform:rotate(90deg);}
+  .archive-list{display:none;margin-top:6px;}
+  .archive-list.open{display:block;}
+  .archive-list .item{opacity:.72;}
+
   .content-topbar{display:flex;justify-content:flex-end;padding:16px 34px 0;}
   .notif-wrap{position:relative;}
   .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
@@ -689,6 +700,27 @@ async function creerDemande() {
   chargerDemandes();
 }
 
+function renderDemandeItem(d, withActions) {
+  return `
+    <div class="item">
+      <div class="item-title">${escapeHtml(d.titre)}
+        <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
+        <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
+      </div>
+      ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
+      <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
+      ${withActions && d.statut !== "Traité" ? `<div class="item-actions">
+        <button class="btn-pdf" onclick="showPage('fichiers')">Envoyer un fichier</button>
+        <button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer comme traité</button>
+      </div>` : ""}
+    </div>`;
+}
+
+function toggleArchive(id) {
+  document.getElementById(id).classList.toggle("open");
+  document.getElementById(id + "-toggle").classList.toggle("open");
+}
+
 async function chargerDemandes() {
   const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
   const elClient = document.getElementById("demandes-list");
@@ -698,38 +730,36 @@ async function chargerDemandes() {
 
   const demandesClient = (data || []).filter(d => d.sens !== "admin");
   const demandesAdmin = (data || []).filter(d => d.sens === "admin");
+  const clientActives = demandesClient.filter(d => d.statut !== "Traité");
+  const clientArchivees = demandesClient.filter(d => d.statut === "Traité");
+  const adminActives = demandesAdmin.filter(d => d.statut !== "Traité");
+  const adminArchivees = demandesAdmin.filter(d => d.statut === "Traité");
 
   if (demandesClient.length === 0) {
     elClient.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Aucune demande pour le moment.</div>';
   } else {
-    elClient.innerHTML = demandesClient.map(d => `
-      <div class="item">
-        <div class="item-title">${escapeHtml(d.titre)}
-          <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
-          <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
-        </div>
-        ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
-        <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
-      </div>`).join("");
+    elClient.innerHTML =
+      (clientActives.length ? clientActives.map(d => renderDemandeItem(d, false)).join("") : '<div class="empty-state" style="padding:16px;">Aucune demande active.</div>') +
+      (clientArchivees.length ? `
+        <button class="archive-toggle" id="archive-client-toggle" onclick="toggleArchive('archive-client')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          ${clientArchivees.length} demande(s) traitée(s) — voir l'archive
+        </button>
+        <div class="archive-list" id="archive-client">${clientArchivees.map(d => renderDemandeItem(d, false)).join("")}</div>` : "");
   }
 
   if (demandesAdmin.length === 0) {
     panelAdmin.style.display = "none";
   } else {
     panelAdmin.style.display = "block";
-    elAdmin.innerHTML = demandesAdmin.map(d => `
-      <div class="item">
-        <div class="item-title">${escapeHtml(d.titre)}
-          <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
-          <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
-        </div>
-        ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
-        <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
-        ${d.statut !== "Traité" ? `<div class="item-actions">
-          <button class="btn-pdf" onclick="showPage('fichiers')">Envoyer un fichier</button>
-          <button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer comme traité</button>
-        </div>` : ""}
-      </div>`).join("");
+    elAdmin.innerHTML =
+      (adminActives.length ? adminActives.map(d => renderDemandeItem(d, true)).join("") : '<div class="empty-state" style="padding:16px;">Aucune demande active.</div>') +
+      (adminArchivees.length ? `
+        <button class="archive-toggle" id="archive-admin-toggle" onclick="toggleArchive('archive-admin')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          ${adminArchivees.length} demande(s) traitée(s) — voir l'archive
+        </button>
+        <div class="archive-list" id="archive-admin">${adminArchivees.map(d => renderDemandeItem(d, true)).join("")}</div>` : "");
   }
 }
 
