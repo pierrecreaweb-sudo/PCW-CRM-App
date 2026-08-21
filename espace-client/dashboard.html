@@ -291,8 +291,12 @@
 
       <!-- DEMANDES -->
       <div class="page" id="page-demandes">
-        <div class="page-title">Mes demandes</div>
-        <div class="page-sub">Envoie une demande de modification ou une question à PCW.</div>
+        <div class="page-title">Demandes</div>
+        <div class="page-sub">Ce que PCW te demande, et tes propres demandes.</div>
+        <div class="panel" id="panel-demandes-admin" style="display:none;">
+          <h3>Demandes de PCW</h3>
+          <div id="demandes-admin-list"></div>
+        </div>
         <div class="panel">
           <h3>Nouvelle demande</h3>
           <label for="d-titre">Titre</label>
@@ -309,7 +313,7 @@
           <div id="demande-msg"></div>
         </div>
         <div class="panel">
-          <h3>Historique</h3>
+          <h3>Mes demandes</h3>
           <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
         </div>
       </div>
@@ -482,13 +486,20 @@ async function computeNotifications() {
   const today = new Date().toISOString().slice(0, 10);
   const items = [];
 
-  const [{ data: messages }, { data: demandes }, { data: devis }, { data: factures }, { data: projets }] = await Promise.all([
+  const [{ data: messages }, { data: demandes }, { data: demandesAdmin }, { data: devis }, { data: factures }, { data: projets }] = await Promise.all([
     sb.from("messages").select("*").eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false).order("id", { ascending: false }),
-    sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("statut", "Traité"),
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("statut", "Traité").neq("sens", "admin"),
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("sens", "admin").neq("statut", "Traité"),
     sb.from("devis").select("*").eq("contact_id", myContact.id).in("statut", ["En attente", "Envoyé"]),
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée"),
     sb.from("evenements").select("*").eq("contact_id", myContact.id).eq("facturation_recurrente", true),
   ]);
+
+  (demandesAdmin || []).forEach(d => {
+    items.push({ id: "demande-admin-" + d.id, urgent: d.priorite === "Urgent", color: "var(--tertiary)", icon: "icon-check-square",
+      label: "PCW te demande : " + d.titre, sub: d.description || "", date: d.date_creation || "",
+      fn: () => showPage("demandes") });
+  });
 
   (messages || []).forEach(m => {
     items.push({ id: "msg-" + m.id, urgent: true, color: "var(--info)", icon: "icon-mail",
@@ -666,7 +677,7 @@ async function creerDemande() {
   if (!titre) { msgEl.innerHTML = '<div class="error-msg">Merci d\'indiquer un titre.</div>'; return; }
 
   const { error } = await sb.from("demandes").insert({
-    contact_id: myContact.id, titre, description, priorite,
+    contact_id: myContact.id, titre, description, priorite, sens: "client",
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
   if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
@@ -679,21 +690,51 @@ async function creerDemande() {
 
 async function chargerDemandes() {
   const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
-  const el = document.getElementById("demandes-list");
-  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
-  if (!data || data.length === 0) {
-    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Aucune demande pour le moment.</div>';
-    return;
+  const elClient = document.getElementById("demandes-list");
+  const elAdmin = document.getElementById("demandes-admin-list");
+  const panelAdmin = document.getElementById("panel-demandes-admin");
+  if (error) { elClient.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+
+  const demandesClient = (data || []).filter(d => d.sens !== "admin");
+  const demandesAdmin = (data || []).filter(d => d.sens === "admin");
+
+  if (demandesClient.length === 0) {
+    elClient.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Aucune demande pour le moment.</div>';
+  } else {
+    elClient.innerHTML = demandesClient.map(d => `
+      <div class="item">
+        <div class="item-title">${escapeHtml(d.titre)}
+          <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
+          <span class="badge subtle">${escapeHtml(d.statut)}</span>
+        </div>
+        ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
+        <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
+      </div>`).join("");
   }
-  el.innerHTML = data.map(d => `
-    <div class="item">
-      <div class="item-title">${escapeHtml(d.titre)}
-        <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
-        <span class="badge subtle">${escapeHtml(d.statut)}</span>
-      </div>
-      ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
-      <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
-    </div>`).join("");
+
+  if (demandesAdmin.length === 0) {
+    panelAdmin.style.display = "none";
+  } else {
+    panelAdmin.style.display = "block";
+    elAdmin.innerHTML = demandesAdmin.map(d => `
+      <div class="item">
+        <div class="item-title">${escapeHtml(d.titre)}
+          <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
+          <span class="badge subtle">${escapeHtml(d.statut)}</span>
+        </div>
+        ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
+        <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
+        ${d.statut !== "Traité" ? `<div class="item-actions">
+          <button class="btn-pdf" onclick="showPage('fichiers')">Envoyer un fichier</button>
+          <button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer comme traité</button>
+        </div>` : ""}
+      </div>`).join("");
+  }
+}
+
+async function marquerDemandeAdminTraitee(id) {
+  const { error } = await sb.from("demandes").update({ statut: "Traité" }).eq("id", id);
+  if (!error) { chargerDemandes(); refreshNotifs(); }
 }
 
 // ---- MESSAGES ----
