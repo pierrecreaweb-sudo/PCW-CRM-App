@@ -2493,19 +2493,40 @@ function renderDemandes() {
   const tbody = document.getElementById("demandes-tbody");
   tbody.innerHTML = rows.length ? rows.map(d => `
     <tr>
+      <td>${d.sens === "admin" ? `<span class="badge" style="background:var(--tertiary);">→ Client</span>` : `<span class="badge subtle">← Client</span>`}</td>
       <td>${statusSelectInline("demandes", d.id, d.priorite, PRIORITES_DEMANDES, STATUT_COLORS, "priorite")}</td>
       <td>${escapeHtml(d.titre)}</td>
       <td>${contactLabel(findContact(d.contact_id))}</td>
       <td>${escapeHtml(d.description || "—")}</td>
       <td>${d.date_creation ? d.date_creation.slice(0, 10).split("-").reverse().join("/") : "—"}</td>
       <td>${statusSelectInline("demandes", d.id, d.statut, STATUTS_DEMANDES, STATUT_COLORS, "statut")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucune demande client</td></tr>`;
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">Aucune demande</td></tr>`;
 }
 function escapeHtml(str) {
   if (str == null) return "";
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function openDemandeAdminDialog() {
+  openModal({
+    title: "Demander quelque chose à un client",
+    table: "demandes",
+    fields: [
+      { key: "contact_id", label: "Client concerné", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(null), value: null, numeric: true, required: true },
+      { key: "titre", label: "Titre", type: "text", placeholder: "Ex : Photos du gîte pour le site" },
+      { key: "description", label: "Détail de la demande", type: "textarea", placeholder: "Ex : J'ai besoin de 5 à 10 photos en haute résolution de l'extérieur et des chambres pour finaliser le site." },
+      { key: "priorite", label: "Priorité", type: "select", options: PRIORITES_DEMANDES, value: "Normal" },
+    ],
+    beforeSave: (values) => {
+      values.sens = "admin";
+      values.statut = "Nouveau";
+      values.date_creation = nowStr();
+      return true;
+    },
+    onSaved: () => { showToast("Demande envoyée au client"); refreshAll(); },
+  });
 }
 
 // ========================================================================
@@ -3136,6 +3157,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("demande-filter-priorite").addEventListener("change", renderDemandes);
   document.getElementById("demande-filter-statut").addEventListener("change", renderDemandes);
+  document.getElementById("btn-new-demande-admin").addEventListener("click", openDemandeAdminDialog);
 
   document.getElementById("sc-devis").addEventListener("click", () => openDevisDialog(null));
   document.getElementById("sc-facture").addEventListener("click", () => openFactureDialog(null));
