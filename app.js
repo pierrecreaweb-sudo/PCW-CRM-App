@@ -107,6 +107,22 @@ const STATUT_COLORS = {
 const STATUTS_DEMANDES = ["Nouveau", "En cours", "Traité"];
 const PRIORITES_DEMANDES = ["Urgent", "Normal", "Faible"];
 
+const ETAPES_PROJET = [
+  { value: "maquette", label: "Maquette" },
+  { value: "developpement", label: "Développement" },
+  { value: "revisions", label: "Révisions" },
+  { value: "mise_en_ligne", label: "Mise en ligne" },
+  { value: "termine", label: "Terminé" },
+];
+const ETAPE_COLORS = { maquette: "var(--info)", developpement: "var(--warning)", revisions: "var(--tertiary)", mise_en_ligne: "var(--accent)", termine: "var(--success)" };
+function etapeSelectInline(id, value) {
+  const v = value || "maquette";
+  const color = ETAPE_COLORS[v] || "var(--muted)";
+  return `<select class="badge-select" data-table="evenements" data-id="${id}" data-field="etape_projet" style="background:${color};" onclick="event.stopPropagation()" onchange="updateStatutInline(this)">
+    ${ETAPES_PROJET.map(e => `<option value="${e.value}" ${e.value === v ? "selected" : ""}>${e.label}</option>`).join("")}
+  </select>`;
+}
+
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
 let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [] };
@@ -2230,6 +2246,7 @@ function renderEvenements() {
       <td>${e.type_evenement || "—"}</td>
       <td>${e.type_prestation || "—"}</td>
       <td>${statusSelectInline("evenements", e.id, e.statut, STATUTS_EVENEMENT, STATUT_COLORS)}</td>
+      <td>${etapeSelectInline(e.id, e.etape_projet)}</td>
       <td>${dev ? statusSelectInlineSubtle("devis", dev.id, dev.statut, STATUTS_DEVIS, STATUT_COLORS) : "—"}</td>
       <td>${fac ? statusSelectInlineSubtle("factures", fac.id, fac.statut, STATUTS_FACTURE, STATUT_COLORS) : "—"}</td>
       <td>${e.derniere_action || "—"}</td>
@@ -2238,7 +2255,7 @@ function renderEvenements() {
         <button onclick="openEvenementDialog(${e.id})">✎</button>
         <button onclick="confirmDelete('evenements', ${e.id}, renderEvenements)">🗑</button>
       </td></tr>`;
-  }).join("") : `<tr class="empty-row"><td colspan="11">Aucun projet</td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="12">Aucun projet</td></tr>`;
 }
 
 function syncRecurringFromOptions(form, pickedOptions) {
@@ -2295,6 +2312,8 @@ function openEvenementDialog(id, defaultDate) {
       { key: "options", label: "Options du projet", type: "options-picker", value: row.options },
       { key: "type_prestation", label: "Formule(s)", type: "checklist", options: TYPES_PRESTATION, value: row.type_prestation },
       { key: "statut", label: "Statut", type: "select", options: STATUTS_EVENEMENT, value: row.statut || "Premier contact" },
+      { key: "etape_projet", label: "Étape (visible par le client)", type: "select-raw", optionsHtml: ETAPES_PROJET.map(e => `<option value="${e.value}" ${e.value === (row.etape_projet || "maquette") ? "selected" : ""}>${e.label}</option>`).join(""), value: row.etape_projet || "maquette" },
+      { key: "date_livraison_estimee", label: "Date de livraison estimée (visible par le client)", type: "date", value: row.date_livraison_estimee },
       { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">—</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
       { key: "facture_id", label: "Facture liée", type: "select-raw", optionsHtml: `<option value="">—</option>` + factureOptionsHtml(row.facture_id), value: row.facture_id, numeric: true },
       { key: "facturation_recurrente", label: "Facturation récurrente (mensuelle/annuelle)", type: "checkbox", value: row.facturation_recurrente },
