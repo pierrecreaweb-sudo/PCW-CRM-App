@@ -48,11 +48,16 @@
     <p class="sub" id="card-lead">Espace Client PCW — accède à ton compte</p>
     <div class="auth-error" id="login-msg"></div>
     <div class="auth-error" id="signup-msg"></div>
+    <div class="auth-error" id="reset-msg"></div>
+    <div class="auth-error" id="reset-confirm-msg"></div>
 
     <div id="form-login">
       <input type="email" id="login-email" placeholder="Adresse email" autocomplete="username">
       <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password">
       <button class="primary" onclick="login()">Se connecter</button>
+      <div class="auth-switch">
+        <a onclick="switchTab('reset')">Mot de passe oublié ?</a>
+      </div>
       <div class="auth-switch">
         <span>Pas encore de compte ?</span>
         <a onclick="switchTab('signup')">Créer un compte</a>
@@ -68,6 +73,20 @@
         <a onclick="switchTab('login')">← Retour à la connexion</a>
       </div>
     </div>
+
+    <div id="form-reset" style="display:none;">
+      <input type="email" id="reset-email" placeholder="Adresse email" autocomplete="username">
+      <button class="primary" onclick="requestReset()">Envoyer le lien</button>
+      <div class="auth-switch">
+        <a onclick="switchTab('login')">← Retour à la connexion</a>
+      </div>
+    </div>
+
+    <div id="form-reset-confirm" style="display:none;">
+      <input type="password" id="reset-password" placeholder="Nouveau mot de passe" autocomplete="new-password">
+      <input type="password" id="reset-password2" placeholder="Confirmer le nouveau mot de passe" autocomplete="new-password">
+      <button class="primary" onclick="confirmReset()">Réinitialiser le mot de passe</button>
+    </div>
   </div>
 </div>
 
@@ -78,19 +97,47 @@ const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function switchTab(tab) {
-  const isLogin = tab === "login";
-  document.getElementById("form-login").style.display = isLogin ? "block" : "none";
-  document.getElementById("form-signup").style.display = isLogin ? "none" : "block";
-  document.getElementById("card-title").textContent = isLogin ? "Connexion" : "Créer un compte";
-  document.getElementById("card-lead").textContent = isLogin ? "Espace Client PCW — accède à ton compte" : "Rejoins ton espace client Pierre Créa Web.";
-  document.getElementById("login-msg").style.display = "none";
-  document.getElementById("signup-msg").style.display = "none";
+  document.getElementById("form-login").style.display = tab === "login" ? "block" : "none";
+  document.getElementById("form-signup").style.display = tab === "signup" ? "block" : "none";
+  document.getElementById("form-reset").style.display = tab === "reset" ? "block" : "none";
+  document.getElementById("form-reset-confirm").style.display = tab === "reset-confirm" ? "block" : "none";
+  const titles = {
+    login: ["Connexion", "Espace Client PCW — accède à ton compte"],
+    signup: ["Créer un compte", "Rejoins ton espace client Pierre Créa Web."],
+    reset: ["Mot de passe oublié", "Reçois un lien pour choisir un nouveau mot de passe"],
+    "reset-confirm": ["Nouveau mot de passe", "Choisis un nouveau mot de passe pour ton compte"],
+  };
+  document.getElementById("card-title").textContent = titles[tab][0];
+  document.getElementById("card-lead").textContent = titles[tab][1];
+  ["login-msg", "signup-msg", "reset-msg", "reset-confirm-msg"].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display = "none"; el.className = "auth-error";
+  });
 }
 
-function showMsg(id, text) {
+function showMsg(id, text, isSuccess) {
   const el = document.getElementById(id);
   el.textContent = text;
+  el.className = isSuccess ? "auth-success" : "auth-error";
   el.style.display = "block";
+}
+
+async function requestReset() {
+  const email = document.getElementById("reset-email").value.trim();
+  if (!email) { showMsg("reset-msg", "Renseigne ton adresse email."); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split("#")[0].split("?")[0] });
+  if (error) { showMsg("reset-msg", error.message); return; }
+  showMsg("reset-msg", "Email envoyé ! Vérifie ta boîte mail (et tes spams) et clique sur le lien reçu.", true);
+}
+
+async function confirmReset() {
+  const password = document.getElementById("reset-password").value;
+  const password2 = document.getElementById("reset-password2").value;
+  if (!password || password.length < 6) { showMsg("reset-confirm-msg", "Le mot de passe doit faire au moins 6 caractères."); return; }
+  if (password !== password2) { showMsg("reset-confirm-msg", "Les deux mots de passe ne correspondent pas."); return; }
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) { showMsg("reset-confirm-msg", error.message); return; }
+  window.location.href = "dashboard.html";
 }
 
 async function login() {
@@ -160,9 +207,17 @@ function finishSignup(session) {
   else showMsg("signup-msg", "Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi.");
 }
 
+let isRecoveryFlow = false;
+sb.auth.onAuthStateChange((event) => {
+  if (event === "PASSWORD_RECOVERY") {
+    isRecoveryFlow = true;
+    switchTab("reset-confirm");
+  }
+});
+
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
-  if (session) window.location.href = "dashboard.html";
+  if (session && !isRecoveryFlow) window.location.href = "dashboard.html";
 })();
 
 if ("serviceWorker" in navigator) {
