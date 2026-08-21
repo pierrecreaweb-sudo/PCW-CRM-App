@@ -125,7 +125,7 @@ function etapeSelectInline(id, value) {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [], admin_dismissed_notifs: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -253,7 +253,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients, dismissedNotifs] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -268,8 +268,9 @@ async function refreshCache() {
     fetchAll("demandes"),
     fetchAll("messages", "id", true),
     fetchAll("fichiers_clients", "id", true),
+    fetchAll("admin_dismissed_notifs", "id", true),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients, admin_dismissed_notifs: dismissedNotifs };
   updateNavBadgeMessages();
 }
 
@@ -547,19 +548,23 @@ function updateNotifBadge() {
   if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 99 ? "99+" : count; }
   else { badge.style.display = "none"; }
 }
-const DISMISSED_NOTIFS_KEY = "pcw_dismissed_notifs";
 function getDismissedNotifs() {
-  try { return JSON.parse(localStorage.getItem(DISMISSED_NOTIFS_KEY)) || []; } catch (e) { return []; }
+  return cache.admin_dismissed_notifs.map(d => d.notif_id);
 }
-function dismissNotif(id) {
-  const list = getDismissedNotifs();
-  if (!list.includes(id)) { list.push(id); localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list)); }
+async function dismissNotif(id) {
+  if (getDismissedNotifs().includes(id)) return;
+  const saved = await insertRow("admin_dismissed_notifs", { notif_id: id, date_creation: nowStr() });
+  if (saved) cache.admin_dismissed_notifs.push(saved);
 }
-function clearAllNotifs() {
+async function clearAllNotifs() {
   const ids = computeNotifications().map(it => it.id);
-  const list = getDismissedNotifs();
-  ids.forEach(id => { if (!list.includes(id)) list.push(id); });
-  localStorage.setItem(DISMISSED_NOTIFS_KEY, JSON.stringify(list));
+  const dismissed = getDismissedNotifs();
+  for (const id of ids) {
+    if (!dismissed.includes(id)) {
+      const saved = await insertRow("admin_dismissed_notifs", { notif_id: id, date_creation: nowStr() });
+      if (saved) cache.admin_dismissed_notifs.push(saved);
+    }
+  }
   updateNotifBadge();
   renderNotifPanelContent();
 }
@@ -581,9 +586,9 @@ function renderNotifPanelContent() {
     items[Number(el.dataset.i)].fn();
     panel.classList.remove("open");
   }));
-  panel.querySelectorAll(".notif-dismiss").forEach(btn => btn.addEventListener("click", (e) => {
+  panel.querySelectorAll(".notif-dismiss").forEach(btn => btn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    dismissNotif(items[Number(btn.dataset.dismissI)].id);
+    await dismissNotif(items[Number(btn.dataset.dismissI)].id);
     updateNotifBadge();
     renderNotifPanelContent();
   }));
