@@ -162,6 +162,23 @@
   .abo-box .abo-title{font-weight:700;font-size:13.5px;}
   .abo-box .abo-sub{font-size:12px;color:var(--muted);}
 
+  .stepper-wrap{overflow-x:auto;padding:8px 2px 4px;}
+  .stepper{display:flex;align-items:flex-start;min-width:520px;}
+  .step{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:96px;}
+  .step-dot{position:relative;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--border);background:var(--card);color:var(--muted);flex-shrink:0;}
+  .step-dot svg{width:18px;height:18px;}
+  .step.done .step-dot{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .step.current .step-dot{background:var(--card);border-color:var(--accent);color:var(--accent-dark);box-shadow:0 0 0 4px var(--accent-light);}
+  .step.current .step-dot::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--accent);opacity:.5;animation:stepPulse 1.8s infinite;}
+  @keyframes stepPulse{0%{transform:scale(.85);opacity:.6;}100%{transform:scale(1.25);opacity:0;}}
+  .step-label{font-size:11px;margin-top:9px;color:var(--muted);text-align:center;font-weight:600;line-height:1.3;}
+  .step.done .step-label,.step.current .step-label{color:var(--text);}
+  .step.current .step-label{color:var(--accent-dark);}
+  .step-line{flex:1;height:2px;background:var(--border);margin-top:20px;min-width:16px;}
+  .step-line.done{background:var(--accent);}
+  .project-name{font-size:15px;font-weight:800;margin-bottom:4px;}
+  .project-sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
+
   .content-topbar{display:flex;justify-content:flex-end;padding:16px 34px 0;}
   .notif-wrap{position:relative;}
   .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
@@ -214,6 +231,10 @@
     <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.3 8.3 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2z"/></symbol>
     <symbol id="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="icon-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></symbol>
+    <symbol id="icon-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><path d="M13.5 7l-3 10"/></symbol>
+    <symbol id="icon-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-4 2-8 5-10z"/><circle cx="12" cy="10" r="1.6" fill="currentColor" stroke="none"/><path d="M9 16l-3 1 1-3"/><path d="M15 16l3 1-1-3"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
   </defs>
 </svg>
 
@@ -849,6 +870,7 @@ async function chargerPaiements() {
 }
 
 // ---- SUIVI DE PROJET ----
+const ETAPES_ICONS = { maquette: "icon-compass", developpement: "icon-code", revisions: "icon-repeat", mise_en_ligne: "icon-rocket", termine: "icon-check-square" };
 async function chargerProjet() {
   const { data, error } = await sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
   const el = document.getElementById("projet-content");
@@ -862,16 +884,39 @@ async function chargerProjet() {
     const etape = p.etape_projet || "maquette";
     const idx = ETAPES.indexOf(etape);
     const pct = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) : 0;
+
+    const stepsHtml = ETAPES.map((e, i) => {
+      const state = i < idx ? "done" : i === idx ? "current" : "";
+      const icon = i < idx ? "icon-check-square" : ETAPES_ICONS[e];
+      const dot = `<div class="step ${state}"><div class="step-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#${icon}"></use></svg></div><div class="step-label">${ETAPES_LABELS[e]}</div></div>`;
+      if (i === 0) return dot;
+      const lineState = i <= idx ? "done" : "";
+      return `<div class="step-line ${lineState}"></div>${dot}`;
+    }).join("");
+
     return `
-    <div class="item">
-      <div class="item-title">${escapeHtml(p.titre || "Projet")}</div>
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
-      <div class="progress-steps">
-        ${ETAPES.map((e, i) => `<span class="${i <= idx ? "done" : ""}">${ETAPES_LABELS[e]}</span>`).join("")}
+    <div style="margin-bottom:8px;">
+      <div class="project-name">${escapeHtml(p.titre || "Projet")}</div>
+      <div class="cards-row" style="margin-bottom:20px;">
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#${ETAPES_ICONS[etape]}"></use></svg></div>
+          <div class="num" style="font-size:16px;">${ETAPES_LABELS[etape]}</div>
+          <div class="label">Étape actuelle</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-bar-chart"></use></svg></div>
+          <div class="num">${pct}%</div>
+          <div class="label">Progression</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:${p.date_livraison_estimee ? "var(--tertiary)" : "var(--muted)"};color:#fff;"><svg><use href="#icon-calendar"></use></svg></div>
+          <div class="num" style="font-size:16px;">${p.date_livraison_estimee ? fmtDateFR(p.date_livraison_estimee) : "—"}</div>
+          <div class="label">Livraison estimée</div>
+        </div>
       </div>
-      ${p.date_livraison_estimee ? `<div class="item-meta" style="margin-top:10px;">Livraison estimée : ${fmtDateFR(p.date_livraison_estimee)}</div>` : ""}
+      <div class="stepper-wrap"><div class="stepper">${stepsHtml}</div></div>
     </div>`;
-  }).join("");
+  }).join("<hr style='border:none;border-top:1px solid var(--border);margin:24px 0;'>");
 }
 
 // ---- DEVIS & FACTURES ----
