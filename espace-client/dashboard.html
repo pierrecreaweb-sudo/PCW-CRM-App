@@ -998,6 +998,7 @@ async function chargerFichiers() {
         <div class="file-meta">${formatTaille(f.taille_octets)} — ${fmtDateFR(f.date_creation)}</div>
       </div>
       <button class="btn-pdf" onclick="telechargerFichier('${f.chemin}')">Ouvrir</button>
+      <button class="btn-pdf" style="color:var(--danger);" onclick="supprimerFichier(${f.id}, '${f.chemin}')">🗑</button>
     </div>`;
 
   const parProjet = {};
@@ -1027,6 +1028,13 @@ async function telechargerFichier(chemin) {
   const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
   if (error) { alert("Fichier introuvable."); return; }
   window.open(data.signedUrl, "_blank");
+}
+async function supprimerFichier(id, chemin) {
+  if (!confirm("Supprimer définitivement ce fichier ?")) return;
+  await sb.storage.from("photos-clients").remove([chemin]);
+  const { error } = await sb.from("fichiers_clients").delete().eq("id", id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  chargerFichiers();
 }
 
 document.getElementById("upload-zone").addEventListener("dragover", e => { e.preventDefault(); e.currentTarget.classList.add("dragover"); });
