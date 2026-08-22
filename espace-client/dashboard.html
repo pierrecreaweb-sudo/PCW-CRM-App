@@ -419,6 +419,10 @@
         <div class="page-title">Fichiers</div>
         <div class="page-sub">Envoie tes photos ou documents à PCW.</div>
         <div class="panel">
+          <label for="file-project-select">Projet concerné (optionnel)</label>
+          <select id="file-project-select" style="margin-bottom:14px;">
+            <option value="">— Aucun projet en particulier —</option>
+          </select>
           <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
             <svg viewBox="0 0 24 24"><use href="#icon-upload"></use></svg>
             <p>Glisse un fichier ici, ou clique pour en choisir un</p>
@@ -943,6 +947,15 @@ function formatTaille(octets) {
   return (octets / (1024 * 1024)).toFixed(1) + " Mo";
 }
 
+let mesProjetsPourFichiers = [];
+async function chargerSelecteurProjetFichiers() {
+  const { data } = await sb.from("evenements").select("id, titre, type_evenement").eq("contact_id", myContact.id).order("id", { ascending: false });
+  mesProjetsPourFichiers = data || [];
+  const sel = document.getElementById("file-project-select");
+  sel.innerHTML = `<option value="">— Aucun projet en particulier —</option>` +
+    mesProjetsPourFichiers.map(p => `<option value="${p.id}">${escapeHtml(p.titre || p.type_evenement || "Projet #" + p.id)}</option>`).join("");
+}
+
 async function handleFileSelect(files) {
   if (!files || !files.length) return;
   const file = files[0];
@@ -951,12 +964,13 @@ async function handleFileSelect(files) {
 
   const cheminSafe = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const chemin = `${myContact.id}/${cheminSafe}`;
+  const evenementId = document.getElementById("file-project-select").value ? Number(document.getElementById("file-project-select").value) : null;
 
   const { error: uploadError } = await sb.storage.from("photos-clients").upload(chemin, file, { upsert: true });
   if (uploadError) { msgEl.innerHTML = `<div class="error-msg">${uploadError.message}</div>`; return; }
 
   const { error: insertError } = await sb.from("fichiers_clients").insert({
-    contact_id: myContact.id, nom_fichier: file.name, chemin,
+    contact_id: myContact.id, evenement_id: evenementId, nom_fichier: file.name, chemin,
     type_mime: file.type, taille_octets: file.size, envoye_par: "client",
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
@@ -968,6 +982,7 @@ async function handleFileSelect(files) {
 }
 
 async function chargerFichiers() {
+  await chargerSelecteurProjetFichiers();
   const { data, error } = await sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
   const el = document.getElementById("fichiers-list");
   if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
@@ -975,21 +990,37 @@ async function chargerFichiers() {
     el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Aucun fichier échangé pour le moment.</div>';
     return;
   }
-  const deAdmin = data.filter(f => f.envoye_par === "admin");
-  const deMoi = data.filter(f => f.envoye_par !== "admin");
   const renderFile = f => `
     <div class="file-item">
       <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
       <div class="file-info">
-        <div class="file-name">${escapeHtml(f.nom_fichier)}</div>
+        <div class="file-name">${escapeHtml(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge subtle">de PCW</span>` : `<span class="badge subtle">envoyé par moi</span>`}</div>
         <div class="file-meta">${formatTaille(f.taille_octets)} — ${fmtDateFR(f.date_creation)}</div>
       </div>
       <button class="btn-pdf" onclick="telechargerFichier('${f.chemin}')">Ouvrir</button>
     </div>`;
-  el.innerHTML =
-    (deAdmin.length ? `<div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📥 Reçus de PCW</div>${deAdmin.map(renderFile).join("")}` : "") +
-    (deAdmin.length && deMoi.length ? `<div style="height:14px;"></div>` : "") +
-    (deMoi.length ? `<div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📤 Envoyés par moi</div>${deMoi.map(renderFile).join("")}` : "");
+
+  const parProjet = {};
+  const sansProjet = [];
+  data.forEach(f => {
+    if (f.evenement_id) { (parProjet[f.evenement_id] = parProjet[f.evenement_id] || []).push(f); }
+    else sansProjet.push(f);
+  });
+  const nomProjet = id => {
+    const p = mesProjetsPourFichiers.find(x => x.id === id);
+    return p ? (p.titre || p.type_evenement || "Projet #" + id) : "Projet";
+  };
+  const groupesProjet = Object.keys(parProjet).map(evId => `
+    <div style="margin-bottom:18px;">
+      <div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📁 ${escapeHtml(nomProjet(Number(evId)))}</div>
+      ${parProjet[evId].map(renderFile).join("")}
+    </div>`).join("");
+  const groupeSansProjet = sansProjet.length ? `
+    <div>
+      <div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📄 Fichiers généraux</div>
+      ${sansProjet.map(renderFile).join("")}
+    </div>` : "";
+  el.innerHTML = groupesProjet + groupeSansProjet;
 }
 
 async function telechargerFichier(chemin) {
