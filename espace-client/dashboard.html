@@ -598,14 +598,21 @@ async function computeNotifications() {
   const today = new Date().toISOString().slice(0, 10);
   const items = [];
 
-  const [{ data: messages }, { data: demandes }, { data: demandesAdmin }, { data: devis }, { data: factures }, { data: projets }] = await Promise.all([
+  const [{ data: messages }, { data: demandes }, { data: demandesAdmin }, { data: devis }, { data: factures }, { data: projets }, { data: fichiersAdmin }] = await Promise.all([
     sb.from("messages").select("*").eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false).order("id", { ascending: false }),
     sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("statut", "Traité").neq("sens", "admin"),
     sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("sens", "admin").neq("statut", "Traité"),
     sb.from("devis").select("*").eq("contact_id", myContact.id).in("statut", ["En attente", "Envoyé"]),
     sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée"),
     sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
+    sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id).eq("envoye_par", "admin"),
   ]);
+
+  (fichiersAdmin || []).forEach(f => {
+    items.push({ id: "fichier-admin-" + f.id, urgent: false, color: "var(--accent)", icon: "icon-folder",
+      label: "Nouveau fichier de PCW : " + (f.nom_fichier || ""), sub: "", date: f.date_creation || "",
+      fn: () => showPage("fichiers") });
+  });
 
   (demandesAdmin || []).forEach(d => {
     items.push({ id: "demande-admin-" + d.id, urgent: d.priorite === "Urgent", color: "var(--tertiary)", icon: "icon-check-square",
@@ -950,7 +957,7 @@ async function handleFileSelect(files) {
 
   const { error: insertError } = await sb.from("fichiers_clients").insert({
     contact_id: myContact.id, nom_fichier: file.name, chemin,
-    type_mime: file.type, taille_octets: file.size,
+    type_mime: file.type, taille_octets: file.size, envoye_par: "client",
     date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
   });
   if (insertError) { msgEl.innerHTML = `<div class="error-msg">${insertError.message}</div>`; return; }
@@ -965,10 +972,12 @@ async function chargerFichiers() {
   const el = document.getElementById("fichiers-list");
   if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   if (!data || data.length === 0) {
-    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Aucun fichier envoyé pour le moment.</div>';
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Aucun fichier échangé pour le moment.</div>';
     return;
   }
-  el.innerHTML = data.map(f => `
+  const deAdmin = data.filter(f => f.envoye_par === "admin");
+  const deMoi = data.filter(f => f.envoye_par !== "admin");
+  const renderFile = f => `
     <div class="file-item">
       <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
       <div class="file-info">
@@ -976,7 +985,11 @@ async function chargerFichiers() {
         <div class="file-meta">${formatTaille(f.taille_octets)} — ${fmtDateFR(f.date_creation)}</div>
       </div>
       <button class="btn-pdf" onclick="telechargerFichier('${f.chemin}')">Ouvrir</button>
-    </div>`).join("");
+    </div>`;
+  el.innerHTML =
+    (deAdmin.length ? `<div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📥 Reçus de PCW</div>${deAdmin.map(renderFile).join("")}` : "") +
+    (deAdmin.length && deMoi.length ? `<div style="height:14px;"></div>` : "") +
+    (deMoi.length ? `<div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📤 Envoyés par moi</div>${deMoi.map(renderFile).join("")}` : "");
 }
 
 async function telechargerFichier(chemin) {
