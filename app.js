@@ -125,7 +125,7 @@ function etapeSelectInline(id, value) {
 
 // ---- 3) ETAT LOCAL ----
 let currentUser = null;
-let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [], admin_dismissed_notifs: [], message_templates: [] };
+let cache = { contacts: [], prospects: [], devis: [], evenements: [], todos: [], grille_tarifaire: [], rdv: [], factures: [], temps_passe: [], depenses: [], cgv_templates: [], demandes: [], messages: [], fichiers_clients: [], admin_dismissed_notifs: [], message_templates: [], orphaned_accounts: [] };
 let currentPage = "dashboard";
 let modalContext = null;
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, selected: null };
@@ -253,7 +253,7 @@ async function deleteRow(table, id) {
   return true;
 }
 async function refreshCache() {
-  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients, dismissedNotifs, messageTemplates] = await Promise.all([
+  const [contacts, prospects, devisRows, evenements, todos, grille, rdv, factures, temps, depenses, cgvTemplates, demandes, messages, fichiersClients, dismissedNotifs, messageTemplates, orphanedRes] = await Promise.all([
     fetchAll("contacts", "nom", true),
     fetchAll("prospects"),
     fetchAll("devis"),
@@ -270,8 +270,9 @@ async function refreshCache() {
     fetchAll("fichiers_clients", "id", true),
     fetchAll("admin_dismissed_notifs", "id", true),
     fetchAll("message_templates", "id", true),
+    sb.rpc("get_orphaned_client_accounts"),
   ]);
-  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients, admin_dismissed_notifs: dismissedNotifs, message_templates: messageTemplates };
+  cache = { contacts, prospects, devis: devisRows, evenements, todos, grille_tarifaire: grille, rdv, factures, temps_passe: temps, depenses, cgv_templates: cgvTemplates, demandes, messages, fichiers_clients: fichiersClients, admin_dismissed_notifs: dismissedNotifs, message_templates: messageTemplates, orphaned_accounts: orphanedRes.data || [] };
   updateNavBadgeMessages();
 }
 
@@ -508,6 +509,11 @@ function computeNotifications() {
     items.push({ id: "fichier-client-" + f.id, urgent: false, color: "var(--accent)", icon: "icon-folder",
       label: "Nouveau fichier reçu : " + (f.nom_fichier || ""), sub: contactLabel(findContact(f.contact_id)),
       date: f.date_creation || "", fn: () => showPage("fichiers") });
+  });
+  (cache.orphaned_accounts || []).forEach(a => {
+    items.push({ id: "orphelin-" + a.id, urgent: true, color: "var(--danger)", icon: "icon-user",
+      label: "Compte client non relié : " + (a.email || ""), sub: "Ce client ne peut pas accéder à son espace — lie-le à une fiche contact.",
+      date: a.created_at ? a.created_at.slice(0, 10) : "", fn: () => showPage("contacts") });
   });
 
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
