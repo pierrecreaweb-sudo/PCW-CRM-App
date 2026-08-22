@@ -163,7 +163,14 @@ async function signup() {
   if (error) { showMsg("signup-msg", error.message); return; }
   if (!data.user) { showMsg("signup-msg", "Compte créé ! Vérifie tes emails pour confirmer, puis connecte-toi."); return; }
 
-  // 1) Essaie de se rattacher à une fiche contact déjà créée par PCW (email identique).
+  // 0) Un déclencheur côté base de données relie déjà automatiquement le
+  // compte à une fiche contact (voir migration-portail-client-15.sql).
+  // On vérifie d'abord si c'est déjà fait, pour ne jamais créer de doublon.
+  const { data: dejaRelie } = await sb.from("contacts").select("id").eq("client_user_id", data.user.id).limit(1);
+  if (dejaRelie && dejaRelie.length > 0) { finishSignup(data.session); return; }
+
+  // 1) Filet de sécurité si le déclencheur n'a pas (encore) tourné : essaie
+  // de se rattacher à une fiche contact déjà créée par PCW (email identique).
   // .limit(1) évite toute ambiguïté s'il existe plusieurs fiches avec le même email.
   const { data: existing } = await sb
     .from("contacts")
