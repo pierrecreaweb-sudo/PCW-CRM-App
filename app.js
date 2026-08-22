@@ -504,6 +504,11 @@ function computeNotifications() {
       label: "Facture d'abonnement générée : " + (f.numero || ""), sub: contactLabel(findContact(f.contact_id)) + " · " + Number(f.montant_ttc || 0).toFixed(2) + " €",
       date: f.date_facture || "", fn: () => showPage("factures") });
   });
+  cache.fichiers_clients.filter(f => f.envoye_par !== "admin").forEach(f => {
+    items.push({ id: "fichier-client-" + f.id, urgent: false, color: "var(--accent)", icon: "icon-folder",
+      label: "Nouveau fichier reçu : " + (f.nom_fichier || ""), sub: contactLabel(findContact(f.contact_id)),
+      date: f.date_creation || "", fn: () => showPage("fichiers") });
+  });
 
   cache.factures.filter(f => f.statut === "En retard").forEach(f => {
     items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
@@ -3074,7 +3079,7 @@ async function renderFichiersClients() {
   });
   const contactIds = Object.keys(parContact);
   if (!contactIds.length) {
-    el.innerHTML = `<div class="page-note">Aucun fichier envoyé par un client pour l'instant.</div>`;
+    el.innerHTML = `<div class="page-note">Aucun fichier échangé avec un client pour l'instant.</div>`;
     return;
   }
   el.innerHTML = contactIds.map(cid => {
@@ -3086,7 +3091,7 @@ async function renderFichiersClients() {
       ${fichiers.map(f => `
         <div class="file-row">
           <div>
-            <div class="fr-name">${escapeAttr(f.nom_fichier)}</div>
+            <div class="fr-name">${escapeAttr(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge" style="background:var(--tertiary);">→ Envoyé au client</span>` : `<span class="badge subtle">← Reçu du client</span>`}</div>
             <div class="fr-meta">${formatTailleAdmin(f.taille_octets)} — ${f.date_creation ? f.date_creation.slice(0, 10).split("-").reverse().join("/") : ""}</div>
           </div>
           <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
@@ -3098,6 +3103,49 @@ async function telechargerFichierAdmin(chemin) {
   const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
   if (error) { showToast("Fichier introuvable"); return; }
   window.open(data.signedUrl, "_blank");
+}
+
+function openSendFileDialog() {
+  const html = `
+    <div class="field">
+      <label>Client destinataire</label>
+      <select id="send-file-contact">
+        <option value="">— Choisir un client —</option>
+        ${contactOptionsHtml(null)}
+      </select>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Fichier</label>
+      <input type="file" id="send-file-input">
+    </div>
+    <div id="send-file-status" style="margin-top:10px;font-size:12.5px;color:var(--muted);"></div>`;
+  openRawModal("Envoyer un fichier à un client", html, async () => {
+    const contactId = Number(document.getElementById("send-file-contact").value);
+    const fileInput = document.getElementById("send-file-input");
+    const file = fileInput.files[0];
+    const statusEl = document.getElementById("send-file-status");
+    if (!contactId) { statusEl.textContent = "Choisis un client."; statusEl.style.color = "var(--danger)"; return; }
+    if (!file) { statusEl.textContent = "Choisis un fichier."; statusEl.style.color = "var(--danger)"; return; }
+
+    statusEl.style.color = "var(--muted)";
+    statusEl.textContent = "Envoi en cours…";
+    const cheminSafe = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const chemin = `${contactId}/${cheminSafe}`;
+
+    const { error: uploadError } = await sb.storage.from("photos-clients").upload(chemin, file, { upsert: true });
+    if (uploadError) { showToast("Erreur envoi : " + uploadError.message); return; }
+
+    const { error: insertError } = await sb.from("fichiers_clients").insert({
+      contact_id: contactId, nom_fichier: file.name, chemin,
+      type_mime: file.type, taille_octets: file.size, envoye_par: "admin",
+      date_creation: nowStr(),
+    });
+    if (insertError) { showToast("Erreur enregistrement : " + insertError.message); return; }
+
+    showToast("Fichier envoyé au client");
+    closeModal();
+    await refreshAll();
+  });
 }
 
 // ========================================================================
@@ -3614,6 +3662,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-new-demande-admin").addEventListener("click", openDemandeAdminDialog);
   document.getElementById("templates-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleTemplateMenu(); });
   document.getElementById("btn-new-template").addEventListener("click", () => openTemplateDialog(null));
+  document.getElementById("btn-send-file").addEventListener("click", openSendFileDialog);
   document.getElementById("messages-back-btn").addEventListener("click", backToMessagesList);
   document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".template-wrap");
