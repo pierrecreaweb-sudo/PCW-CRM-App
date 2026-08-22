@@ -3088,7 +3088,10 @@ async function renderFichiersClients() {
         <div class="fr-name">${escapeAttr(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge" style="background:var(--tertiary);">→ Envoyé au client</span>` : `<span class="badge subtle">← Reçu du client</span>`}</div>
         <div class="fr-meta">${formatTailleAdmin(f.taille_octets)} — ${f.date_creation ? f.date_creation.slice(0, 10).split("-").reverse().join("/") : ""}</div>
       </div>
-      <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
+        <button class="btn secondary" title="Supprimer" onclick="supprimerFichierAdmin(${f.id}, '${f.chemin}')">🗑</button>
+      </div>
     </div>`;
   el.innerHTML = contactIds.map(cid => {
     const contact = findContact(Number(cid));
@@ -3121,6 +3124,14 @@ async function telechargerFichierAdmin(chemin) {
   const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
   if (error) { showToast("Fichier introuvable"); return; }
   window.open(data.signedUrl, "_blank");
+}
+async function supprimerFichierAdmin(id, chemin) {
+  if (!confirm("Supprimer définitivement ce fichier ?")) return;
+  await sb.storage.from("photos-clients").remove([chemin]);
+  const { error } = await sb.from("fichiers_clients").delete().eq("id", id);
+  if (error) { showToast("Erreur suppression : " + error.message); return; }
+  showToast("Fichier supprimé");
+  await refreshAll();
 }
 
 function openSendFileDialog() {
