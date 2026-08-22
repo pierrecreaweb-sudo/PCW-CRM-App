@@ -3082,20 +3082,38 @@ async function renderFichiersClients() {
     el.innerHTML = `<div class="page-note">Aucun fichier échangé avec un client pour l'instant.</div>`;
     return;
   }
+  const renderFile = f => `
+    <div class="file-row">
+      <div>
+        <div class="fr-name">${escapeAttr(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge" style="background:var(--tertiary);">→ Envoyé au client</span>` : `<span class="badge subtle">← Reçu du client</span>`}</div>
+        <div class="fr-meta">${formatTailleAdmin(f.taille_octets)} — ${f.date_creation ? f.date_creation.slice(0, 10).split("-").reverse().join("/") : ""}</div>
+      </div>
+      <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
+    </div>`;
   el.innerHTML = contactIds.map(cid => {
     const contact = findContact(Number(cid));
     const fichiers = parContact[cid].sort((a, b) => b.id - a.id);
+    const parProjet = {};
+    const sansProjet = [];
+    fichiers.forEach(f => {
+      if (f.evenement_id) { (parProjet[f.evenement_id] = parProjet[f.evenement_id] || []).push(f); }
+      else sansProjet.push(f);
+    });
+    const groupesProjet = Object.keys(parProjet).map(evId => {
+      const ev = findEvenement(Number(evId));
+      return `<div class="files-project-group">
+        <h5>${escapeAttr(ev ? eventLabel(ev) : "Projet supprimé")}</h5>
+        ${parProjet[evId].map(renderFile).join("")}
+      </div>`;
+    }).join("");
+    const groupeSansProjet = sansProjet.length ? `<div class="files-project-group">
+        <h5>Sans projet</h5>
+        ${sansProjet.map(renderFile).join("")}
+      </div>` : "";
     return `
     <div class="files-client-group">
       <h4>${contactLabel(contact)}</h4>
-      ${fichiers.map(f => `
-        <div class="file-row">
-          <div>
-            <div class="fr-name">${escapeAttr(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge" style="background:var(--tertiary);">→ Envoyé au client</span>` : `<span class="badge subtle">← Reçu du client</span>`}</div>
-            <div class="fr-meta">${formatTailleAdmin(f.taille_octets)} — ${f.date_creation ? f.date_creation.slice(0, 10).split("-").reverse().join("/") : ""}</div>
-          </div>
-          <button class="btn" onclick="telechargerFichierAdmin('${f.chemin}')">Télécharger</button>
-        </div>`).join("")}
+      ${groupesProjet}${groupeSansProjet}
     </div>`;
   }).join("");
 }
@@ -3115,12 +3133,19 @@ function openSendFileDialog() {
       </select>
     </div>
     <div class="field" style="margin-top:12px;">
+      <label>Projet lié (optionnel)</label>
+      <select id="send-file-evenement">
+        <option value="">— Aucun projet en particulier —</option>
+      </select>
+    </div>
+    <div class="field" style="margin-top:12px;">
       <label>Fichier</label>
       <input type="file" id="send-file-input">
     </div>
     <div id="send-file-status" style="margin-top:10px;font-size:12.5px;color:var(--muted);"></div>`;
   openRawModal("Envoyer un fichier à un client", html, async () => {
     const contactId = Number(document.getElementById("send-file-contact").value);
+    const evenementId = document.getElementById("send-file-evenement").value ? Number(document.getElementById("send-file-evenement").value) : null;
     const fileInput = document.getElementById("send-file-input");
     const file = fileInput.files[0];
     const statusEl = document.getElementById("send-file-status");
@@ -3136,7 +3161,7 @@ function openSendFileDialog() {
     if (uploadError) { showToast("Erreur envoi : " + uploadError.message); return; }
 
     const { error: insertError } = await sb.from("fichiers_clients").insert({
-      contact_id: contactId, nom_fichier: file.name, chemin,
+      contact_id: contactId, evenement_id: evenementId, nom_fichier: file.name, chemin,
       type_mime: file.type, taille_octets: file.size, envoye_par: "admin",
       date_creation: nowStr(),
     });
@@ -3145,6 +3170,12 @@ function openSendFileDialog() {
     showToast("Fichier envoyé au client");
     closeModal();
     await refreshAll();
+  });
+  document.getElementById("send-file-contact").addEventListener("change", (e) => {
+    const cid = Number(e.target.value);
+    const evSel = document.getElementById("send-file-evenement");
+    const projets = cache.evenements.filter(ev => ev.contact_id === cid);
+    evSel.innerHTML = `<option value="">— Aucun projet en particulier —</option>` + projets.map(ev => `<option value="${ev.id}">${escapeAttr(eventLabel(ev))}</option>`).join("");
   });
 }
 
