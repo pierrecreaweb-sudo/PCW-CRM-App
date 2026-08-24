@@ -373,6 +373,22 @@
     .totaux{text-align:left;}
     .totaux .grand{font-size:16px;white-space:nowrap;display:inline-block;}
   }
+
+  /* ---- Animation de préparation de fichier (téléchargement) ---- */
+  .dl-overlay{position:fixed;inset:0;background:rgba(11,18,32,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  .dl-overlay.show{opacity:1;pointer-events:auto;}
+  .dl-card{background:#fff;border-radius:18px;padding:34px 32px;width:320px;max-width:88vw;box-shadow:0 24px 60px -14px rgba(11,18,32,.4);text-align:center;transform:scale(.94);transition:transform .25s ease;}
+  .dl-overlay.show .dl-card{transform:scale(1);}
+  .dl-icon-wrap,.dl-check-wrap{width:60px;height:60px;margin:0 auto 16px;border-radius:16px;display:flex;align-items:center;justify-content:center;}
+  .dl-icon-wrap{background:var(--accent-light,#E7F4FC);}
+  .dl-icon-wrap svg{width:28px;height:28px;color:var(--accent,#2C96D8);}
+  .dl-check-wrap{border-radius:50%;background:var(--success,#3FA772);transform:scale(0);transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
+  .dl-check-wrap.show{transform:scale(1);}
+  .dl-check-wrap svg{width:28px;height:28px;color:#fff;}
+  .dl-filename{font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dl-status{font-size:12.5px;color:var(--muted,#69787F);margin-bottom:16px;}
+  .dl-track{height:6px;border-radius:99px;background:var(--paper-2,#EFF8FC);overflow:hidden;}
+  .dl-fill{height:100%;width:0%;background:var(--accent,#2C96D8);border-radius:99px;transition:width 1.1s cubic-bezier(.4,0,.2,1);}
 </style>
 </head>
 <body>
@@ -1061,5 +1077,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="app.js"></script>
+  <div class="dl-overlay" id="dl-overlay">
+    <div class="dl-card">
+      <div class="dl-icon-wrap" id="dl-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      </div>
+      <div class="dl-check-wrap" id="dl-check-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="dl-filename" id="dl-filename">Fichier</div>
+      <div class="dl-status" id="dl-status">Préparation de ton fichier…</div>
+      <div class="dl-track"><div class="dl-fill" id="dl-fill"></div></div>
+    </div>
+  </div>
 </body>
 </html>

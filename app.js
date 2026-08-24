@@ -2391,6 +2391,7 @@ function factureFields(row) {
     { key: "numero", label: "Numéro", type: "text", value: row.numero != null ? row.numero : nextFactureNumero() },
     { key: "contact_id", label: "Client / contact", type: "select-raw", optionsHtml: `<option value="">—</option>` + contactOptionsHtml(row.contact_id), value: row.contact_id, numeric: true },
     { key: "devis_id", label: "Devis lié", type: "select-raw", optionsHtml: `<option value="">— Aucun —</option>` + devisOptionsHtml(row.devis_id), value: row.devis_id, numeric: true },
+    { key: "evenement_id", label: "Projet lié (pour les statistiques de rentabilité)", type: "select-raw", optionsHtml: `<option value="">— Aucun —</option>` + evenementOptionsHtml(row.evenement_id), value: row.evenement_id, numeric: true },
     { key: "type_facture", label: "Type de facture", type: "select", options: TYPES_FACTURE, value: row.type_facture || "Facture unique" },
     { key: "type_evenement", label: "Type de projet", type: "select-other", options: TYPES_EVENEMENT, value: row.type_evenement, allowEmpty: true },
     { key: "date_facture", label: "Date de la facture", type: "date", value: row.date_facture || todayStr() },
@@ -2413,6 +2414,7 @@ function factureOnRender(form, currentId) {
     const d = findDevis(Number(form.elements["devis_id"].value)); if (!d) return;
     const c = devisContact(d);
     if (!form.elements["contact_id"].value && c) form.elements["contact_id"].value = c.id;
+    if (!form.elements["evenement_id"].value && d.evenement_id) form.elements["evenement_id"].value = d.evenement_id;
     recompute();
     if (!form.elements["montant_ttc"].value && d.montant_ttc != null) form.elements["montant_ttc"].value = d.montant_ttc;
   });
@@ -3126,10 +3128,51 @@ async function renderFichiersClients() {
     </div>`;
   }).join("");
 }
+// Affiche un voile plein écran avec une animation de préparation de
+// fichier (icône → barre de progression → coche de succès), puis appelle
+// onComplete une fois l'animation terminée (~1,5s).
+function showDownloadOverlay(fileName, onComplete) {
+  const overlay = document.getElementById("dl-overlay");
+  const iconWrap = document.getElementById("dl-icon-wrap");
+  const checkWrap = document.getElementById("dl-check-wrap");
+  const filenameEl = document.getElementById("dl-filename");
+  const statusEl = document.getElementById("dl-status");
+  const fillEl = document.getElementById("dl-fill");
+
+  filenameEl.textContent = fileName || "Fichier";
+  statusEl.textContent = "Préparation de ton fichier…";
+  iconWrap.style.display = "flex";
+  checkWrap.classList.remove("show");
+  checkWrap.style.display = "none";
+  fillEl.style.transition = "none";
+  fillEl.style.width = "0%";
+  void fillEl.offsetWidth; // force le navigateur à repartir de 0%
+  fillEl.style.transition = "width 1.1s cubic-bezier(.4,0,.2,1)";
+
+  overlay.classList.add("show");
+  requestAnimationFrame(() => { fillEl.style.width = "100%"; });
+
+  setTimeout(() => {
+    iconWrap.style.display = "none";
+    checkWrap.style.display = "flex";
+    requestAnimationFrame(() => checkWrap.classList.add("show"));
+    statusEl.textContent = "Fichier prêt !";
+  }, 1100);
+
+  setTimeout(() => {
+    overlay.classList.remove("show");
+    if (onComplete) onComplete();
+  }, 1500);
+}
+
 async function telechargerFichierAdmin(chemin) {
-  const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
-  if (error) { showToast("Fichier introuvable"); return; }
-  window.open(data.signedUrl, "_blank");
+  const record = cache.fichiers_clients.find(f => f.chemin === chemin);
+  const urlPromise = sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
+  showDownloadOverlay(record ? record.nom_fichier : "Fichier", async () => {
+    const { data, error } = await urlPromise;
+    if (error) { showToast("Fichier introuvable"); return; }
+    window.open(data.signedUrl, "_blank");
+  });
 }
 async function supprimerFichierAdmin(id, chemin) {
   if (!confirm("Supprimer définitivement ce fichier ?")) return;
