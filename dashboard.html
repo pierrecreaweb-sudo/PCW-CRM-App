@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon espace — PCW</title>
+<link rel="icon" href="../logo.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#0B1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PCW Client">
+<script>
+  (function(){
+    const saved = localStorage.getItem("pcw-theme");
+    const theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  })();
+</script>
+<style>
+  :root{
+    --bg:#FBFDFE; --sidebar:#0B1220; --sidebar-active:#17233B; --sidebar-text:#AEB7C9;
+    --accent:#2C96D8; --accent-dark:#1D74AC; --accent-light:#E7F4FC; --card:#FFFFFF; --text:#070F13;
+    --muted:#69787F; --border:#E2EDF2; --success:#3FA772; --warning:#D99A2B;
+    --danger:#D9534F; --info:#7EC5F1; --tertiary:#40B1F7; --tertiary-light:#E3F6FE;
+    --surface-alt:#EFF8FC; --input-bg:#F4FAFD;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow-md:0 2px 8px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --shadow-lg:0 12px 32px rgba(16,24,40,.12),0 2px 6px rgba(16,24,40,.06);
+  }
+  :root[data-theme="dark"]{
+    --bg:#010304; --sidebar:#070A11; --sidebar-active:#161D2C; --sidebar-text:#8D96AC;
+    --accent:#2791D3; --accent-dark:#0879BF; --accent-light:#0D2536; --card:#0D1418; --text:#ECF4F8;
+    --muted:#8890A0; --border:#16232C; --success:#3FA772; --warning:#D99A2B;
+    --danger:#E0645F; --info:#0E5581; --tertiary:#0879BF; --tertiary-light:#0A2E42;
+    --surface-alt:#0D1A22; --input-bg:#0A1318;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:0 2px 8px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.25);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Inter",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes popIn{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:scale(1);}}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;color:var(--text);}
+  ::selection{background:var(--accent-light);color:var(--accent-dark);}
+
+  .layout{display:flex;min-height:100vh;}
+  .sidebar{width:236px;background:var(--sidebar);flex-shrink:0;padding:26px 0 20px;display:flex;flex-direction:column;}
+  .sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px 22px 22px;}
+  .sidebar-head img{height:32px;width:32px;border-radius:8px;flex-shrink:0;}
+  .sidebar-head .logo{flex:1;min-width:0;}
+  .sidebar .logo{color:#fff;font-size:15px;font-weight:700;line-height:1.3;}
+  .sidebar .logo .sub{color:var(--sidebar-text);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+  .nav-section-label{color:#4C5975;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:16px 22px 6px;}
+  .nav-section-label:first-of-type{padding-top:4px;}
+  .nav-item{color:var(--sidebar-text);padding:11px 22px;margin:2px 12px;border-radius:14px;font-size:13.5px;font-weight:500;cursor:pointer;user-select:none;transition:background .18s ease,color .18s ease,transform .18s ease;display:flex;align-items:center;gap:11px;}
+  .nav-item:hover{background:var(--sidebar-active);color:#fff;transform:translateX(2px);}
+  .nav-item.active{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#fff;box-shadow:0 8px 18px -4px rgba(44,150,216,.55);}
+  .nav-icon{width:17px;height:17px;flex-shrink:0;opacity:.85;}
+  .nav-item.active .nav-icon{opacity:1;}
+  .nav-badge{background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;}
+
+  .sidebar-footer{margin-top:auto;padding:16px 22px 0;border-top:1px solid #1B2740;}
+  .sidebar-footer .who{color:#fff;font-size:12.5px;font-weight:700;margin-bottom:1px;}
+  .sidebar-footer .who-sub{color:var(--sidebar-text);font-size:11px;margin-bottom:10px;}
+  .sidebar-footer button{background:none;border:none;color:var(--sidebar-text);font-size:12.5px;padding:7px 0;transition:.15s;display:flex;align-items:center;gap:8px;width:100%;text-align:left;}
+  .sidebar-footer button:hover{color:#fff;}
+  .sidebar-footer button svg{width:14px;height:14px;}
+
+  .main{flex:1;min-width:0;}
+  .content{padding:30px 34px 60px;max-width:840px;}
+  .page{display:none;}
+  .page.active{display:block;animation:pageIn .28s ease;}
+  @keyframes pageIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  .page-title{font-size:22px;font-weight:800;margin:4px 0 4px;letter-spacing:-.01em;}
+  .page-sub{font-size:12.5px;color:var(--muted);margin:0 0 20px;}
+  .dash-greeting{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:4px 0 2px;}
+  .dash-greeting-sub{font-size:12.5px;color:var(--muted);margin:0 0 20px;}
+
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:20px 22px;margin-bottom:20px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px -8px rgba(16,24,40,.08);transition:transform .2s ease,box-shadow .2s ease;animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both;}
+  .panel h3{margin:0 0 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+
+  .cards-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:19px 21px;min-width:150px;flex:1;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px -8px rgba(16,24,40,.08);transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .22s ease,border-color .22s ease;animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both;}
+  .cards-row .stat-card:nth-child(1){animation-delay:.02s;} .cards-row .stat-card:nth-child(2){animation-delay:.08s;} .cards-row .stat-card:nth-child(3){animation-delay:.14s;} .cards-row .stat-card:nth-child(4){animation-delay:.2s;}
+  .stat-card.clickable{cursor:pointer;}
+  .stat-card.clickable:hover{border-color:#CDE8F7;transform:translateY(-4px) scale(1.012);box-shadow:0 2px 4px rgba(16,24,40,.06),0 20px 40px -12px rgba(44,150,216,.22);}
+  .stat-card.clickable:hover .stat-icon-wrap{transform:scale(1.08) rotate(-4deg);}
+  .stat-card .num{font-size:20px;font-weight:800;letter-spacing:-.01em;}
+  .stat-card .label{font-size:12px;color:var(--muted);margin-top:3px;font-weight:500;}
+  .stat-icon-wrap{width:34px;height:34px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;transition:transform .25s ease;}
+  .stat-icon-wrap svg{width:18px;height:18px;}
+
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:14px 0 5px;}
+  label:first-of-type{margin-top:0;}
+  input,textarea,select{width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;background:var(--input-bg);color:var(--text);transition:.15s;outline:none;}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent);background:var(--card);box-shadow:0 0 0 3px var(--accent-light);}
+  textarea{resize:vertical;min-height:78px;}
+
+  .btn{border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#fff;box-shadow:0 10px 20px -8px rgba(44,150,216,.55);transition:transform .15s ease,box-shadow .15s ease,filter .15s ease;margin-top:16px;}
+  .btn:hover{filter:brightness(1.05);transform:translateY(-2px);box-shadow:0 14px 26px -8px rgba(44,150,216,.6);}
+  .btn.secondary{background:var(--card);color:var(--text);border:1.5px solid var(--border);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.04);margin-top:0;}
+  .btn.secondary:hover{border-color:var(--accent);color:var(--accent-dark);transform:translateY(-2px);box-shadow:var(--shadow-sm);}
+
+  .item{border-top:1px solid var(--border);padding:14px 0;}
+  .item:first-child{border-top:none;padding-top:2px;}
+  .item-title{font-weight:700;font-size:13.5px;margin-bottom:4px;}
+  .item-meta{font-size:12px;color:var(--muted);}
+  .item-desc{font-size:12.5px;color:var(--muted);margin:3px 0 6px;}
+
+  .badge{display:inline-block;padding:4px 11px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;letter-spacing:.01em;margin-left:6px;}
+  .badge.subtle{color:var(--muted);background:var(--surface-alt);font-weight:600;}
+
+  .empty-state{text-align:center;color:var(--muted);padding:34px 18px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .empty-state svg{width:28px;height:28px;opacity:.35;}
+  .error-msg{color:var(--danger);font-size:12.5px;margin-top:9px;}
+  .success-msg{color:var(--success);font-size:12.5px;margin-top:9px;}
+
+  .timeline{position:relative;padding-left:24px;}
+  .timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--border);}
+  .tl-item{position:relative;padding-bottom:18px;}
+  .tl-item:last-child{padding-bottom:2px;}
+  .tl-item::before{content:"";position:absolute;left:-24px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:3px solid var(--card);}
+  .tl-type{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-dark);margin-bottom:2px;}
+
+  .progress-track{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;height:9px;overflow:hidden;margin:12px 0 8px;}
+  .progress-fill{height:100%;background:var(--accent);transition:width .4s ease;}
+  .progress-steps{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+  .progress-steps .done{color:var(--accent-dark);font-weight:700;}
+
+  .thread{max-height:440px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;margin-bottom:14px;padding-right:2px;}
+  .msg-bubble{max-width:76%;padding:9px 13px;border-radius:13px;font-size:13px;line-height:1.45;}
+  .msg-bubble.client{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px;}
+  .msg-bubble.admin{align-self:flex-start;background:var(--surface-alt);border-bottom-left-radius:4px;}
+  .msg-time{display:block;font-size:10px;opacity:.65;margin-top:4px;}
+  .compose{display:flex;gap:9px;}
+  .compose textarea{flex:1;min-height:46px;}
+  .compose .btn{margin-top:0;}
+
+  .btn-pdf{background:var(--surface-alt);border:1px solid var(--border);color:var(--text);padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;transition:.15s;margin-top:0;box-shadow:none;}
+  .btn-pdf:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--surface-alt);transform:none;}
+  .item-actions{display:flex;gap:8px;margin-top:9px;}
+
+  .upload-zone{border:1.5px dashed var(--border);border-radius:18px;padding:26px 20px;text-align:center;cursor:pointer;transition:.18s;margin-bottom:16px;}
+  .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:var(--accent-light);transform:translateY(-2px);}
+  .upload-zone svg{width:24px;height:24px;color:var(--muted);margin-bottom:8px;}
+  .upload-zone p{margin:0;font-size:13px;color:var(--muted);}
+  .upload-zone input{display:none;}
+  .file-item{display:flex;align-items:center;gap:11px;padding:12px 0;border-top:1px solid var(--border);}
+  .file-item:first-child{border-top:none;}
+  .file-icon{width:34px;height:34px;border-radius:8px;background:var(--surface-alt);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .file-icon svg{width:16px;height:16px;color:var(--muted);}
+  .file-info{flex:1;min-width:0;}
+  .file-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .file-meta{font-size:11.5px;color:var(--muted);}
+
+  .pay-flag-late{color:var(--danger);font-weight:700;}
+  .pay-flag-soon{color:var(--warning);font-weight:700;}
+  .pay-flag-ok{color:var(--muted);}
+  .abo-box{display:flex;align-items:center;gap:14px;padding:16px 18px;border:1px solid var(--border);border-radius:18px;background:var(--surface-alt);margin-bottom:4px;animation:fadeUp .4s ease both;}
+  .abo-box .abo-icon{width:38px;height:38px;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .abo-box .abo-icon svg{width:18px;height:18px;color:#fff;}
+  .abo-box .abo-title{font-weight:700;font-size:13.5px;}
+  .abo-box .abo-sub{font-size:12px;color:var(--muted);}
+
+  .stepper-wrap{overflow-x:auto;padding:8px 2px 4px;}
+  .stepper{display:flex;align-items:flex-start;min-width:520px;}
+  .step{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:96px;}
+  .step-dot{position:relative;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--border);background:var(--card);color:var(--muted);flex-shrink:0;transition:box-shadow .25s ease,background .25s ease,border-color .25s ease;}
+  .step-dot svg{width:18px;height:18px;}
+  .step.done .step-dot{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .step.current .step-dot{background:var(--card);border-color:var(--accent);color:var(--accent-dark);box-shadow:0 0 0 4px var(--accent-light);}
+  .step.current .step-dot::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--accent);opacity:.5;animation:stepPulse 1.8s infinite;}
+  @keyframes stepPulse{0%{transform:scale(.85);opacity:.6;}100%{transform:scale(1.25);opacity:0;}}
+  .step-label{font-size:11px;margin-top:9px;color:var(--muted);text-align:center;font-weight:600;line-height:1.3;}
+  .step.done .step-label,.step.current .step-label{color:var(--text);}
+  .step.current .step-label{color:var(--accent-dark);}
+  .step-line{flex:1;height:2px;background:var(--border);margin-top:20px;min-width:16px;}
+  .step-line.done{background:var(--accent);}
+  .project-name{font-size:15px;font-weight:800;margin-bottom:4px;}
+  .project-sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
+
+  .archive-toggle{
+    display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--muted);
+    font-size:12px;font-weight:600;padding:10px 0 2px;cursor:pointer;width:100%;text-align:left;
+  }
+  .archive-toggle:hover{color:var(--accent-dark);}
+  .archive-toggle svg{width:13px;height:13px;transition:transform .15s;}
+  .archive-toggle.open svg{transform:rotate(90deg);}
+  .archive-list{display:none;margin-top:6px;}
+  .archive-list.open{display:block;}
+  .archive-list .item{opacity:.72;}
+
+  .cat-tabs{display:flex;gap:8px;flex-wrap:wrap;}
+  .cat-tab{border:1px solid var(--border);background:var(--card);padding:8px 16px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s;}
+  .cat-tab:hover{border-color:var(--accent);color:var(--text);}
+  .cat-tab.active{color:#fff;border-color:transparent;background:var(--accent);}
+  .kanban-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;}
+  .kanban-col{background:var(--cloud, var(--bg));border-radius:20px;padding:14px;min-width:220px;flex:1;max-width:260px;animation:fadeUp .45s cubic-bezier(.2,.8,.2,1) both;}
+  .kanban-col h4{margin:0 0 10px;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+  .kanban-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 13px;margin-bottom:10px;font-size:12.5px;box-shadow:var(--shadow-sm);transition:transform .18s ease,box-shadow .18s ease;animation:fadeUp .4s cubic-bezier(.2,.8,.2,1) both;}
+  .kanban-card:hover{transform:translateY(-3px) rotate(-.3deg);box-shadow:0 10px 24px -8px rgba(44,150,216,.25);}
+  .kanban-card .kc-title{font-weight:700;margin-bottom:3px;}
+  .kanban-card .kc-sub{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
+  .kanban-card .kc-badges{display:flex;gap:5px;flex-wrap:wrap;}
+
+  .content-topbar{display:flex;justify-content:flex-end;padding:16px 34px 0;}
+  .global-search-wrap{position:relative;flex:1;max-width:420px;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:10px 16px;box-shadow:var(--shadow-sm);margin-right:14px;}
+  .global-search-wrap svg{width:16px;height:16px;color:var(--muted);flex-shrink:0;}
+  .global-search-wrap input{border:none;outline:none;background:transparent;flex:1;font-size:13.5px;color:var(--text);font-family:'Inter',sans-serif;}
+  .global-search-results{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);max-height:360px;overflow-y:auto;z-index:40;}
+  .global-search-results.open{display:block;}
+  .gsr-item{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;align-items:center;}
+  .gsr-item:last-child{border-bottom:none;}
+  .gsr-item:hover{background:var(--surface-alt, var(--cloud));}
+  .gsr-item .gsr-type{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;flex-shrink:0;}
+  .gsr-empty{padding:14px;font-size:12.5px;color:var(--muted);text-align:center;}
+  .notif-wrap{position:relative;}
+  .notif-bell{position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text);transition:.15s;}
+  .notif-bell:hover{border-color:var(--accent);}
+  .notif-bell svg{width:18px;height:18px;}
+  .notif-badge{position:absolute;top:-5px;right:-5px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px;}
+  .notif-panel{display:none;position:absolute;top:calc(100% + 8px);right:0;width:340px;max-width:88vw;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);max-height:420px;overflow-y:auto;z-index:41;}
+  .notif-panel.open{display:block;}
+  .notif-panel-header{padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+  .notif-item{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .notif-item:last-child{border-bottom:none;}
+  .notif-item:hover{background:var(--surface-alt);}
+  .notif-item .ni-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;}
+  .notif-item .ni-icon svg{width:15px;height:15px;}
+  .notif-item .ni-label{font-size:12.5px;font-weight:600;}
+  .notif-item .ni-sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .notif-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:12.5px;}
+  .notif-dismiss{background:none;border:none;color:var(--muted);font-size:13px;padding:2px 6px;border-radius:6px;flex-shrink:0;line-height:1;cursor:pointer;}
+  .notif-dismiss:hover{color:var(--danger);background:var(--surface-alt);}
+
+  /* ---- Menu latéral rétractable (desktop + mobile) ---- */
+  .sidebar-toggle-btn{background:none;border:none;color:var(--sidebar-text);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;flex-shrink:0;}
+  .sidebar-toggle-btn:hover{background:var(--sidebar-active);color:#fff;}
+  .sidebar-toggle-btn svg{width:18px;height:18px;}
+  .mobile-menu-btn{display:none;}
+  .sidebar-overlay{display:none;}
+
+  /* Desktop : ouvert par défaut, la classe .desktop-collapsed le réduit en rail d'icônes */
+  .sidebar{transition:width .2s ease;}
+  .sidebar.desktop-collapsed{width:74px;}
+  .sidebar.desktop-collapsed .logo,
+  .sidebar.desktop-collapsed .nav-item span,
+  .sidebar.desktop-collapsed .nav-section-label,
+  .sidebar.desktop-collapsed .sidebar-footer .who,
+  .sidebar.desktop-collapsed .sidebar-footer .who-sub,
+  .sidebar.desktop-collapsed .sidebar-footer button span{display:none;}
+  .sidebar.desktop-collapsed .sidebar-head{justify-content:center;padding:0 0 22px;}
+  .sidebar.desktop-collapsed .nav-item{justify-content:center;padding:11px 0;}
+  .sidebar.desktop-collapsed .nav-badge{position:absolute;top:4px;right:10px;margin-left:0;}
+  .sidebar.desktop-collapsed .sidebar-footer button{justify-content:center;}
+
+  @media (max-width: 820px){
+    /* Mobile : fermé par défaut (hors écran), la classe .mobile-open le fait glisser depuis la gauche */
+    .sidebar{
+      position:fixed;top:0;left:0;height:100vh;width:236px;z-index:120;
+      flex-direction:column;align-items:stretch;padding:26px 0 20px;
+      overflow-y:auto;transform:translateX(-100%);transition:transform .25s ease;
+    }
+    .sidebar.mobile-open{transform:translateX(0);}
+    .sidebar.mobile-open ~ .sidebar-overlay{display:block;position:fixed;inset:0;background:rgba(4,8,16,.5);z-index:110;}
+    .content{padding:16px 14px 50px;}
+    .content-topbar{padding:14px 14px 0;}
+    .mobile-menu-btn{display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;width:42px;height:42px;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);flex-shrink:0;margin-right:12px;color:var(--text);}
+    .mobile-menu-btn svg{width:19px;height:19px;}
+    .cards-row{gap:10px;}
+    .stat-card{min-width:130px;padding:14px 15px;}
+    .item-title{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+    .item-actions{flex-wrap:wrap;}
+    .timeline{padding-left:16px;}
+    .tl-item::before{left:-16px;}
+    .btn-pdf{font-size:11.5px;padding:6px 11px;}
+    .thread{max-height:60vh;}
+    .panel{padding:16px 16px;}
+    .cards-row .stat-card{flex:1 1 45%;}
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
+  <defs>
+    <symbol id="icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></symbol>
+    <symbol id="icon-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="icon-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="icon-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v11a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1 0-4"/><circle cx="16.5" cy="14" r="1.4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="icon-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h5M9.5 17h5M9.5 9.3h1.5"/></symbol>
+    <symbol id="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-2-1.3L14 21l-2-1.3L10 21l-2-1.3L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.3 8.3 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2z"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="icon-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></symbol>
+    <symbol id="icon-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><path d="M13.5 7l-3 10"/></symbol>
+    <symbol id="icon-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-4 2-8 5-10z"/><circle cx="12" cy="10" r="1.6" fill="currentColor" stroke="none"/><path d="M9 16l-3 1 1-3"/><path d="M15 16l3 1-1-3"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  </defs>
+</svg>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-head">
+      <img src="../logo.png" alt="PCW">
+      <div class="logo">PCW<div class="sub">Espace Client</div></div>
+      <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Réduire / déplier le menu" aria-label="Réduire ou déplier le menu" type="button">
+        <svg viewBox="0 0 24 24"><use href="#icon-menu"></use></svg>
+      </button>
+    </div>
+
+    <div class="nav-section-label">Mon espace</div>
+    <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg class="nav-icon"><use href="#icon-home"></use></svg><span>Tableau de bord</span></div>
+    <div class="nav-item" data-page="demandes" onclick="showPage('demandes')"><svg class="nav-icon"><use href="#icon-check-square"></use></svg><span>Demandes</span></div>
+    <div class="nav-item" data-page="messages" onclick="showPage('messages')"><svg class="nav-icon"><use href="#icon-mail"></use></svg><span>Messages</span><span class="nav-badge" id="badge-messages" style="display:none;">0</span></div>
+    <div class="nav-item" data-page="fichiers" onclick="showPage('fichiers')"><svg class="nav-icon"><use href="#icon-folder"></use></svg><span>Fichiers</span></div>
+    <div class="nav-item" data-page="paiements" onclick="showPage('paiements')"><svg class="nav-icon"><use href="#icon-wallet"></use></svg><span>Paiements</span></div>
+    <div class="nav-item" data-page="projet" onclick="showPage('projet')"><svg class="nav-icon"><use href="#icon-bar-chart"></use></svg><span>Suivi de projet</span></div>
+    <div class="nav-item" data-page="documents" onclick="showPage('documents')"><svg class="nav-icon"><use href="#icon-file-text"></use></svg><span>Devis & Factures</span></div>
+
+    <div class="sidebar-footer">
+      <div class="who" id="header-client-name">PCW</div>
+      <div class="who-sub">Client</div>
+      <button id="theme-toggle-btn" onclick="toggleTheme()"><svg id="theme-icon" class="nav-icon"><use href="#icon-moon"></use></svg><span id="theme-label">Mode sombre</span></button>
+      <button onclick="logout()"><svg class="nav-icon"><use href="#icon-logout"></use></svg><span>Se déconnecter</span></button>
+    </div>
+  </div>
+
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="content-topbar">
+      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu" type="button">
+        <svg viewBox="0 0 24 24"><use href="#icon-menu"></use></svg>
+      </button>
+      <div class="global-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
+        <input type="text" id="global-search-input" placeholder="Rechercher une demande, un message, une facture…" autocomplete="off">
+        <div class="global-search-results" id="global-search-results"></div>
+      </div>
+      <div class="notif-wrap" id="notif-wrap">
+        <div class="notif-bell" id="notif-bell-btn">
+          <svg viewBox="0 0 24 24"><use href="#icon-bell"></use></svg>
+          <div class="notif-badge" id="notif-badge">0</div>
+        </div>
+        <div class="notif-panel" id="notif-panel"></div>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- TABLEAU DE BORD -->
+      <div class="page active" id="page-dashboard">
+        <div class="dash-greeting" id="dash-greeting">Bonjour</div>
+        <div class="dash-greeting-sub">Voici un résumé de ton espace.</div>
+        <div class="cards-row" id="dash-grid"></div>
+        <div class="panel">
+          <h3>Dernière demande</h3>
+          <div id="dash-last-demande"><div class="empty-state">Chargement…</div></div>
+        </div>
+        <div class="panel">
+          <h3>Dernier message</h3>
+          <div id="dash-last-message"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- DEMANDES -->
+      <div class="page" id="page-demandes">
+        <div class="page-title">Demandes</div>
+        <div class="page-sub">Ce que PCW te demande, et tes propres demandes.</div>
+        <div id="demandes-liste-wrap">
+          <div class="panel" id="panel-demandes-admin" style="display:none;">
+            <h3>Demandes de PCW</h3>
+            <div id="demandes-admin-list"></div>
+          </div>
+          <div class="panel">
+            <h3>Nouvelle demande</h3>
+            <label for="d-titre">Titre</label>
+            <input type="text" id="d-titre" placeholder="Ex : Modifier la page d'accueil">
+            <label for="d-description">Description</label>
+            <textarea id="d-description" placeholder="Décris ta demande..."></textarea>
+            <label for="d-priorite">Priorité</label>
+            <select id="d-priorite">
+              <option value="Normal">Normal</option>
+              <option value="Urgent">Urgent</option>
+              <option value="Faible">Faible</option>
+            </select>
+            <button class="btn" onclick="creerDemande()">Envoyer la demande</button>
+            <div id="demande-msg"></div>
+          </div>
+          <div class="panel">
+            <h3>Mes demandes</h3>
+            <div id="demandes-list"><div class="empty-state">Chargement…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="page" id="page-messages">
+        <div class="page-title">Messages</div>
+        <div class="page-sub">Discute directement avec PCW.</div>
+        <div class="panel">
+          <div class="thread" id="messages-thread"><div class="empty-state">Chargement…</div></div>
+          <div class="compose">
+            <textarea id="message-input" placeholder="Écrire un message..."></textarea>
+            <button class="btn" onclick="envoyerMessage()">Envoyer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FICHIERS -->
+      <div class="page" id="page-fichiers">
+        <div class="page-title">Fichiers</div>
+        <div class="page-sub">Envoie tes photos ou documents à PCW.</div>
+        <div class="panel">
+          <label for="file-project-select">Projet concerné (optionnel)</label>
+          <select id="file-project-select" style="margin-bottom:14px;">
+            <option value="">— Aucun projet en particulier —</option>
+          </select>
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <svg viewBox="0 0 24 24"><use href="#icon-upload"></use></svg>
+            <p>Glisse un fichier ici, ou clique pour en choisir un</p>
+            <input type="file" id="file-input" onchange="handleFileSelect(this.files)">
+          </div>
+          <div id="upload-msg"></div>
+          <div id="fichiers-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- PAIEMENTS -->
+      <div class="page" id="page-paiements">
+        <div class="page-title">Paiements</div>
+        <div class="page-sub">Tes échéances et ton abonnement, en un coup d'œil.</div>
+        <div class="cards-row" id="pay-summary"></div>
+        <div class="panel" id="abo-card" style="display:none;">
+          <h3>Abonnement récurrent</h3>
+          <div id="abo-content"></div>
+        </div>
+        <div class="panel">
+          <h3>Factures en attente</h3>
+          <div id="paiements-list"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- SUIVI DE PROJET -->
+      <div class="page" id="page-projet">
+        <div class="page-title">Suivi de projet</div>
+        <div class="page-sub">Où en est ton projet, en un coup d'œil.</div>
+        <div class="panel">
+          <div id="projet-content"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- DEVIS & FACTURES -->
+      <div class="page" id="page-documents">
+        <div class="page-title">Devis & Factures</div>
+        <div class="page-sub">Tous tes documents, dans l'ordre chronologique.</div>
+        <div class="panel" id="documents-liste-wrap">
+          <div class="timeline" id="documents-timeline"><div class="empty-state">Chargement…</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="pdf-client.js"></script>
+<script>
+const SUPABASE_URL = "https://chlmceyretciqydrdpgp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_JXUR4NfJQB4V5F8prZ3kjQ_RvVuNQ7q";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let myContact = null;
+const ETAPES = ["maquette", "developpement", "revisions", "mise_en_ligne", "termine"];
+const ETAPES_LABELS = { maquette: "Maquette", developpement: "Développement", revisions: "Révisions", mise_en_ligne: "Mise en ligne", termine: "Terminé" };
+const PILL_PRIORITE = { Urgent: "var(--danger)", Normal: "var(--warning)", Faible: "var(--success)" };
+const PILL_STATUT_DEMANDE = { "Nouveau": "var(--info)", "En cours": "var(--warning)", "Traité": "var(--success)" };
+
+// Aplatit un projet en 0, 1 ou 2 "abonnements" (un projet peut avoir un
+// abonnement mensuel ET un abonnement annuel en parallèle).
+function abonnementsDe(e) {
+  const list = [];
+  if (e.facturation_recurrente && e.montant_recurrent) {
+    list.push({ titre: e.titre, montant: Number(e.montant_recurrent), frequence: e.frequence_facturation || "Mensuelle", prochaine: e.prochaine_facturation });
+  }
+  if (e.facturation_recurrente_2 && e.montant_recurrent_2) {
+    list.push({ titre: e.titre, montant: Number(e.montant_recurrent_2), frequence: e.frequence_facturation_2 || "Annuelle", prochaine: e.prochaine_facturation_2 });
+  }
+  return list;
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+function fmtDateFR(iso) {
+  if (!iso) return "—";
+  return iso.slice(0, 10).split("-").reverse().join("/");
+}
+function addDaysISO(iso, days) {
+  const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const SUN_PATH = '<circle cx="12" cy="12" r="4.3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>';
+const MOON_PATH = '<path d="M20 14.2A8.3 8.3 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2z"/>';
+function applyThemeIcon() {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  document.getElementById("theme-icon").innerHTML = isDark ? SUN_PATH : MOON_PATH;
+  document.getElementById("theme-label").textContent = isDark ? "Mode clair" : "Mode sombre";
+}
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  if (isDark) { document.documentElement.removeAttribute("data-theme"); localStorage.setItem("pcw-theme", "light"); }
+  else { document.documentElement.setAttribute("data-theme", "dark"); localStorage.setItem("pcw-theme", "dark"); }
+  applyThemeIcon();
+}
+applyThemeIcon();
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = "index.html"; return; }
+  currentUser = session.user;
+
+  const { data: contact, error } = await sb.from("contacts").select("*").eq("client_user_id", currentUser.id).single();
+  if (error || !contact) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#69787F;font-family:Inter,sans-serif;">Ton profil n\'est pas encore relié à un compte client. Contacte Pierre Créa Web.</div>';
+    return;
+  }
+  myContact = contact;
+  const displayName = [contact.prenom, contact.nom].filter(Boolean).join(" ") || contact.societe || "PCW";
+  document.getElementById("header-client-name").textContent = displayName;
+  document.getElementById("dash-greeting").textContent = "Bonjour " + (contact.prenom || displayName);
+
+  chargerTableauDeBord();
+  chargerDemandes();
+  chargerMessages();
+  chargerFichiers();
+  chargerProjet();
+  chargerDocuments();
+  chargerPaiements();
+  rafraichirBadgeMessages();
+  refreshNotifs();
+  initMessagesRealtime();
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  window.location.href = "index.html";
+}
+
+function showPage(key) {
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.page === key));
+  document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + key));
+  if (key === "messages") marquerMessagesLus();
+  if (window.innerWidth <= 820) document.querySelector(".sidebar").classList.remove("mobile-open");
+}
+
+function toggleSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  if (window.innerWidth <= 820) sidebar.classList.toggle("mobile-open");
+  else sidebar.classList.toggle("desktop-collapsed");
+}
+document.getElementById("sidebar-toggle-btn").addEventListener("click", toggleSidebar);
+document.getElementById("mobile-menu-btn").addEventListener("click", toggleSidebar);
+document.getElementById("sidebar-overlay").addEventListener("click", toggleSidebar);
+
+// ---- NOTIFICATIONS ----
+async function getDismissedNotifs() {
+  const { data } = await sb.from("client_dismissed_notifs").select("notif_id").eq("contact_id", myContact.id);
+  return (data || []).map(d => d.notif_id);
+}
+async function dismissNotif(id) {
+  await sb.from("client_dismissed_notifs").insert({
+    contact_id: myContact.id, notif_id: id,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+}
+async function clearAllNotifs() {
+  const items = await computeNotifications();
+  const dismissed = await getDismissedNotifs();
+  const rows = items.filter(it => !dismissed.includes(it.id)).map(it => ({
+    contact_id: myContact.id, notif_id: it.id,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  }));
+  if (rows.length) await sb.from("client_dismissed_notifs").insert(rows);
+  refreshNotifs();
+}
+
+async function computeNotifications() {
+  const today = new Date().toISOString().slice(0, 10);
+  const items = [];
+
+  const [{ data: messages }, { data: demandes }, { data: demandesAdmin }, { data: devis }, { data: factures }, { data: projets }, { data: fichiersAdmin }] = await Promise.all([
+    sb.from("messages").select("*").eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false).order("id", { ascending: false }),
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("statut", "Traité").neq("sens", "admin"),
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).eq("sens", "admin").neq("statut", "Traité"),
+    sb.from("devis").select("*").eq("contact_id", myContact.id).in("statut", ["En attente", "Envoyé"]),
+    sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée"),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
+    sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id).eq("envoye_par", "admin"),
+  ]);
+
+  (fichiersAdmin || []).forEach(f => {
+    items.push({ id: "fichier-admin-" + f.id, urgent: false, color: "var(--accent)", icon: "icon-folder",
+      label: "Nouveau fichier de PCW : " + (f.nom_fichier || ""), sub: "", date: f.date_creation || "",
+      fn: () => showPage("fichiers") });
+  });
+
+  (demandesAdmin || []).forEach(d => {
+    items.push({ id: "demande-admin-" + d.id, urgent: d.priorite === "Urgent", color: "var(--tertiary)", icon: "icon-check-square",
+      label: "PCW te demande : " + d.titre, sub: d.description || "", date: d.date_creation || "",
+      fn: () => showPage("demandes") });
+  });
+
+  (messages || []).forEach(m => {
+    items.push({ id: "msg-" + m.id, urgent: true, color: "var(--info)", icon: "icon-mail",
+      label: "Nouveau message de PCW", sub: m.contenu, date: m.date_creation || "",
+      fn: () => showPage("messages") });
+  });
+
+  (devis || []).forEach(d => {
+    items.push({ id: "devis-attente-" + d.id, urgent: false, color: "var(--accent)", icon: "icon-file-text",
+      label: "Devis en attente de ta réponse : " + (d.numero || ""), sub: d.montant_ttc ? Number(d.montant_ttc).toFixed(2) + " € TTC" : "",
+      date: d.date_creation || "", fn: () => showPage("documents") });
+  });
+
+  (factures || []).forEach(f => {
+    if (f.date_echeance && f.date_echeance < today) {
+      items.push({ id: "facture-retard-" + f.id, urgent: true, color: "var(--danger)", icon: "icon-wallet",
+        label: "Facture en retard : " + (f.numero || ""), sub: "Échue le " + fmtDateFR(f.date_echeance),
+        date: f.date_echeance, fn: () => showPage("paiements") });
+    } else if (f.date_echeance && f.date_echeance <= addDaysISO(today, 3)) {
+      items.push({ id: "facture-bientot-" + f.id, urgent: f.date_echeance === today, color: "var(--warning)", icon: "icon-wallet",
+        label: "Facture bientôt échue : " + (f.numero || ""), sub: "Échéance le " + fmtDateFR(f.date_echeance),
+        date: f.date_echeance, fn: () => showPage("paiements") });
+    }
+  });
+
+  (demandes || []).forEach(d => {
+    items.push({ id: "demande-traitee-" + d.id, urgent: false, color: "var(--success)", icon: "icon-check-square",
+      label: "Demande traitée : " + d.titre, sub: "PCW a terminé cette demande",
+      date: d.date_creation || "", fn: () => showPage("demandes") });
+  });
+
+  (projets || []).forEach(p => {
+    if (p.prochaine_facturation && p.prochaine_facturation <= addDaysISO(today, 7)) {
+      items.push({ id: "recurrent-" + p.id + "-" + p.prochaine_facturation, urgent: p.prochaine_facturation <= today, color: "var(--tertiary)", icon: "icon-repeat",
+        label: "Abonnement à renouveler bientôt", sub: "Prochaine facture le " + fmtDateFR(p.prochaine_facturation),
+        date: p.prochaine_facturation, fn: () => showPage("paiements") });
+    }
+  });
+
+  const dismissed = await getDismissedNotifs();
+  const filtered = items.filter(it => !dismissed.includes(it.id));
+  filtered.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
+  return filtered;
+}
+
+async function refreshNotifs() {
+  const items = await computeNotifications();
+  const badge = document.getElementById("notif-badge");
+  const urgentCount = items.filter(i => i.urgent).length;
+  const count = urgentCount || items.length;
+  if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 99 ? "99+" : count; }
+  else { badge.style.display = "none"; }
+  return items;
+}
+
+async function renderNotifPanelContent() {
+  const panel = document.getElementById("notif-panel");
+  const items = await computeNotifications();
+  panel.innerHTML = `<div class="notif-panel-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Notifications${items.length ? " (" + items.length + ")" : ""}</span>
+      ${items.length ? `<a href="#" id="notif-clear-all" style="font-weight:600;color:var(--accent);text-transform:none;letter-spacing:0;font-size:11.5px;">Tout effacer</a>` : ""}
+    </div>` +
+    (items.length ? items.map((it, i) => `
+      <div class="notif-item" data-i="${i}">
+        <div class="ni-icon" style="background:${it.color};"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><use href="#${it.icon}"></use></svg></div>
+        <div style="flex:1;min-width:0;"><div class="ni-label">${escapeHtml(it.label)}</div><div class="ni-sub">${escapeHtml(it.sub || "")}</div></div>
+        <button class="notif-dismiss" data-dismiss-i="${i}" title="Supprimer cette notification">✕</button>
+      </div>`).join("") : `<div class="notif-empty">Rien à signaler pour l'instant 👍</div>`);
+  panel.querySelectorAll(".notif-item").forEach(el => el.addEventListener("click", (e) => {
+    if (e.target.closest(".notif-dismiss")) return;
+    items[Number(el.dataset.i)].fn();
+    panel.classList.remove("open");
+  }));
+  panel.querySelectorAll(".notif-dismiss").forEach(btn => btn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await dismissNotif(items[Number(btn.dataset.dismissI)].id);
+    await refreshNotifs();
+    renderNotifPanelContent();
+  }));
+  const clearAll = document.getElementById("notif-clear-all");
+  if (clearAll) clearAll.addEventListener("click", (e) => { e.preventDefault(); clearAllNotifs(); });
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById("notif-panel");
+  const isOpen = panel.classList.contains("open");
+  if (isOpen) { panel.classList.remove("open"); return; }
+  renderNotifPanelContent();
+  panel.classList.add("open");
+}
+
+// ---- TABLEAU DE BORD ----
+async function chargerTableauDeBord() {
+  const [demandesRes, messagesRes, projetRes, facturesRes, abosRes] = await Promise.all([
+    sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false }),
+    sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false }).limit(1),
+    sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").order("date_echeance", { ascending: true }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
+  ]);
+
+  const demandes = demandesRes.data || [];
+  const messages = messagesRes.data || [];
+  const projet = (projetRes.data || [])[0] || null;
+  const facturesEnAttente = facturesRes.data || [];
+  const abonnements = abosRes.data || [];
+
+  const enCours = demandes.filter(d => d.statut !== "Traité").length;
+  const prochaineFacture = facturesEnAttente[0] || null;
+
+  let projetLabel = "Aucun projet", projetSub = "—";
+  if (projet) {
+    const idx = ETAPES.indexOf(projet.etape_projet || "maquette");
+    projetLabel = ETAPES_LABELS[projet.etape_projet || "maquette"];
+    projetSub = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) + "% terminé" : "—";
+  }
+
+  let abonnementCard = "";
+  const abonnementsProjet = abonnements.flatMap(abonnementsDe);
+  if (abonnementsProjet.length) {
+    const total = abonnementsProjet.reduce((s, a) => s + a.montant, 0);
+    abonnementCard = `
+    <div class="stat-card clickable" onclick="showPage('paiements')">
+      <div class="stat-icon-wrap" style="background:var(--tertiary);color:#fff;"><svg><use href="#icon-repeat"></use></svg></div>
+      <div class="num">${total.toFixed(0)} €</div>
+      <div class="label">${abonnementsProjet.length > 1 ? abonnementsProjet.length + " abonnements récurrents" : "Abonnement " + escapeHtml(abonnementsProjet[0].frequence || "récurrent")}</div>
+    </div>`;
+  }
+
+  document.getElementById("dash-grid").innerHTML = `
+    <div class="stat-card clickable" onclick="showPage('demandes')">
+      <div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-check-square"></use></svg></div>
+      <div class="num">${enCours}</div>
+      <div class="label">Demandes en cours (${demandes.length} au total)</div>
+    </div>
+    <div class="stat-card clickable" onclick="showPage('messages')">
+      <div class="stat-icon-wrap" style="background:var(--info);color:#fff;"><svg><use href="#icon-mail"></use></svg></div>
+      <div class="num">${messages.length}</div>
+      <div class="label">${messages.length ? "Dernier le " + fmtDateFR(messages[0].date_creation) : "Aucun message"}</div>
+    </div>
+    <div class="stat-card clickable" onclick="showPage('projet')">
+      <div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-bar-chart"></use></svg></div>
+      <div class="num">${escapeHtml(projetLabel)}</div>
+      <div class="label">${projetSub}</div>
+    </div>
+    <div class="stat-card clickable" onclick="showPage('paiements')">
+      <div class="stat-icon-wrap" style="background:var(--warning);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div>
+      <div class="num">${prochaineFacture ? Number(prochaineFacture.montant_ttc || 0).toFixed(0) + " €" : "À jour"}</div>
+      <div class="label">${prochaineFacture ? (prochaineFacture.date_echeance ? "Échéance " + fmtDateFR(prochaineFacture.date_echeance) : prochaineFacture.numero || "") : "Aucune facture en attente"}</div>
+    </div>
+    ${abonnementCard}`;
+
+  const lastDemandeEl = document.getElementById("dash-last-demande");
+  lastDemandeEl.innerHTML = demandes.length ? `
+    <div class="item" style="cursor:pointer;" onclick="showPage('demandes')">
+      <div class="item-title">${escapeHtml(demandes[0].titre)}
+        <span class="badge" style="background:${PILL_PRIORITE[demandes[0].priorite] || "var(--muted)"};">${escapeHtml(demandes[0].priorite)}</span>
+        <span class="badge" style="background:${PILL_STATUT_DEMANDE[demandes[0].statut] || "var(--muted)"};">${escapeHtml(demandes[0].statut)}</span>
+      </div>
+      <div class="item-meta">${fmtDateFR(demandes[0].date_creation)}</div>
+    </div>` : '<div class="empty-state">Aucune demande pour le moment.</div>';
+
+  const lastMessageEl = document.getElementById("dash-last-message");
+  lastMessageEl.innerHTML = messages.length ? `
+    <div class="item" style="cursor:pointer;" onclick="showPage('messages')">
+      <div class="item-title">${messages[0].expediteur === "client" ? "Toi" : "PCW"}</div>
+      <div class="item-desc">${escapeHtml(messages[0].contenu)}</div>
+      <div class="item-meta">${messages[0].date_creation ? messages[0].date_creation.slice(0, 16).replace("T", " ") : ""}</div>
+    </div>` : '<div class="empty-state">Aucun message pour l\'instant.</div>';
+}
+
+// ---- DEMANDES ----
+async function creerDemande() {
+  const titre = document.getElementById("d-titre").value.trim();
+  const description = document.getElementById("d-description").value.trim();
+  const priorite = document.getElementById("d-priorite").value;
+  const msgEl = document.getElementById("demande-msg");
+  msgEl.innerHTML = "";
+  if (!titre) { msgEl.innerHTML = '<div class="error-msg">Merci d\'indiquer un titre.</div>'; return; }
+
+  const { error } = await sb.from("demandes").insert({
+    contact_id: myContact.id, titre, description, priorite, sens: "client",
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (error) { msgEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+
+  msgEl.innerHTML = '<div class="success-msg">Demande envoyée !</div>';
+  document.getElementById("d-titre").value = "";
+  document.getElementById("d-description").value = "";
+  chargerDemandes();
+}
+
+function renderDemandeItem(d, withActions) {
+  return `
+    <div class="item">
+      <div class="item-title">${escapeHtml(d.titre)}
+        <span class="badge" style="background:${PILL_PRIORITE[d.priorite] || "var(--muted)"};">${escapeHtml(d.priorite)}</span>
+        <span class="badge" style="background:${PILL_STATUT_DEMANDE[d.statut] || "var(--muted)"};">${escapeHtml(d.statut)}</span>
+      </div>
+      ${d.description ? `<div class="item-desc">${escapeHtml(d.description)}</div>` : ""}
+      <div class="item-meta">${fmtDateFR(d.date_creation)}</div>
+      ${withActions && d.statut !== "Traité" ? `<div class="item-actions">
+        <button class="btn-pdf" onclick="showPage('fichiers')">Envoyer un fichier</button>
+        <button class="btn-pdf" onclick="marquerDemandeAdminTraitee(${d.id})">Marquer comme traité</button>
+      </div>` : ""}
+    </div>`;
+}
+
+function toggleArchive(id) {
+  document.getElementById(id).classList.toggle("open");
+  document.getElementById(id + "-toggle").classList.toggle("open");
+}
+
+async function chargerDemandes() {
+  const { data, error } = await sb.from("demandes").select("*").eq("contact_id", myContact.id).order("date_creation", { ascending: false });
+  const elClient = document.getElementById("demandes-list");
+  const elAdmin = document.getElementById("demandes-admin-list");
+  const panelAdmin = document.getElementById("panel-demandes-admin");
+  if (error) { elClient.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+
+  const demandesClient = (data || []).filter(d => d.sens !== "admin");
+  const demandesAdmin = (data || []).filter(d => d.sens === "admin");
+  const clientActives = demandesClient.filter(d => d.statut !== "Traité");
+  const clientArchivees = demandesClient.filter(d => d.statut === "Traité");
+  const adminActives = demandesAdmin.filter(d => d.statut !== "Traité");
+  const adminArchivees = demandesAdmin.filter(d => d.statut === "Traité");
+
+  if (demandesClient.length === 0) {
+    elClient.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Aucune demande pour le moment.</div>';
+  } else {
+    elClient.innerHTML =
+      (clientActives.length ? clientActives.map(d => renderDemandeItem(d, false)).join("") : '<div class="empty-state" style="padding:16px;">Aucune demande active.</div>') +
+      (clientArchivees.length ? `
+        <button class="archive-toggle" id="archive-client-toggle" onclick="toggleArchive('archive-client')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          ${clientArchivees.length} demande(s) traitée(s) — voir l'archive
+        </button>
+        <div class="archive-list" id="archive-client">${clientArchivees.map(d => renderDemandeItem(d, false)).join("")}</div>` : "");
+  }
+
+  if (demandesAdmin.length === 0) {
+    panelAdmin.style.display = "none";
+  } else {
+    panelAdmin.style.display = "block";
+    elAdmin.innerHTML =
+      (adminActives.length ? adminActives.map(d => renderDemandeItem(d, true)).join("") : '<div class="empty-state" style="padding:16px;">Aucune demande active.</div>') +
+      (adminArchivees.length ? `
+        <button class="archive-toggle" id="archive-admin-toggle" onclick="toggleArchive('archive-admin')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          ${adminArchivees.length} demande(s) traitée(s) — voir l'archive
+        </button>
+        <div class="archive-list" id="archive-admin">${adminArchivees.map(d => renderDemandeItem(d, true)).join("")}</div>` : "");
+  }
+}
+
+async function marquerDemandeAdminTraitee(id) {
+  const { error } = await sb.from("demandes").update({ statut: "Traité" }).eq("id", id);
+  if (!error) { chargerDemandes(); refreshNotifs(); }
+}
+
+// ---- MESSAGES ----
+async function rafraichirBadgeMessages() {
+  const { count } = await sb.from("messages").select("id", { count: "exact", head: true })
+    .eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false);
+  const badge = document.getElementById("badge-messages");
+  if (count && count > 0) { badge.textContent = count > 9 ? "9+" : count; badge.style.display = "flex"; }
+  else { badge.style.display = "none"; }
+}
+
+async function marquerMessagesLus() {
+  await sb.from("messages").update({ lu: true }).eq("contact_id", myContact.id).eq("expediteur", "admin").eq("lu", false);
+  rafraichirBadgeMessages();
+  refreshNotifs();
+}
+
+async function chargerMessages() {
+  const { data, error } = await sb.from("messages").select("*").eq("contact_id", myContact.id).order("id", { ascending: true });
+  const el = document.getElementById("messages-thread");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Aucun message pour l\'instant.</div>';
+    return;
+  }
+  el.innerHTML = data.map(m => `
+    <div class="msg-bubble ${m.expediteur === "client" ? "client" : "admin"}">
+      ${escapeHtml(m.contenu)}
+      <span class="msg-time">${m.date_creation ? m.date_creation.slice(0, 16).replace("T", " ") : ""}</span>
+    </div>`).join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+async function envoyerMessage() {
+  const input = document.getElementById("message-input");
+  const contenu = input.value.trim();
+  if (!contenu) return;
+  const { error } = await sb.from("messages").insert({
+    contact_id: myContact.id, expediteur: "client", contenu,
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (!error) { input.value = ""; chargerMessages(); chargerTableauDeBord(); }
+}
+
+// ---- Temps réel : nouveaux messages sans avoir à recharger ----
+let messagesRealtimeChannel = null;
+function initMessagesRealtime() {
+  if (messagesRealtimeChannel) return;
+  messagesRealtimeChannel = sb.channel("client-messages-realtime")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `contact_id=eq.${myContact.id}` }, async (payload) => {
+      const row = payload.new;
+      const activePage = document.getElementById("page-messages").classList.contains("active");
+      if (activePage) { chargerMessages(); if (row.expediteur === "admin") marquerMessagesLus(); }
+      else { rafraichirBadgeMessages(); refreshNotifs(); }
+    })
+    .subscribe();
+}
+
+// ---- FICHIERS ----
+function formatTaille(octets) {
+  if (!octets) return "";
+  if (octets < 1024) return octets + " o";
+  if (octets < 1024 * 1024) return (octets / 1024).toFixed(0) + " Ko";
+  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+}
+
+let mesProjetsPourFichiers = [];
+async function chargerSelecteurProjetFichiers() {
+  const { data } = await sb.from("evenements").select("id, titre, type_evenement").eq("contact_id", myContact.id).order("id", { ascending: false });
+  mesProjetsPourFichiers = data || [];
+  const sel = document.getElementById("file-project-select");
+  sel.innerHTML = `<option value="">— Aucun projet en particulier —</option>` +
+    mesProjetsPourFichiers.map(p => `<option value="${p.id}">${escapeHtml(p.titre || p.type_evenement || "Projet #" + p.id)}</option>`).join("");
+}
+
+async function handleFileSelect(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  const msgEl = document.getElementById("upload-msg");
+  msgEl.innerHTML = '<div class="item-meta">Envoi en cours…</div>';
+
+  const cheminSafe = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const chemin = `${myContact.id}/${cheminSafe}`;
+  const evenementId = document.getElementById("file-project-select").value ? Number(document.getElementById("file-project-select").value) : null;
+
+  const { error: uploadError } = await sb.storage.from("photos-clients").upload(chemin, file, { upsert: true });
+  if (uploadError) { msgEl.innerHTML = `<div class="error-msg">${uploadError.message}</div>`; return; }
+
+  const { error: insertError } = await sb.from("fichiers_clients").insert({
+    contact_id: myContact.id, evenement_id: evenementId, nom_fichier: file.name, chemin,
+    type_mime: file.type, taille_octets: file.size, envoye_par: "client",
+    date_creation: new Date().toISOString().slice(0, 16).replace("T", " "),
+  });
+  if (insertError) { msgEl.innerHTML = `<div class="error-msg">${insertError.message}</div>`; return; }
+
+  msgEl.innerHTML = '<div class="success-msg">Fichier envoyé !</div>';
+  document.getElementById("file-input").value = "";
+  chargerFichiers();
+}
+
+async function chargerFichiers() {
+  await chargerSelecteurProjetFichiers();
+  const { data, error } = await sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const el = document.getElementById("fichiers-list");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Aucun fichier échangé pour le moment.</div>';
+    return;
+  }
+  const renderFile = f => `
+    <div class="file-item">
+      <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.nom_fichier)} ${f.envoye_par === "admin" ? `<span class="badge subtle">de PCW</span>` : `<span class="badge subtle">envoyé par moi</span>`}</div>
+        <div class="file-meta">${formatTaille(f.taille_octets)} — ${fmtDateFR(f.date_creation)}</div>
+      </div>
+      <button class="btn-pdf" onclick="telechargerFichier('${f.chemin}')">Ouvrir</button>
+      <button class="btn-pdf" style="color:var(--danger);" onclick="supprimerFichier(${f.id}, '${f.chemin}')">🗑</button>
+    </div>`;
+
+  const parProjet = {};
+  const sansProjet = [];
+  data.forEach(f => {
+    if (f.evenement_id) { (parProjet[f.evenement_id] = parProjet[f.evenement_id] || []).push(f); }
+    else sansProjet.push(f);
+  });
+  const nomProjet = id => {
+    const p = mesProjetsPourFichiers.find(x => x.id === id);
+    return p ? (p.titre || p.type_evenement || "Projet #" + id) : "Projet";
+  };
+  const groupesProjet = Object.keys(parProjet).map(evId => `
+    <div style="margin-bottom:18px;">
+      <div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📁 ${escapeHtml(nomProjet(Number(evId)))}</div>
+      ${parProjet[evId].map(renderFile).join("")}
+    </div>`).join("");
+  const groupeSansProjet = sansProjet.length ? `
+    <div>
+      <div class="item-meta" style="font-weight:700;color:var(--text);margin-bottom:6px;">📄 Fichiers généraux</div>
+      ${sansProjet.map(renderFile).join("")}
+    </div>` : "";
+  el.innerHTML = groupesProjet + groupeSansProjet;
+}
+
+async function telechargerFichier(chemin) {
+  const { data, error } = await sb.storage.from("photos-clients").createSignedUrl(chemin, 60);
+  if (error) { alert("Fichier introuvable."); return; }
+  window.open(data.signedUrl, "_blank");
+}
+async function supprimerFichier(id, chemin) {
+  if (!confirm("Supprimer définitivement ce fichier ?")) return;
+  await sb.storage.from("photos-clients").remove([chemin]);
+  const { error } = await sb.from("fichiers_clients").delete().eq("id", id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  chargerFichiers();
+}
+
+document.getElementById("upload-zone").addEventListener("dragover", e => { e.preventDefault(); e.currentTarget.classList.add("dragover"); });
+document.getElementById("upload-zone").addEventListener("dragleave", e => { e.currentTarget.classList.remove("dragover"); });
+document.getElementById("upload-zone").addEventListener("drop", e => {
+  e.preventDefault(); e.currentTarget.classList.remove("dragover");
+  handleFileSelect(e.dataTransfer.files);
+});
+
+// ---- PAIEMENTS ----
+async function chargerPaiements() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [{ data: factures }, { data: projets }] = await Promise.all([
+    sb.from("factures").select("*").eq("contact_id", myContact.id).neq("statut", "Payée").neq("statut", "Annulée").order("date_echeance", { ascending: true }),
+    sb.from("evenements").select("*").eq("contact_id", myContact.id).or("facturation_recurrente.eq.true,facturation_recurrente_2.eq.true"),
+  ]);
+
+  const list = factures || [];
+  const enRetard = list.filter(f => f.date_echeance && f.date_echeance < today);
+  const bientot = list.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= addDaysISO(today, 7));
+
+  document.getElementById("pay-summary").innerHTML = `
+    <div class="stat-card">
+      <div class="stat-icon-wrap" style="background:var(--danger);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div>
+      <div class="num">${enRetard.length}</div>
+      <div class="label">En retard</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon-wrap" style="background:var(--warning);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div>
+      <div class="num">${bientot.length}</div>
+      <div class="label">Sous 7 jours</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#icon-wallet"></use></svg></div>
+      <div class="num">${list.reduce((s, f) => s + Number(f.montant_ttc || 0), 0).toFixed(0)} €</div>
+      <div class="label">Total en attente</div>
+    </div>`;
+
+  const aboCard = document.getElementById("abo-card");
+  const abonnementsListe = (projets || []).flatMap(abonnementsDe);
+  if (abonnementsListe.length) {
+    aboCard.style.display = "block";
+    document.querySelector("#abo-card h3").textContent = abonnementsListe.length > 1 ? "Abonnements récurrents" : "Abonnement récurrent";
+    document.getElementById("abo-content").innerHTML = abonnementsListe.map(a => `
+      <div class="abo-box" style="margin-bottom:10px;">
+        <div class="abo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#icon-repeat"></use></svg></div>
+        <div>
+          <div class="abo-title">${escapeHtml(a.titre || "Abonnement")} — ${a.montant.toFixed(2)} € / ${escapeHtml(a.frequence)}</div>
+          <div class="abo-sub">${a.prochaine ? "Prochaine facture le " + fmtDateFR(a.prochaine) : "Date non définie"}</div>
+        </div>
+      </div>`).join("");
+  } else {
+    aboCard.style.display = "none";
+  }
+
+  const el = document.getElementById("paiements-list");
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><use href="#icon-wallet"></use></svg>Aucune facture en attente. Tout est à jour !</div>';
+    return;
+  }
+  el.innerHTML = list.map(f => {
+    let cls = "pay-flag-ok", texte = f.date_echeance ? fmtDateFR(f.date_echeance) : "—";
+    if (f.date_echeance && f.date_echeance < today) { cls = "pay-flag-late"; texte = "En retard — " + texte; }
+    else if (f.date_echeance && f.date_echeance <= addDaysISO(today, 7)) { cls = "pay-flag-soon"; texte = "Bientôt — " + texte; }
+    return `
+    <div class="item">
+      <div class="item-title">${escapeHtml(f.numero || "Facture")} <span class="badge subtle">${escapeHtml(f.statut || "")}</span></div>
+      <div class="item-meta">${f.montant_ttc ? Number(f.montant_ttc).toFixed(2) + " € TTC" : ""}</div>
+      <div class="item-meta ${cls}">${texte}</div>
+      <div class="item-actions">
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "preview")'>Voir le PDF</button>
+        <button class="btn-pdf" onclick='voirFacturePDF(${f.id}, "download")'>Télécharger</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ---- SUIVI DE PROJET ----
+const ETAPES_ICONS = { maquette: "icon-compass", developpement: "icon-code", revisions: "icon-repeat", mise_en_ligne: "icon-rocket", termine: "icon-check-square" };
+async function chargerProjet() {
+  const { data, error } = await sb.from("evenements").select("*").eq("contact_id", myContact.id).order("id", { ascending: false });
+  const el = document.getElementById("projet-content");
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><use href="#icon-bar-chart"></use></svg>Aucun projet en cours.</div>';
+    return;
+  }
+
+  el.innerHTML = data.map(p => {
+    const etape = p.etape_projet || "maquette";
+    const idx = ETAPES.indexOf(etape);
+    const pct = idx >= 0 ? Math.round(((idx + 1) / ETAPES.length) * 100) : 0;
+
+    const stepsHtml = ETAPES.map((e, i) => {
+      const state = i < idx ? "done" : i === idx ? "current" : "";
+      const icon = i < idx ? "icon-check-square" : ETAPES_ICONS[e];
+      const dot = `<div class="step ${state}"><div class="step-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#${icon}"></use></svg></div><div class="step-label">${ETAPES_LABELS[e]}</div></div>`;
+      if (i === 0) return dot;
+      const lineState = i <= idx ? "done" : "";
+      return `<div class="step-line ${lineState}"></div>${dot}`;
+    }).join("");
+
+    return `
+    <div style="margin-bottom:8px;">
+      <div class="project-name">${escapeHtml(p.titre || "Projet")}</div>
+      <div class="cards-row" style="margin-bottom:20px;">
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--accent);color:#fff;"><svg><use href="#${ETAPES_ICONS[etape]}"></use></svg></div>
+          <div class="num">${ETAPES_LABELS[etape]}</div>
+          <div class="label">Étape actuelle</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--success);color:#fff;"><svg><use href="#icon-bar-chart"></use></svg></div>
+          <div class="num">${pct}%</div>
+          <div class="label">Progression</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:${p.date_livraison_estimee ? "var(--tertiary)" : "var(--muted)"};color:#fff;"><svg><use href="#icon-calendar"></use></svg></div>
+          <div class="num">${p.date_livraison_estimee ? fmtDateFR(p.date_livraison_estimee) : "—"}</div>
+          <div class="label">Livraison estimée</div>
+        </div>
+      </div>
+      <div class="stepper-wrap"><div class="stepper">${stepsHtml}</div></div>
+    </div>`;
+  }).join("<hr style='border:none;border-top:1px solid var(--border);margin:24px 0;'>");
+}
+
+// ---- DEVIS & FACTURES ----
+async function chargerDocuments() {
+  const [{ data: devis }, { data: factures }] = await Promise.all([
+    sb.from("devis").select("*").eq("contact_id", myContact.id),
+    sb.from("factures").select("*").eq("contact_id", myContact.id),
+  ]);
+
+  const items = [
+    ...(devis || []).map(d => ({ type: "devis", date: d.date_creation, row: d })),
+    ...(factures || []).map(f => ({ type: "facture", date: f.date_facture || f.date_creation, row: f })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const el = document.getElementById("documents-timeline");
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><use href="#icon-file-text"></use></svg>Aucun devis ou facture pour le moment.</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(it => {
+    const r = it.row;
+    const isDevis = it.type === "devis";
+    const label = isDevis ? "Devis" : "Facture";
+    const numero = r.numero || label;
+    const montant = r.montant_ttc ? Number(r.montant_ttc).toFixed(2) + " € TTC" : "";
+    const fnVoir = isDevis ? "voirDevisPDF" : "voirFacturePDF";
+    let echeanceHtml = "";
+    if (!isDevis && r.statut !== "Payée" && r.date_echeance) {
+      const today = new Date().toISOString().slice(0, 10);
+      const enRetard = r.date_echeance < today;
+      const bientot = !enRetard && r.date_echeance <= addDaysISO(today, 7);
+      const color = enRetard ? "var(--danger)" : (bientot ? "var(--warning)" : "var(--muted)");
+      const texte = enRetard ? "En retard — échéance " : "Échéance ";
+      echeanceHtml = `<span class="badge" style="background:${color};">${texte}${fmtDateFR(r.date_echeance)}</span>`;
+    }
+    const enAttenteSignature = isDevis && ["En attente", "Envoyé"].includes(r.statut);
+    const signatureInfo = isDevis && r.signature_nom ? `<div class="item-meta" style="margin-top:4px;">✔ Signé par ${escapeHtml(r.signature_nom)} le ${r.signature_date ? r.signature_date.slice(0, 16).replace("T", " ") : ""}</div>` : "";
+    const peutPayer = !isDevis && r.statut !== "Payée" && r.statut !== "Annulée";
+    return `
+    <div class="tl-item">
+      <div class="tl-type">${label}</div>
+      <div class="item-title">${escapeHtml(numero)} <span class="badge subtle">${escapeHtml(r.statut || "")}</span>${echeanceHtml}</div>
+      <div class="item-meta">${montant}${montant ? " — " : ""}${fmtDateFR(it.date)}</div>
+      ${signatureInfo}
+      <div class="item-actions">
+        <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "preview")'>Voir le PDF</button>
+        <button class="btn-pdf" onclick='${fnVoir}(${r.id}, "download")'>Télécharger</button>
+        ${enAttenteSignature ? `<button class="btn-pdf" style="background:var(--success);color:#fff;" onclick="ouvrirSignature(${r.id})">✔ Accepter</button>
+        <button class="btn-pdf" style="color:var(--danger);" onclick="refuserDevis(${r.id})">✕ Refuser</button>` : ""}
+        ${peutPayer ? `<button class="btn-pdf" style="background:var(--accent);color:#fff;" onclick="payerFacture(${r.id})">💳 Payer maintenant</button>` : ""}
+      </div>
+      ${peutPayer ? `<div class="item-meta" style="margin-top:6px;">
+        Des frais de traitement s'ajoutent au paiement par carte.<br>
+        Paiement par virement bancaire également possible — RIB disponible sur la facture (bouton "Voir le PDF").
+      </div>` : ""}
+      ${enAttenteSignature ? `<div id="signature-panel-${r.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-alt, var(--cloud));border-radius:10px;">
+        <label style="font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px;">Tape ton nom complet pour signer</label>
+        <input type="text" id="signature-nom-${r.id}" placeholder="Prénom Nom" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;margin-bottom:10px;">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" id="signature-check-${r.id}" style="margin-top:2px;">
+          <span>Je certifie avoir lu ce devis et j'en accepte le contenu.</span>
+        </label>
+        <button class="btn-pdf" style="background:var(--success);color:#fff;" onclick="confirmerSignature(${r.id})">Confirmer ma signature</button>
+        <button class="btn-pdf" onclick="document.getElementById('signature-panel-${r.id}').style.display='none';">Annuler</button>
+      </div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function ouvrirSignature(id) {
+  const panel = document.getElementById("signature-panel-" + id);
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+async function confirmerSignature(id) {
+  const nom = document.getElementById("signature-nom-" + id).value.trim();
+  const checked = document.getElementById("signature-check-" + id).checked;
+  if (!nom) { alert("Merci d'indiquer ton nom complet."); return; }
+  if (!checked) { alert("Merci de cocher la case de certification."); return; }
+  const { error } = await sb.from("devis").update({
+    statut: "Accepté",
+    signature_nom: nom,
+    signature_date: new Date().toISOString(),
+    signature_ua: navigator.userAgent,
+  }).eq("id", id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  chargerDocuments();
+  refreshNotifs();
+}
+
+async function refuserDevis(id) {
+  if (!confirm("Confirmer le refus de ce devis ?")) return;
+  const { error } = await sb.from("devis").update({ statut: "Refusé" }).eq("id", id);
+  if (!error) { chargerDocuments(); refreshNotifs(); }
+}
+
+async function payerFacture(id) {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = "Chargement…";
+  try {
+    const { data, error } = await sb.functions.invoke("create-checkout-session", { body: { facture_id: id } });
+    if (error || !data || !data.url) {
+      alert("Le paiement en ligne n'est pas encore configuré. Contacte PCW pour régler cette facture.");
+      btn.disabled = false; btn.textContent = "💳 Payer maintenant";
+      return;
+    }
+    window.location.href = data.url;
+  } catch (e) {
+    alert("Le paiement en ligne n'est pas encore disponible pour le moment.");
+    btn.disabled = false; btn.textContent = "💳 Payer maintenant";
+  }
+}
+
+async function voirDevisPDF(id, mode) {
+  const { data: d, error } = await sb.from("devis").select("*").eq("id", id).eq("contact_id", myContact.id).single();
+  if (error || !d) { alert("Devis introuvable."); return; }
+  await generateDevisPDF(d, myContact, mode);
+}
+
+async function voirFacturePDF(id, mode) {
+  const { data: f, error } = await sb.from("factures").select("*").eq("id", id).eq("contact_id", myContact.id).single();
+  if (error || !f) { alert("Facture introuvable."); return; }
+  let devisRef = null;
+  if (f.devis_id) {
+    const { data: d } = await sb.from("devis").select("id, numero").eq("id", f.devis_id).maybeSingle();
+    devisRef = d || null;
+  }
+  await generateFacturePDF(f, myContact, devisRef, mode);
+}
+
+// ---- RECHERCHE GLOBALE ----
+async function runGlobalSearch(qRaw) {
+  const box = document.getElementById("global-search-results");
+  const q = (qRaw || "").trim().toLowerCase();
+  if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
+
+  const [{ data: demandesData }, { data: messagesData }, { data: devisData }, { data: facturesData }, { data: fichiersData }] = await Promise.all([
+    sb.from("demandes").select("*").eq("contact_id", myContact.id),
+    sb.from("messages").select("*").eq("contact_id", myContact.id),
+    sb.from("devis").select("*").eq("contact_id", myContact.id),
+    sb.from("factures").select("*").eq("contact_id", myContact.id),
+    sb.from("fichiers_clients").select("*").eq("contact_id", myContact.id),
+  ]);
+
+  const results = [];
+  (demandesData || []).forEach(d => {
+    const hay = [d.titre, d.description].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) results.push({ type: "Demande", label: d.titre, sub: d.statut || "", fn: () => showPage("demandes") });
+  });
+  (messagesData || []).forEach(m => {
+    if ((m.contenu || "").toLowerCase().includes(q)) results.push({ type: "Message", label: m.contenu.slice(0, 60), sub: m.expediteur === "admin" ? "PCW" : "Toi", fn: () => showPage("messages") });
+  });
+  (devisData || []).forEach(d => {
+    if ((d.numero || "").toLowerCase().includes(q)) results.push({ type: "Devis", label: d.numero || "Devis", sub: d.statut || "", fn: () => showPage("documents") });
+  });
+  (facturesData || []).forEach(f => {
+    if ((f.numero || "").toLowerCase().includes(q)) results.push({ type: "Facture", label: f.numero || "Facture", sub: f.statut || "", fn: () => showPage("documents") });
+  });
+  (fichiersData || []).forEach(f => {
+    if ((f.nom_fichier || "").toLowerCase().includes(q)) results.push({ type: "Fichier", label: f.nom_fichier, sub: "", fn: () => showPage("fichiers") });
+  });
+
+  box.classList.add("open");
+  if (!results.length) { box.innerHTML = `<div class="gsr-empty">Aucun résultat pour « ${escapeHtml(qRaw)} »</div>`; return; }
+  box.innerHTML = results.slice(0, 15).map((r, i) => `
+    <div class="gsr-item" data-i="${i}">
+      <span>${escapeHtml(r.label)}${r.sub ? `<br><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(r.sub)}</span>` : ""}</span>
+      <span class="gsr-type">${r.type}</span>
+    </div>`).join("");
+  box.querySelectorAll(".gsr-item").forEach(el => el.addEventListener("click", () => {
+    results[Number(el.dataset.i)].fn();
+    document.getElementById("global-search-input").value = "";
+    box.classList.remove("open");
+  }));
+}
+let globalSearchDebounce = null;
+document.getElementById("global-search-input").addEventListener("input", (e) => {
+  clearTimeout(globalSearchDebounce);
+  const val = e.target.value;
+  globalSearchDebounce = setTimeout(() => runGlobalSearch(val), 200);
+});
+document.addEventListener("click", (e) => {
+  const wrap = document.querySelector(".global-search-wrap");
+  if (wrap && !wrap.contains(e.target)) document.getElementById("global-search-results").classList.remove("open");
+});
+
+init();
+
+document.getElementById("notif-bell-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPanel(); });
+document.addEventListener("click", (e) => {
+  const notifWrap = document.getElementById("notif-wrap");
+  if (notifWrap && !notifWrap.contains(e.target)) document.getElementById("notif-panel").classList.remove("open");
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
+</script>
+<script>
+(function(){
+  function parseNum(text){
+    var m=text.trim().match(/^(-?[\d\s .,]+)(.*)$/);
+    if(!m)return null;
+    var numStr=m[1].replace(/[\s ]/g,'').replace(',','.');
+    var val=parseFloat(numStr);
+    if(isNaN(val))return null;
+    return {val:val,decimals:(numStr.split('.')[1]||'').length,suffix:m[2]||''};
+  }
+  function fmt(n,decimals){
+    var s=n.toFixed(decimals);
+    var parts=s.split('.');
+    parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+    return parts.join(',');
+  }
+  function animateTo(el,parsed,fromVal,onDone){
+    var start=null,dur=700;
+    function step(ts){
+      if(!start)start=ts;
+      var p=Math.min((ts-start)/dur,1);
+      var eased=1-Math.pow(1-p,3);
+      var cur=fromVal+(parsed.val-fromVal)*eased;
+      el.textContent=fmt(cur,parsed.decimals)+parsed.suffix;
+      if(p<1)requestAnimationFrame(step);
+      else{el.textContent=fmt(parsed.val,parsed.decimals)+parsed.suffix;if(onDone)onDone();}
+    }
+    requestAnimationFrame(step);
+  }
+  function watch(selector){
+    document.querySelectorAll(selector).forEach(function(el){
+      if(el.dataset.countBound)return;
+      el.dataset.countBound='1';
+      var initial=parseNum(el.textContent);
+      if(initial){el.dataset.countLast=initial.val;animateTo(el,initial,0);}
+      var obs=new MutationObserver(function(){
+        obs.disconnect();
+        var cur=parseNum(el.textContent);
+        if(cur){
+          var prevVal=(el.dataset.countLast!=null)?parseFloat(el.dataset.countLast):0;
+          el.dataset.countLast=cur.val;
+          animateTo(el,cur,prevVal,function(){obs.observe(el,{childList:true,characterData:true,subtree:true});});
+        } else {
+          obs.observe(el,{childList:true,characterData:true,subtree:true});
+        }
+      });
+      obs.observe(el,{childList:true,characterData:true,subtree:true});
+    });
+  }
+  var pending=false;
+  function scheduleRun(){
+    if(pending)return;
+    pending=true;
+    requestAnimationFrame(function(){
+      pending=false;
+      watch('.stat-card .num');
+    });
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    scheduleRun();
+    new MutationObserver(scheduleRun).observe(document.body,{childList:true,subtree:true});
+  });
+})();
+</script>
+</body>
+</html>
