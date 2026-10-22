@@ -520,13 +520,13 @@ function computeNotifications() {
     items.push({ id: "facture-retard-" + f.id + "-" + (f.date_echeance || ""), urgent: true, color: "var(--danger)", icon: "icon-receipt", date: f.date_echeance || "",
       label: "Facture en retard : " + (f.numero || ""),
       sub: contactLabel(findContact(f.contact_id)) + (f.date_echeance ? " · échue le " + fmtDateFR(f.date_echeance) : ""),
-      fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+      fn: () => { showPage("factures"); setTimeout(() => openFactureEditor(f.id), 150); } });
   });
   cache.factures.filter(f => f.statut === "Envoyée" && f.date_echeance && f.date_echeance >= today && f.date_echeance <= addDaysISO(today, 3)).forEach(f => {
     items.push({ id: "facture-bientot-" + f.id + "-" + f.date_echeance, urgent: f.date_echeance === today, color: "var(--warning)", icon: "icon-receipt", date: f.date_echeance,
       label: "Facture bientôt échue : " + (f.numero || ""),
       sub: contactLabel(findContact(f.contact_id)) + " · échéance le " + fmtDateFR(f.date_echeance),
-      fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+      fn: () => { showPage("factures"); setTimeout(() => openFactureEditor(f.id), 150); } });
   });
   cache.devis.filter(d => ["En attente", "Envoyé"].includes(d.statut)).forEach(d => {
     const val = d.date_validite || (d.date_creation ? addDaysISO(d.date_creation.slice(0, 10), 30) : null);
@@ -650,7 +650,7 @@ function runGlobalSearch(qRaw) {
   });
   cache.factures.forEach(f => {
     const hay = [f.numero, contactLabel(findContact(f.contact_id))].filter(Boolean).join(" ").toLowerCase();
-    if (hay.includes(q)) results.push({ type: "Facture", label: (f.numero || "Facture") + " — " + contactLabel(findContact(f.contact_id)), sub: f.statut || "", fn: () => { showPage("factures"); setTimeout(() => openFactureDialog(f.id), 150); } });
+    if (hay.includes(q)) results.push({ type: "Facture", label: (f.numero || "Facture") + " — " + contactLabel(findContact(f.contact_id)), sub: f.statut || "", fn: () => { showPage("factures"); setTimeout(() => openFactureEditor(f.id), 150); } });
   });
   box.classList.add("open");
   if (!results.length) { box.innerHTML = `<div class="gsr-empty">Aucun résultat pour « ${qRaw} »</div>`; return; }
@@ -947,7 +947,7 @@ function renderDashboard() {
     if (val && val >= today && val <= dans1Mois) items.push({ date: val, type: "Devis", detail: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), statut: d.statut, editTable: "devis", editId: d.id, editField: "statut", editOptions: STATUTS_DEVIS, fn: `openDevisEditor(${d.id})` });
   });
   cache.factures.filter(f => f.date_echeance && f.date_echeance >= today && f.date_echeance <= dans1Mois && !["Payée", "Annulée"].includes(f.statut))
-    .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, editTable: "factures", editId: f.id, editField: "statut", editOptions: STATUTS_FACTURE, fn: `openFactureDialog(${f.id})` }));
+    .forEach(f => items.push({ date: f.date_echeance, type: "Facture", detail: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), statut: f.statut, editTable: "factures", editId: f.id, editField: "statut", editOptions: STATUTS_FACTURE, fn: `openFactureEditor(${f.id})` }));
   items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const top = items.slice(0, 15);
   document.getElementById("dash-dates").innerHTML = top.length ? top.map(it => {
@@ -2343,7 +2343,7 @@ function renderFactures() {
   if (getView("factures") === "kanban") {
     renderGenericKanban("facture-kanban-view", rows, STATUTS_FACTURE, {
       table: "factures", cardTitle: f => (f.numero || "Facture") + (f.montant_ttc ? " — " + f.montant_ttc + " €" : ""),
-      cardSub: f => contactLabel(findContact(f.contact_id)), onClickFn: "openFactureDialog",
+      cardSub: f => contactLabel(findContact(f.contact_id)), onClickFn: "openFactureEditor",
     });
     return;
   }
@@ -2366,7 +2366,7 @@ function renderFactures() {
         <button title="Télécharger la facture (PDF)" onclick="generateFacturePDF(${f.id})">⬇</button>
         ${pdfBtn}
         ${relanceBtn}
-        <button onclick="openFactureDialog(${f.id})">✎</button>
+        <button title="Éditer la facture" onclick="openFactureEditor(${f.id})">✎</button>
         <button onclick="confirmDelete('factures', ${f.id}, renderFactures)">🗑</button>
       </td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="8">Aucune facture — crée-la ici ou depuis un devis (🧾)</td></tr>`;
@@ -2426,9 +2426,16 @@ function openFactureDialog(id, prefill) {
     title: id ? "Modifier la facture" : "Nouvelle facture", table: "factures", id, fields: factureFields(row), onRender: (form) => factureOnRender(form, id),
     beforeSave: (v) => {
       const linked = v.devis_id ? findDevis(Number(v.devis_id)) : null;
-      v.lignes = (linked && Array.isArray(linked.lignes) && linked.lignes.length) ? linked.lignes : (row.lignes || null);
+      // On conserve les lignes déjà saisies (éditeur de facture) ; on ne reprend
+      // celles du devis lié que si la facture n'en a pas encore.
+      v.lignes = (Array.isArray(row.lignes) && row.lignes.length) ? row.lignes
+        : ((linked && Array.isArray(linked.lignes) && linked.lignes.length) ? linked.lignes : (row.lignes || null));
     },
-    onSaved: refreshAll,
+    onSaved: async (saved) => {
+      await refreshAll();
+      if (!id && saved) openFactureEditor(saved.id);
+      else if (id && document.getElementById("facture-editor").classList.contains("open")) openFactureEditor(id);
+    },
   });
 }
 function createFactureFromDevis(devisId) {
@@ -2544,6 +2551,212 @@ async function generateFacturePDF(id, mode) {
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
 }
 
+// ---- Éditeur de facture (A4) — même principe que l'éditeur de devis ----
+let fedState = { id: null, lignes: [] };
+function newFactureLine() { return { designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }; }
+function linesTotals(lignes) {
+  let unique = 0, mensuel = 0, annuel = 0;
+  (lignes || []).forEach(l => {
+    const t = computeLine(l).total;
+    const mode = l.mode_paiement || "Paiement unique";
+    if (mode === "Paiement mensuel") mensuel += t; else if (mode === "Paiement annuel") annuel += t; else unique += t;
+  });
+  return { ttc: round2(unique + mensuel + annuel), unique: round2(unique), mensuel: round2(mensuel), annuel: round2(annuel) };
+}
+function factureEditorValue(id) { const el = document.getElementById(id); return el ? el.value : ""; }
+
+function openFactureEditor(id) {
+  const f = findFacture(id);
+  if (!f) return;
+  let lignes = Array.isArray(f.lignes) ? JSON.parse(JSON.stringify(f.lignes)) : [];
+  if (!lignes.length) {
+    // Facture ancienne (créée sans détail) : on reconstitue un point de départ cohérent avec le montant déjà facturé
+    const dev = f.devis_id ? findDevis(f.devis_id) : null;
+    const devLines = (dev && Array.isArray(dev.lignes)) ? dev.lignes : [];
+    const montant = Number(f.montant_ttc || 0);
+    const partiel = f.type_facture === "Facture d'acompte (30%)" || f.type_facture === "Facture de solde";
+    if (devLines.length && (partiel || !montant || linesTotals(devLines).ttc === round2(montant))) lignes = JSON.parse(JSON.stringify(devLines));
+    else if (montant) lignes = [{ designation: f.type_evenement || "Prestation", qte: 1, pu_ttc: montant, remise: 0, mode_paiement: "Paiement unique" }];
+  }
+  if (!lignes.length) lignes.push(newFactureLine());
+  fedState = { id, lignes };
+
+  const inp = "padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:13px;color:#1A1D24;background:#fff;";
+  const sel = "padding:5px 8px;border:1px solid var(--border);border-radius:5px;color:#1A1D24;background:#fff;width:100%;";
+  const lbl = "font-size:12px;color:var(--muted);";
+  document.getElementById("fed-numero").innerHTML =
+    `N° <input type="text" id="fed-num" value="${escapeAttr(f.numero || nextFactureNumero())}" style="${inp}width:110px;font-weight:700;"> · Date
+      <input type="date" id="fed-date" value="${f.date_facture || todayStr()}" style="${inp}"> · Échéance
+      <input type="date" id="fed-echeance" value="${f.date_echeance || ""}" style="${inp}">`;
+  document.getElementById("fed-client").innerHTML =
+    `<div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;max-width:470px;">
+      <span style="${lbl}">Client</span>
+      <select id="fed-contact" style="${sel}"><option value="">—</option>${contactOptionsHtml(f.contact_id)}</select>
+      <span style="${lbl}">Devis lié</span>
+      <select id="fed-devis" style="${sel}"><option value="">— Aucun —</option>${devisOptionsHtml(f.devis_id)}</select>
+      <span style="${lbl}">Type</span>
+      <select id="fed-type" style="${sel}">${TYPES_FACTURE.map(t => `<option value="${escapeAttr(t)}" ${t === (f.type_facture || "Facture unique") ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <span style="${lbl}">Statut</span>
+      <select id="fed-statut" style="${sel}">${STATUTS_FACTURE.map(s => `<option value="${s}" ${s === (f.statut || "Brouillon") ? "selected" : ""}>${s}</option>`).join("")}</select>
+    </div>
+    <div id="fed-contact-info" style="margin-top:6px;font-size:12px;color:var(--muted);"></div>`;
+  document.getElementById("fed-emetteur").innerHTML =
+    `<strong>${EMETTEUR.nom}</strong><br>${EMETTEUR.adresse}<br>${EMETTEUR.siret}<br>${EMETTEUR.email}<br>Tél : ${EMETTEUR.telephone}<br>${EMETTEUR.site}`;
+  const logoEl = document.getElementById("fed-logo");
+  if (logoEl) logoEl.src = "logo.png";
+  document.getElementById("fed-notes").value = f.notes || "";
+
+  renderFactureEditorContactInfo();
+  renderFactureEditorLines();
+  document.getElementById("facture-editor").classList.add("open");
+}
+function renderFactureEditorContactInfo() {
+  const el = document.getElementById("fed-contact-info");
+  if (!el) return;
+  const id = Number(factureEditorValue("fed-contact"));
+  const c = id ? findContact(id) : null;
+  el.textContent = c ? [c.societe, c.telephone, c.email].filter(Boolean).join(" · ") : "";
+}
+function renderFactureEditorLines() {
+  const tb = document.getElementById("fed-lines");
+  const pickerOptions = grillePickerOptionsHtml();
+  tb.innerHTML = fedState.lignes.map((l, i) => `
+    <tr data-i="${i}">
+      <td>
+        <select data-k="designation-picker" style="margin-bottom:5px;">${pickerOptions}</select>
+        <input type="text" data-k="designation" placeholder="Désignation" value="${(l.designation || "").replace(/"/g, "&quot;")}">
+      </td>
+      <td><input type="number" data-k="qte" min="0" step="1" value="${l.qte != null ? l.qte : 1}" style="width:60px;"></td>
+      <td><input type="number" data-k="pu_ttc" min="0" step="0.01" value="${l.pu_ttc != null ? l.pu_ttc : ""}" style="width:90px;"></td>
+      <td><input type="number" data-k="remise" min="0" max="100" step="1" value="${l.remise != null ? l.remise : 0}" style="width:60px;"></td>
+      <td><select data-k="mode_paiement" style="width:100px;">${MODES_PAIEMENT.map(m => `<option value="${m}" ${(l.mode_paiement || "Paiement unique") === m ? "selected" : ""}>${modePaiementShort(m)}</option>`).join("")}</select></td>
+      <td class="ro" data-ro="total"></td>
+      <td><button class="del" title="Supprimer" onclick="removeFactureEditorLine(${i})">✕</button></td>
+    </tr>`).join("");
+  recomputeFactureEditor();
+}
+function readFactureEditorToState() {
+  document.querySelectorAll("#fed-lines tr").forEach(tr => {
+    const l = fedState.lignes[Number(tr.dataset.i)]; if (!l) return;
+    tr.querySelectorAll("[data-k]").forEach(inp => {
+      const k = inp.dataset.k;
+      if (k === "designation-picker") return;
+      l[k] = (inp.type === "number") ? (inp.value === "" ? "" : Number(inp.value)) : inp.value;
+    });
+  });
+}
+// Montant réellement facturé : pour un acompte / un solde rattaché à un devis, c'est la part du devis ;
+// sinon c'est le total des lignes (exactement comme le PDF).
+function factureEditorMontant() {
+  const type = factureEditorValue("fed-type") || "Facture unique";
+  const devisId = factureEditorValue("fed-devis");
+  if (devisId && (type === "Facture d'acompte (30%)" || type === "Facture de solde")) {
+    const m = computeMontantParType(devisId, type, fedState.id);
+    if (m != null) return m;
+  }
+  return linesTotals(fedState.lignes).ttc;
+}
+function recomputeFactureEditor() {
+  document.querySelectorAll("#fed-lines tr").forEach(tr => {
+    const l = fedState.lignes[Number(tr.dataset.i)]; if (!l) return;
+    tr.querySelector('[data-ro="total"]').textContent = computeLine(l).total.toFixed(2) + " €";
+  });
+  const t = linesTotals(fedState.lignes);
+  const type = factureEditorValue("fed-type") || "Facture unique";
+  const montant = factureEditorMontant();
+  let html = `<span style="font-size:13px;color:var(--muted);">Total des lignes : ${t.unique.toFixed(2)} €</span>`;
+  if (t.mensuel > 0) html += `<br><span style="font-size:13px;color:var(--warning);">Dont mensuel : ${t.mensuel.toFixed(2)} € /mois</span>`;
+  if (t.annuel > 0) html += `<br><span style="font-size:13px;color:var(--info);">Dont annuel : ${t.annuel.toFixed(2)} € /an</span>`;
+  const label = type === "Facture d'acompte (30%)" ? "Acompte à payer (30%)" : (type === "Facture de solde" ? "Solde à payer" : "Net à payer");
+  html += `<br><span class="grand">${label} : ${montant.toFixed(2)} €</span>`;
+  html += `<br><span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
+  document.getElementById("fed-totaux").innerHTML = html;
+}
+function removeFactureEditorLine(i) { readFactureEditorToState(); fedState.lignes.splice(i, 1); if (!fedState.lignes.length) fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
+function addFactureEditorLine() { readFactureEditorToState(); fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
+function importFactureLinesFromDevis() {
+  readFactureEditorToState();
+  const dev = factureEditorValue("fed-devis") ? findDevis(Number(factureEditorValue("fed-devis"))) : null;
+  if (!dev || !Array.isArray(dev.lignes) || !dev.lignes.length) { showToast("Aucun devis lié, ou ce devis n'a pas de lignes à reprendre"); return; }
+  const hasContent = fedState.lignes.some(l => (l.designation || "").trim() || Number(l.pu_ttc));
+  if (hasContent && !confirm("Remplacer les lignes actuelles par celles du devis " + (dev.numero || "") + " ?")) return;
+  fedState.lignes = JSON.parse(JSON.stringify(dev.lignes));
+  renderFactureEditorLines();
+}
+async function saveFactureEditor(closeAfter, opts) {
+  opts = opts || {};
+  readFactureEditorToState();
+  const f = findFacture(fedState.id); if (!f) return false;
+  const numero = factureEditorValue("fed-num").trim() || f.numero || nextFactureNumero();
+  if (cache.factures.some(x => x.id !== f.id && x.numero && x.numero === numero)
+      && !confirm("Le numéro " + numero + " est déjà utilisé par une autre facture. Enregistrer quand même ?")) return false;
+  const montant = factureEditorMontant();
+  if (!montant && Number(f.montant_ttc) > 0 && !confirm("Le montant de cette facture passerait à 0 €. Enregistrer quand même ?")) return false;
+  const saved = await updateRow("factures", fedState.id, {
+    numero,
+    contact_id: factureEditorValue("fed-contact") ? Number(factureEditorValue("fed-contact")) : null,
+    devis_id: factureEditorValue("fed-devis") ? Number(factureEditorValue("fed-devis")) : null,
+    type_facture: factureEditorValue("fed-type") || "Facture unique",
+    statut: factureEditorValue("fed-statut") || f.statut,
+    date_facture: factureEditorValue("fed-date") || f.date_facture || todayStr(),
+    date_echeance: factureEditorValue("fed-echeance") || null,
+    notes: factureEditorValue("fed-notes").trim() || null,
+    lignes: fedState.lignes,
+    montant_ttc: montant,
+  });
+  if (!saved) return false;
+  await refreshCache();
+  if (!opts.silent) showToast("Facture enregistrée");
+  if (closeAfter) closeFactureEditor();
+  renderPage(currentPage);
+  return true;
+}
+function closeFactureEditor() { document.getElementById("facture-editor").classList.remove("open"); }
+function bindFactureEditor() {
+  const $ = id => document.getElementById(id);
+  $("fed-add-line").addEventListener("click", addFactureEditorLine);
+  $("fed-import-devis").addEventListener("click", importFactureLinesFromDevis);
+  $("fed-close").addEventListener("click", closeFactureEditor);
+  $("fed-save").addEventListener("click", () => saveFactureEditor(false));
+  $("fed-save-close").addEventListener("click", () => saveFactureEditor(true));
+  $("fed-view").addEventListener("click", async () => { if (await saveFactureEditor(false, { silent: true })) generateFacturePDF(fedState.id, "preview"); });
+  $("fed-pdf").addEventListener("click", async () => { if (await saveFactureEditor(false, { silent: true })) generateFacturePDF(fedState.id); });
+  $("fed-infos").addEventListener("click", async () => { if (await saveFactureEditor(false, { silent: true })) openFactureDialog(fedState.id); });
+  $("fed-client").addEventListener("change", (e) => {
+    if (e.target.id === "fed-devis") {
+      const d = findDevis(Number(e.target.value));
+      if (d && !factureEditorValue("fed-contact")) { const c = devisContact(d); if (c) $("fed-contact").value = c.id; }
+    }
+    if (e.target.id === "fed-contact" || e.target.id === "fed-devis") renderFactureEditorContactInfo();
+    readFactureEditorToState(); recomputeFactureEditor();
+  });
+  $("fed-lines").addEventListener("input", () => { readFactureEditorToState(); recomputeFactureEditor(); });
+  $("fed-lines").addEventListener("change", (e) => {
+    const k = e.target.dataset.k;
+    if (k === "designation-picker") {
+      readFactureEditorToState();
+      const i = Number(e.target.closest("tr").dataset.i);
+      const val = e.target.value;
+      if (val === "__custom__") {
+        renderFactureEditorLines();
+        const input = document.querySelector(`#fed-lines tr[data-i="${i}"] input[data-k="designation"]`);
+        if (input) input.focus();
+        return;
+      }
+      if (!val) return;
+      const g = cache.grille_tarifaire.find(x => (x.nom_presta || "") === val);
+      fedState.lignes[i].designation = val;
+      if (g) fedState.lignes[i].mode_paiement = g.mode_paiement || "Paiement unique";
+      if (g && g.pu_ttc != null) fedState.lignes[i].pu_ttc = g.pu_ttc;
+      renderFactureEditorLines();
+    } else if (k === "designation") {
+      const i = Number(e.target.closest("tr").dataset.i);
+      const g = cache.grille_tarifaire.find(x => (x.nom_presta || "").toLowerCase() === e.target.value.toLowerCase());
+      if (g && g.pu_ttc != null) { readFactureEditorToState(); fedState.lignes[i].pu_ttc = g.pu_ttc; renderFactureEditorLines(); }
+    }
+  });
+}
+
 async function downloadAttachment(pdf_path) {
   if (!pdf_path) { showToast("Aucun PDF joint"); return; }
   const { data, error } = await sb.storage.from("devis-signes").createSignedUrl(pdf_path, 60);
@@ -2561,7 +2774,7 @@ function openContactHistory(contactId) {
     items.push({ date: (d.date_creation || "").slice(0, 10), icon: "icon-file-text", label: "Devis " + (d.numero || "") + (d.montant_ttc ? " — " + d.montant_ttc + " €" : ""), sub: d.statut, color: "var(--info)", fn: `openDevisEditor(${d.id})` });
   });
   cache.factures.filter(f => f.contact_id === contactId).forEach(f => {
-    items.push({ date: f.date_facture || "", icon: "icon-receipt", label: "Facture " + (f.numero || "") + (f.montant_ttc ? " — " + f.montant_ttc + " €" : ""), sub: f.statut, color: "var(--warning)", fn: `openFactureDialog(${f.id})` });
+    items.push({ date: f.date_facture || "", icon: "icon-receipt", label: "Facture " + (f.numero || "") + (f.montant_ttc ? " — " + f.montant_ttc + " €" : ""), sub: f.statut, color: "var(--warning)", fn: `openFactureEditor(${f.id})` });
   });
   cache.rdv.filter(r => r.contact_id === contactId).forEach(r => {
     items.push({ date: r.date_rdv || "", icon: "icon-clock", label: "RDV" + (r.objet ? " — " + r.objet : ""), sub: r.statut, color: "var(--tertiary)", fn: `openRdvDialog(${r.id})` });
@@ -3471,7 +3684,7 @@ function collectCalendarItems() {
     if (val) items.push({ date: val, type: "Devis", label: "Expire : " + (d.numero || "—") + " — " + contactLabel(devisContact(d)), fn: `openDevisEditor(${d.id})` });
   });
   cache.factures.filter(f => f.date_echeance && !["Payée", "Annulée"].includes(f.statut)).forEach(f => {
-    items.push({ date: f.date_echeance, type: "Facture", label: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), fn: `openFactureDialog(${f.id})` });
+    items.push({ date: f.date_echeance, type: "Facture", label: (f.numero || "—") + " à régler — " + contactLabel(findContact(f.contact_id)), fn: `openFactureEditor(${f.id})` });
   });
   cache.todos.filter(t => t.statut !== "Terminé" && t.date_echeance).forEach(t => {
     items.push({ date: t.date_echeance, type: "Tâche", label: t.titre, fn: `openTodoDialog(${t.id})` });
@@ -3823,6 +4036,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (g && g.pu_ttc != null) { edState.lignes[i].pu_ttc = g.pu_ttc; renderEditorLines(); }
     }
   });
+
+  // éditeur de facture
+  bindFactureEditor();
 
   document.getElementById("cal-prev").addEventListener("click", () => { calState.month--; if (calState.month < 1) { calState.month = 12; calState.year--; } calState.selected = null; renderCalendrier(); });
   document.getElementById("cal-next").addEventListener("click", () => { calState.month++; if (calState.month > 12) { calState.month = 1; calState.year++; } calState.selected = null; renderCalendrier(); });

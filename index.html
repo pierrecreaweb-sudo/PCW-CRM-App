@@ -1081,6 +1081,46 @@
   </div>
 </div>
 
+<div class="editor-overlay" id="facture-editor">
+  <div class="editor-sheet">
+    <div class="editor-head">
+      <div>
+        <img id="fed-logo" src="logo.png" alt="PCW" style="width:56px;height:56px;border-radius:50%;margin-bottom:8px;">
+        <h2 style="margin:0 0 6px;font-size:26px;letter-spacing:.06em;color:var(--accent-dark);">FACTURE</h2>
+        <div id="fed-numero" style="font-size:13px;color:var(--muted);"></div>
+        <div id="fed-client" style="font-size:13px;margin-top:8px;"></div>
+      </div>
+      <div class="em" id="fed-emetteur"></div>
+    </div>
+    <div class="lines-table-scroll">
+      <table class="lines-table">
+        <thead><tr>
+          <th style="width:30%;">Désignation</th><th>Qté</th><th>PU (€)</th><th>Remise %</th>
+          <th>Paiement</th><th>Total (€)</th><th></th>
+        </tr></thead>
+        <tbody id="fed-lines"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn secondary" type="button" id="fed-add-line">＋ Ajouter une ligne</button>
+      <button class="btn secondary" type="button" id="fed-import-devis">↻ Reprendre les lignes du devis lié</button>
+    </div>
+    <div class="totaux" id="fed-totaux"></div>
+    <div style="margin-top:16px;">
+      <label for="fed-notes" style="display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700;">Notes (affichées sur la facture)</label>
+      <textarea id="fed-notes" rows="2" style="width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:#1A1D24;resize:vertical;"></textarea>
+    </div>
+    <div class="modal-actions" style="margin-top:24px;">
+      <button class="btn secondary" type="button" id="fed-close">Fermer</button>
+      <button class="btn secondary" type="button" id="fed-infos">Infos &amp; PDF joint</button>
+      <button class="btn secondary" type="button" id="fed-view">Visualiser</button>
+      <button class="btn secondary" type="button" id="fed-pdf">Télécharger PDF</button>
+      <button class="btn secondary" type="button" id="fed-save">Enregistrer</button>
+      <button class="btn" type="button" id="fed-save-close">Enregistrer et fermer</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
