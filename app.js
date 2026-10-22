@@ -2546,13 +2546,19 @@ async function generateFacturePDF(id, mode) {
   doc.text("BIC : " + EMETTEUR.bic + (EMETTEUR.banque ? "   ·   " + EMETTEUR.banque : ""), 21, y + 24);
   y += 38;
   if (f.notes) { doc.setFontSize(10); doc.text(doc.splitTextToSize("Notes : " + f.notes, 170), 20, y); y += 14; }
+  if (Array.isArray(f.cgv) && f.cgv.length) {
+    if (y > 235) { doc.addPage(); y = 20; }
+    doc.setFontSize(11); doc.text("Conditions générales de vente :", 20, y); y += 6;
+    doc.setFontSize(10);
+    f.cgv.forEach((c2, i) => { const t = doc.splitTextToSize((i + 1) + ". " + c2, 175); doc.text(t, 20, y); y += t.length * 5 + 1; if (y > 255) { doc.addPage(); y = 20; } });
+  }
   drawFooter(doc);
   if (mode === "preview") { window.open(doc.output("bloburl"), "_blank"); }
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
 }
 
 // ---- Éditeur de facture (A4) — même principe que l'éditeur de devis ----
-let fedState = { id: null, lignes: [] };
+let fedState = { id: null, lignes: [], cgv: null };
 function newFactureLine() { return { designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }; }
 function linesTotals(lignes) {
   let unique = 0, mensuel = 0, annuel = 0;
@@ -2579,7 +2585,7 @@ function openFactureEditor(id) {
     else if (montant) lignes = [{ designation: f.type_evenement || "Prestation", qte: 1, pu_ttc: montant, remise: 0, mode_paiement: "Paiement unique" }];
   }
   if (!lignes.length) lignes.push(newFactureLine());
-  fedState = { id, lignes };
+  fedState = { id, lignes, cgv: Array.isArray(f.cgv) ? f.cgv.slice() : null };
 
   const inp = "padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:13px;color:#1A1D24;background:#fff;";
   const sel = "padding:5px 8px;border:1px solid var(--border);border-radius:5px;color:#1A1D24;background:#fff;width:100%;";
@@ -2608,6 +2614,7 @@ function openFactureEditor(id) {
 
   renderFactureEditorContactInfo();
   renderFactureEditorLines();
+  renderFactureCgvPreview();
   document.getElementById("facture-editor").classList.add("open");
 }
 function renderFactureEditorContactInfo() {
@@ -2703,6 +2710,7 @@ async function saveFactureEditor(closeAfter, opts) {
     notes: factureEditorValue("fed-notes").trim() || null,
     lignes: fedState.lignes,
     montant_ttc: montant,
+    ...(Array.isArray(fedState.cgv) ? { cgv: fedState.cgv } : {}),
   });
   if (!saved) return false;
   await refreshCache();
@@ -2711,12 +2719,47 @@ async function saveFactureEditor(closeAfter, opts) {
   renderPage(currentPage);
   return true;
 }
+function renderFactureCgvPreview() {
+  const el = document.getElementById("fed-cgv-preview");
+  if (!el) return;
+  if (Array.isArray(fedState.cgv) && fedState.cgv.length) {
+    el.innerHTML = "<strong>Conditions générales de vente :</strong><br>" + fedState.cgv.map((c, i) => `${i + 1}. ${c}`).join("<br>");
+  } else { el.innerHTML = "<em>Aucune condition sélectionnée — clique sur « CGV » pour en ajouter.</em>"; }
+}
+function openFactureCgvPicker() {
+  readFactureEditorToState();
+  const availableCgv = cache.cgv_templates.length ? cache.cgv_templates.map(t => t.texte) : CGV_OPTIONS;
+  const already = Array.isArray(fedState.cgv) ? fedState.cgv.slice() : [];
+  const html = `<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Coche les conditions dans l'ordre où elles doivent apparaître sur la facture. <a href="#" onclick="closeModal();openCgvManagerDialog();return false;">Gérer les modèles de CGV</a></p>
+    <div class="cgv-list" id="cgv-list">${availableCgv.map((c, i) => {
+      const pos = already.indexOf(c);
+      return `<label><span class="cgv-order" data-cgv="${i}">${pos >= 0 ? (pos + 1) : ""}</span>
+        <input type="checkbox" data-cgv-cb="${i}" ${pos >= 0 ? "checked" : ""}> ${c}</label>`;
+    }).join("")}</div>`;
+  window._cgvOrder = already.map(c => availableCgv.indexOf(c)).filter(x => x >= 0);
+  openRawModal("Conditions générales de vente", html, async () => {
+    fedState.cgv = window._cgvOrder.map(i => availableCgv[i]);
+    closeModal();
+    renderFactureCgvPreview();
+    showToast("CGV sélectionnées — pense à enregistrer la facture");
+  });
+  document.querySelectorAll("[data-cgv-cb]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const i = Number(cb.dataset.cgvCb);
+      if (cb.checked) { if (!window._cgvOrder.includes(i)) window._cgvOrder.push(i); }
+      else { window._cgvOrder = window._cgvOrder.filter(x => x !== i); }
+      window._cgvOrder.forEach((idx, pos) => { const s = document.querySelector(`[data-cgv="${idx}"]`); if (s) s.textContent = pos + 1; });
+      document.querySelectorAll("[data-cgv]").forEach(s => { if (!window._cgvOrder.includes(Number(s.dataset.cgv))) s.textContent = ""; });
+    });
+  });
+}
 function closeFactureEditor() { document.getElementById("facture-editor").classList.remove("open"); }
 function bindFactureEditor() {
   const $ = id => document.getElementById(id);
   $("fed-add-line").addEventListener("click", addFactureEditorLine);
   $("fed-import-devis").addEventListener("click", importFactureLinesFromDevis);
   $("fed-close").addEventListener("click", closeFactureEditor);
+  $("fed-cgv").addEventListener("click", openFactureCgvPicker);
   $("fed-save").addEventListener("click", () => saveFactureEditor(false));
   $("fed-save-close").addEventListener("click", () => saveFactureEditor(true));
   $("fed-view").addEventListener("click", async () => { if (await saveFactureEditor(false, { silent: true })) generateFacturePDF(fedState.id, "preview"); });
