@@ -1159,37 +1159,33 @@
     parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ');
     return parts.join(',');
   }
-  function animateTo(el,parsed,fromVal,onDone){
-    var start=null,dur=700;
-    function step(ts){
-      if(!start)start=ts;
-      var p=Math.min((ts-start)/dur,1);
-      var eased=1-Math.pow(1-p,3);
-      var cur=fromVal+(parsed.val-fromVal)*eased;
-      el.textContent=fmt(cur,parsed.decimals)+parsed.suffix;
-      if(p<1)requestAnimationFrame(step);
-      else{el.textContent=fmt(parsed.val,parsed.decimals)+parsed.suffix;if(onDone)onDone();}
-    }
-    requestAnimationFrame(step);
-  }
   function watch(selector){
     document.querySelectorAll(selector).forEach(function(el){
       if(el.dataset.countBound)return;
       el.dataset.countBound='1';
-      var initial=parseNum(el.textContent);
-      if(initial){el.dataset.countLast=initial.val;animateTo(el,initial,0);}
-      var obs=new MutationObserver(function(){
-        obs.disconnect();
-        var cur=parseNum(el.textContent);
-        if(cur){
-          var prevVal=(el.dataset.countLast!=null)?parseFloat(el.dataset.countLast):0;
-          el.dataset.countLast=cur.val;
-          animateTo(el,cur,prevVal,function(){obs.observe(el,{childList:true,characterData:true,subtree:true});});
-        } else {
-          obs.observe(el,{childList:true,characterData:true,subtree:true});
+      var token=0,shown=0,lastWritten=null;
+      function write(txt){lastWritten=txt;el.textContent=txt;}
+      function run(){
+        var parsed=parseNum(el.textContent);
+        if(!parsed)return;
+        var from=shown,my=++token,start=null,dur=700;
+        function step(ts){
+          if(my!==token)return; // une valeur plus récente a pris le relais
+          if(!start)start=ts;
+          var p=Math.min((ts-start)/dur,1);
+          var eased=1-Math.pow(1-p,3);
+          shown=from+(parsed.val-from)*eased;
+          if(p<1){write(fmt(shown,parsed.decimals)+parsed.suffix);requestAnimationFrame(step);}
+          else{shown=parsed.val;write(fmt(parsed.val,parsed.decimals)+parsed.suffix);}
         }
-      });
-      obs.observe(el,{childList:true,characterData:true,subtree:true});
+        requestAnimationFrame(step);
+      }
+      // Toute valeur écrite par l'appli (et pas par l'animation) relance le compteur vers la vraie valeur
+      new MutationObserver(function(){
+        if(el.textContent===lastWritten)return;
+        run();
+      }).observe(el,{childList:true,characterData:true,subtree:true});
+      run();
     });
   }
   var pending=false;
