@@ -596,7 +596,58 @@ async function clearAllNotifs() {
   updateNotifBadge();
   renderNotifPanelContent();
 }
-function renderNotifPanelContent() {
+
+// ---- Notifications push (abonnement de cet appareil) ----
+const VAPID_PUBLIC_KEY = window.PCW_VAPID_PUBLIC_KEY || ""; // défini dans push-config.js
+function urlB64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+function pushSupported() { return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+async function pushIsActive() {
+  if (!pushSupported() || Notification.permission !== "granted") return false;
+  try { const reg = await navigator.serviceWorker.ready; return !!(await reg.pushManager.getSubscription()); } catch (e) { return false; }
+}
+async function enablePush() {
+  if (!VAPID_PUBLIC_KEY) { alert("Notifications pas encore configurées : renseigne la clé publique dans push-config.js."); return false; }
+  if (!pushSupported()) { alert("Les notifications ne sont pas disponibles sur ce navigateur. Sur iPhone : ajoute d'abord l'application à l'écran d'accueil (Partager → Sur l'écran d'accueil), puis rouvre-la depuis l'icône."); return false; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { alert("Notifications refusées. Tu peux les réactiver dans les réglages du navigateur pour ce site."); return false; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY) });
+    const j = sub.toJSON();
+    const { error } = await sb.rpc("register_push", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent.slice(0, 200) });
+    if (error) { alert("Échec de l'enregistrement : " + error.message); return false; }
+    return true;
+  } catch (e) { alert("Impossible d'activer les notifications : " + e.message); return false; }
+}
+async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) { await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); }
+  } catch (e) {}
+}
+async function pushToggleHtml() {
+  if (!pushSupported()) return "";
+  const on = await pushIsActive();
+  return `<div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">
+    <span>${on ? "🔔 Notifications actives sur cet appareil" : "🔕 Notifications désactivées sur cet appareil"}</span>
+    <a href="#" id="push-toggle" style="font-weight:700;color:var(--accent);">${on ? "Désactiver" : "Activer"}</a></div>`;
+}
+function bindPushToggle(panel, rerender) {
+  const a = panel.querySelector("#push-toggle");
+  if (!a) return;
+  a.addEventListener("click", async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (await pushIsActive()) await disablePush(); else await enablePush();
+    rerender();
+  });
+}
+async function renderNotifPanelContent() {
   const panel = document.getElementById("notif-panel");
   const items = computeNotifications();
   panel.innerHTML = `<div class="notif-panel-header" style="display:flex;justify-content:space-between;align-items:center;">
@@ -622,6 +673,8 @@ function renderNotifPanelContent() {
   }));
   const clearAll = document.getElementById("notif-clear-all");
   if (clearAll) clearAll.addEventListener("click", (e) => { e.preventDefault(); clearAllNotifs(); });
+  panel.insertAdjacentHTML("beforeend", await pushToggleHtml());
+  bindPushToggle(panel, renderNotifPanelContent);
 }
 function toggleNotifPanel() {
   const panel = document.getElementById("notif-panel");
@@ -2530,15 +2583,6 @@ async function generateFacturePDF(id, mode) {
     doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   }
   y += 14;
-  if (f.statut !== "Payée") {
-    doc.setFontSize(9); doc.setTextColor(90);
-    const mentions = [
-      "Le solde de la prestation est exigible à la livraison du projet.",
-      "La propriété des livrables et les droits d'utilisation ne sont transférés au client qu'après paiement intégral de la facture.",
-    ];
-    mentions.forEach(m => { const t = doc.splitTextToSize(m, 175); doc.text(t, 20, y); y += t.length * 4.5 + 2; });
-    doc.setTextColor(0); y += 6;
-  }
   drawInfoBox(doc, 16, y, 179, 30);
   doc.setFontSize(9.5); doc.setTextColor(120); doc.text("COORDONNÉES BANCAIRES POUR LE RÈGLEMENT PAR VIREMENT", 21, y + 8); doc.setTextColor(0);
   doc.setFontSize(11);
