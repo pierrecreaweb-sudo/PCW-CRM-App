@@ -1,4 +1,4 @@
-const CACHE_NAME = "pcw-espace-client-v1";
+const CACHE_NAME = "pcw-espace-client-v2";
 const ASSETS = ["./", "./index.html", "./dashboard.html", "./manifest.json"];
 
 self.addEventListener("install", event => {
@@ -27,4 +27,26 @@ self.addEventListener("fetch", event => {
       })
       .catch(() => caches.match(event.request))
   );
+});
+
+// ---- Notifications push ----
+self.addEventListener("push", event => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: "PCW", body: event.data ? event.data.text() : "" }; }
+  event.waitUntil(self.registration.showNotification(d.title || "PCW", {
+    body: d.body || "",
+    icon: "icon-192.png",
+    badge: "icon-192.png",
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    data: { url: d.url || "./" },
+  }));
+});
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "./", self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    for (const c of list) { if (c.url.startsWith(self.registration.scope) && "focus" in c) return c.focus(); }
+    return self.clients.openWindow(target);
+  }));
 });
