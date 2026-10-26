@@ -567,6 +567,13 @@ function computeNotifications() {
   filtered.sort((a, b) => (b.urgent - a.urgent) || (a.date || "9999").localeCompare(b.date || "9999"));
   return filtered;
 }
+// Pastille chiffrée sur l'icône de l'appli (écran d'accueil / dock)
+function setAppBadgeCount(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) navigator.setAppBadge(n).catch(() => {}); else navigator.clearAppBadge().catch(() => {});
+  } catch (e) {}
+}
 function updateNotifBadge() {
   const badge = document.getElementById("notif-badge");
   if (!badge) return;
@@ -575,6 +582,7 @@ function updateNotifBadge() {
   const count = urgentCount || items.length;
   if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 99 ? "99+" : count; }
   else { badge.style.display = "none"; }
+  setAppBadgeCount(count);
 }
 function getDismissedNotifs() {
   return cache.admin_dismissed_notifs.map(d => d.notif_id);
@@ -1804,16 +1812,139 @@ function renderRelances() {
   hint.textContent = googleConnected
     ? "L'email est envoyé directement depuis votre compte Gmail connecté."
     : "Google non connecté — l'envoi ouvrira un brouillon dans votre messagerie par défaut.";
+  loadRelanceTemplates().then(() => { renderRelanceTemplates(); if (!document.getElementById("relance-subject").value && !relanceSelectedFactureId) applyRelanceTemplate(); });
+}
+// ---- Modèles de relance (prédéfinis, modifiables, supprimables) ----
+// Variables : {client} {numero} {montant} {echeance} {retard} {emetteur}
+const RELANCE_TEMPLATES_DEFAUT = [
+  { nom: "Rappel avant échéance (courtois)",
+    objet: "Rappel — Facture {numero} à régler prochainement — {emetteur}",
+    corps: "Bonjour {client},\n\nPetit rappel amical : la facture {numero}{montant} arrive à échéance{echeance}.\n\nSi le règlement est déjà en cours, merci de ne pas tenir compte de ce message. Dans le cas contraire, vous trouverez mes coordonnées bancaires sur la facture.\n\nBien cordialement,\n{emetteur}" },
+  { nom: "1re relance — amiable",
+    objet: "Relance — Facture {numero} — {emetteur}",
+    corps: "Bonjour {client},\n\nSauf erreur de notre part, la facture {numero}{montant}, échue{echeance}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n{emetteur}" },
+  { nom: "2e relance — rappel ferme",
+    objet: "2e relance — Facture {numero} impayée — {emetteur}",
+    corps: "Bonjour {client},\n\nMalgré notre précédent message, la facture {numero}{montant}, échue{echeance}{retard}, n'a toujours pas été réglée.\n\nNous vous remercions de bien vouloir procéder au règlement sous 8 jours, ou de nous contacter si un problème est à l'origine de ce retard.\n\nCordialement,\n{emetteur}" },
+  { nom: "Dernière relance avant mise en demeure",
+    objet: "Dernier rappel avant mise en demeure — Facture {numero} — {emetteur}",
+    corps: "Bonjour {client},\n\nLa facture {numero}{montant}, échue{echeance}{retard}, reste impayée malgré nos relances.\n\nSans règlement sous 7 jours à réception de ce message, nous serons contraints d'engager une procédure de recouvrement et d'appliquer les pénalités de retard et l'indemnité forfaitaire de recouvrement de 40 € prévues par la loi.\n\nNous préférons une solution amiable : merci de nous contacter dès que possible.\n\nCordialement,\n{emetteur}" },
+  { nom: "Relance facture d'acompte",
+    objet: "Acompte à régler — Facture {numero} — {emetteur}",
+    corps: "Bonjour {client},\n\nPour lancer votre projet, nous attendons le règlement de la facture d'acompte {numero}{montant}, échue{echeance}.\n\nDès réception, nous démarrons la réalisation. N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n{emetteur}" },
+  { nom: "Relance facture de solde (livraison)",
+    objet: "Solde à régler — Facture {numero} — {emetteur}",
+    corps: "Bonjour {client},\n\nNous espérons que la livraison de votre projet vous satisfait.\n\nLe solde, facture {numero}{montant}, est à régler{echeance}. Pour rappel, les droits d'utilisation des livrables sont transférés au client après paiement intégral.\n\nMerci d'avance,\n{emetteur}" },
+];
+let relanceTemplates = [];        // modèles chargés depuis Supabase
+let relanceTplReady = false;      // table disponible ?
+let relanceTplLoaded = false;
+async function loadRelanceTemplates(force) {
+  if (relanceTplLoaded && !force) return;
+  const { data, error } = await sb.from("relance_templates").select("*").order("id", { ascending: true });
+  relanceTplLoaded = true;
+  if (error) { relanceTplReady = false; relanceTemplates = RELANCE_TEMPLATES_DEFAUT.map((t, i) => ({ id: "def-" + i, ...t })); return; }
+  relanceTplReady = true;
+  relanceTemplates = data || [];
+  let seeded = false; try { seeded = localStorage.getItem("pcw-relance-seeded") === "1"; } catch (e) {}
+  if (!relanceTemplates.length && !seeded) {
+    for (const t of RELANCE_TEMPLATES_DEFAUT) await insertRow("relance_templates", { ...t });
+    try { localStorage.setItem("pcw-relance-seeded", "1"); } catch (e) {}
+    const r = await sb.from("relance_templates").select("*").order("id", { ascending: true });
+    relanceTemplates = r.data || [];
+  }
+}
+function fillRelanceVars(text, f) {
+  const c = f ? findContact(f.contact_id) : null;
+  const nom = c ? contactLabel(c) : "";
+  let retard = "";
+  if (f && f.date_echeance) {
+    const j = Math.floor((new Date(todayStr()) - new Date(f.date_echeance)) / 86400000);
+    if (j > 0) retard = " (" + j + " jour" + (j > 1 ? "s" : "") + " de retard)";
+  }
+  const vars = {
+    client: nom && nom !== "—" ? nom : "",
+    numero: f ? (f.numero || "") : "",
+    montant: f && f.montant_ttc != null ? " d'un montant de " + f.montant_ttc + " €" : "",
+    echeance: f && f.date_echeance ? " le " + fmtDateFR(f.date_echeance) : "",
+    retard,
+    emetteur: EMETTEUR.nom,
+  };
+  return (text || "").replace(/\{(client|numero|montant|echeance|retard|emetteur)\}/g, (m, k) => vars[k]);
+}
+function currentRelanceTemplate() {
+  const sel = document.getElementById("relance-template");
+  const id = sel ? sel.value : "";
+  return relanceTemplates.find(t => String(t.id) === String(id)) || relanceTemplates[0] || null;
+}
+function applyRelanceTemplate() {
+  const f = relanceSelectedFactureId ? findFacture(relanceSelectedFactureId) : null;
+  const t = currentRelanceTemplate();
+  if (!t) return;
+  document.getElementById("relance-subject").value = fillRelanceVars(t.objet, f);
+  document.getElementById("relance-body").value = fillRelanceVars(t.corps, f);
+}
+function renderRelanceTemplates() {
+  const sel = document.getElementById("relance-template");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = relanceTemplates.map(t => `<option value="${t.id}">${escapeHtml(t.nom || "Sans nom")}</option>`).join("");
+  if (prev && relanceTemplates.some(t => String(t.id) === prev)) sel.value = prev;
+  document.getElementById("relance-tpl-banner").innerHTML = relanceTplReady ? "" :
+    `<div class="warn-banner">⚠️ Pour modifier ou supprimer les modèles, il faut d'abord créer la table dans Supabase (fichier <strong>relance_templates.sql</strong> → SQL Editor → Run). En attendant, les modèles par défaut restent utilisables.</div>`;
+  document.getElementById("relance-tpl-tbody").innerHTML = relanceTemplates.length ? relanceTemplates.map(t => `
+    <tr>
+      <td><strong>${escapeHtml(t.nom || "")}</strong></td>
+      <td>${escapeHtml(t.objet || "")}</td>
+      <td>${escapeHtml((t.corps || "").replace(/\s+/g, " ").slice(0, 80))}${(t.corps || "").length > 80 ? "…" : ""}</td>
+      <td class="row-actions">
+        <button title="Utiliser" onclick="document.getElementById('relance-template').value='${t.id}';applyRelanceTemplate();window.scrollTo({top:document.getElementById('relance-subject').offsetTop-120,behavior:'smooth'})">✉</button>
+        ${relanceTplReady ? `<button title="Modifier" onclick="openRelanceTemplateDialog(${t.id})">✎</button><button title="Supprimer" onclick="deleteRelanceTemplate(${t.id})">🗑</button>` : ""}
+      </td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="4">Aucun modèle — clique sur « Restaurer les modèles par défaut ».</td></tr>`;
+}
+function openRelanceTemplateDialog(id) {
+  if (!relanceTplReady) { showToast("Crée d'abord la table relance_templates dans Supabase"); return; }
+  const row = id ? relanceTemplates.find(t => t.id === id) : {};
+  openModal({
+    title: id ? "Modifier le modèle de relance" : "Nouveau modèle de relance",
+    table: "relance_templates", id,
+    fields: [
+      { key: "nom", label: "Nom du modèle", type: "text", value: row.nom, placeholder: "Ex : 2e relance — rappel ferme", required: true },
+      { key: "objet", label: "Objet de l'email", type: "text", value: row.objet, placeholder: "Relance — Facture {numero} — {emetteur}" },
+      { key: "corps", label: "Message — variables : {client} {numero} {montant} {echeance} {retard} {emetteur}", type: "textarea", value: row.corps, placeholder: "Bonjour {client}, …" },
+    ],
+    beforeSave: (v) => { v.date_creation = nowStr(); return true; },
+    onSaved: async () => { await loadRelanceTemplates(true); renderRelanceTemplates(); applyRelanceTemplate(); },
+  });
+}
+async function deleteRelanceTemplate(id) {
+  if (!confirm("Supprimer ce modèle de relance ?")) return;
+  if (await deleteRow("relance_templates", id)) { showToast("Modèle supprimé"); await loadRelanceTemplates(true); renderRelanceTemplates(); }
+}
+async function resetRelanceTemplates() {
+  if (!relanceTplReady) { showToast("Crée d'abord la table relance_templates dans Supabase"); return; }
+  if (!confirm("Ajouter les modèles par défaut manquants ? (tes modèles existants ne sont pas modifiés)")) return;
+  const noms = relanceTemplates.map(t => t.nom);
+  for (const t of RELANCE_TEMPLATES_DEFAUT.filter(t => !noms.includes(t.nom))) await insertRow("relance_templates", { ...t });
+  await loadRelanceTemplates(true); renderRelanceTemplates(); showToast("Modèles par défaut restaurés");
 }
 function selectFactureForRelance(id) {
   const f = findFacture(id); if (!f) return;
   relanceSelectedFactureId = id;
   const c = findContact(f.contact_id);
-  const nom = contactLabel(c);
-  const montant = f.montant_ttc != null ? f.montant_ttc + " €" : "";
   document.getElementById("relance-to").value = (c && c.email) || "";
-  document.getElementById("relance-subject").value = `Relance — Facture ${f.numero || ""} — ${EMETTEUR.nom}`;
-  document.getElementById("relance-body").value = `Bonjour ${nom !== "—" ? nom : ""},\n\nSauf erreur de notre part, la facture ${f.numero || ""}${montant ? " d'un montant de " + montant : ""}${f.date_echeance ? ", échue le " + fmtDateFR(f.date_echeance) : ""}, reste impayée à ce jour.\n\nPourriez-vous nous indiquer un délai de règlement ? N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n${EMETTEUR.nom}`;
+  // modèle conseillé selon le type / l'état de la facture
+  const sel = document.getElementById("relance-template");
+  if (sel && relanceTemplates.length) {
+    const pick = (nom) => relanceTemplates.find(t => (t.nom || "").startsWith(nom));
+    const j = f.date_echeance ? Math.floor((new Date(todayStr()) - new Date(f.date_echeance)) / 86400000) : 0;
+    const t = (f.type_facture === "Facture d'acompte (30%)" && pick("Relance facture d'acompte")) ||
+              (f.type_facture === "Facture de solde" && pick("Relance facture de solde")) ||
+              (j <= 0 && pick("Rappel avant échéance")) || (j > 30 && pick("Dernière relance")) || (j > 10 && pick("2e relance")) || pick("1re relance");
+    if (t) sel.value = String(t.id);
+  }
+  applyRelanceTemplate();
 }
 async function sendRelanceFromForm() {
   const to = document.getElementById("relance-to").value.trim();
@@ -4042,6 +4173,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("logout-btn").addEventListener("click", handleLogout);
   document.getElementById("google-connect-btn").addEventListener("click", startGoogleConnect);
   document.getElementById("btn-send-relance").addEventListener("click", sendRelanceFromForm);
+  document.getElementById("relance-template").addEventListener("change", applyRelanceTemplate);
+  document.getElementById("btn-relance-tpl-new").addEventListener("click", () => openRelanceTemplateDialog(null));
+  document.getElementById("btn-relance-tpl-reset").addEventListener("click", resetRelanceTemplates);
   document.getElementById("btn-refresh-google-cal").addEventListener("click", loadGoogleCalendarList);
   document.getElementById("btn-new-google-event").addEventListener("click", () => openRdvDialog(null));
   document.getElementById("messages-send-btn").addEventListener("click", sendAdminMessage);
