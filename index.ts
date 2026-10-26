@@ -50,6 +50,24 @@ async function notifyClient(contactId: number, msg: Msg) {
   await sendTo(data || [], msg, "./dashboard.html");
 }
 
+// ---- Regroupement des notifications de fichiers ----
+const FENETRE_MIN = 5; // minutes : les fichiers envoyés dans cet intervalle = 1 seule notification
+const ilYa = (min: number) => new Date(Date.now() - min * 60000).toISOString().slice(0, 16).replace("T", " ");
+// Vrai si un autre fichier du même client et du même sens a été ajouté juste avant
+async function suiteDeLot(r: any, admin: boolean) {
+  let q = sb.from("fichiers_clients").select("id, date_creation").eq("contact_id", r.contact_id).lt("id", r.id)
+    .gte("date_creation", ilYa(FENETRE_MIN)).limit(1);
+  q = admin ? q.eq("envoye_par", "admin") : q.neq("envoye_par", "admin");
+  const { data } = await q;
+  return !!(data && data.length);
+}
+// Vrai si un projet vient d'être créé pour ce client depuis une commande du site
+async function vientDUneCommande(contactId: number) {
+  const { data } = await sb.from("evenements").select("id").eq("contact_id", contactId)
+    .not("commande_site_id", "is", null).gte("date_creation", ilYa(15)).limit(1);
+  return !!(data && data.length);
+}
+
 async function onEvent(table: string, type: string, r: any, old: any) {
   if (table === "messages" && type === "INSERT") {
     if (r.expediteur === "client") await notifyAdmin({ title: "Message de " + nameOf(await contact(r.contact_id)), body: cut(r.contenu), tag: "msg-" + r.contact_id });
@@ -65,8 +83,16 @@ async function onEvent(table: string, type: string, r: any, old: any) {
     }
   }
   if (table === "fichiers_clients" && type === "INSERT") {
-    if (r.envoye_par === "admin") await notifyClient(r.contact_id, { title: "Nouveau fichier de PCW", body: cut(r.nom_fichier), tag: "fichier-" + r.id });
-    else await notifyAdmin({ title: "Fichier reçu", body: nameOf(await contact(r.contact_id)) + " : " + cut(r.nom_fichier), tag: "fichier-" + r.id });
+    // Une seule notification par envoi groupé : on ignore les fichiers qui suivent
+    // de près un autre fichier du même client (même sens), et ceux d'une commande
+    // du site (la commande a déjà sa propre notification « Nouvelle commande »).
+    if (r.envoye_par === "admin") {
+      if (await suiteDeLot(r, true)) return;
+      await notifyClient(r.contact_id, { title: "Nouveaux fichiers de PCW", body: cut(r.nom_fichier), tag: "fichiers-" + r.contact_id });
+    } else {
+      if (await suiteDeLot(r, false) || await vientDUneCommande(r.contact_id)) return;
+      await notifyAdmin({ title: "Fichiers reçus", body: nameOf(await contact(r.contact_id)) + " : " + cut(r.nom_fichier), tag: "fichiers-" + r.contact_id });
+    }
   }
   if (table === "devis" && old && old.statut !== r.statut) {
     const num = r.numero || "";
@@ -129,6 +155,15 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     if (body.type === "daily") await daily();
+    else if (body.type === "commande") {
+      // Envoyée par import-commande-site : UNE notification par commande du site
+      const n = Number(body.nb_fichiers || 0);
+      await notifyAdmin({
+        title: "🟢 Nouvelle commande",
+        body: cut([body.entreprise, body.formule, body.montant ? body.montant + " €" : "", n ? n + " fichier" + (n > 1 ? "s" : "") : ""].filter(Boolean).join(" · ")),
+        tag: "commande-" + (body.commande_id || ""),
+      });
+    }
     else if (body.table) await onEvent(body.table, body.type, body.record || {}, body.old_record || null);
     return new Response("ok");
   } catch (e) {
