@@ -779,11 +779,12 @@ function createRecurringInvoiceFor(evenementId, slot) {
     table: "factures", id: null,
     fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: montant, date_facture: todayStr(), type_facture: "Facture d'abonnement" }),
     onRender: factureOnRender,
-    onSaved: async () => {
+    onSaved: async (saved) => {
       const next = advanceDateBy(prochaine || todayStr(), frequence);
       await updateRow("evenements", e.id, slot === 2 ? { prochaine_facturation_2: next } : { prochaine_facturation: next });
       await refreshAll();
       showToast("Facture créée · prochaine échéance : " + fmtDateFR(next));
+      if (saved && confirm("Facture créée. L'envoyer maintenant par email au client (avec le lien de paiement de son espace) ?")) sendInvoiceEmailDialog(saved.id);
     },
   });
 }
@@ -1835,6 +1836,9 @@ const RELANCE_TEMPLATES_DEFAUT = [
   { nom: "Relance facture d'acompte",
     objet: "Acompte à régler — Facture {numero} — {emetteur}",
     corps: "Bonjour {client},\n\nPour lancer votre projet, nous attendons le règlement de la facture d'acompte {numero}{montant}, échue{echeance}.\n\nDès réception, nous démarrons la réalisation. N'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n{emetteur}" },
+  { nom: "Envoi facture d'abonnement",
+    objet: "Votre facture d'abonnement {numero} — {emetteur}",
+    corps: "Bonjour {prenom},\n\nVotre facture d'abonnement {numero}{montant}{periodicite} vient d'être émise{intitule}. Elle est disponible dans votre espace client.\n\nSi vous le souhaitez, vous pouvez la régler directement en ligne :\n1. Connectez-vous à votre espace client : {lien_espace}\n2. Ouvrez l'onglet « Paiements »\n3. Cliquez sur « Payer maintenant » en face de la facture {numero}\n\nVous pouvez aussi la régler par virement bancaire (coordonnées sur la facture). L'échéance est fixée au {date_echeance}.\n\nVous retrouvez également dans votre espace client l'ensemble de vos factures, devis et documents.\n\nN'hésitez pas à me contacter pour toute question.\n\nBien cordialement,\nPierre Orriols\n{emetteur}\n06 45 33 43 28 · pierre.creaweb@gmail.com · pierrecreaweb.fr" },
   { nom: "Relance facture de solde (livraison)",
     objet: "Solde à régler — Facture {numero} — {emetteur}",
     corps: "Bonjour {client},\n\nNous espérons que la livraison de votre projet vous satisfait.\n\nLe solde, facture {numero}{montant}, est à régler{echeance}. Pour rappel, les droits d'utilisation des livrables sont transférés au client après paiement intégral.\n\nMerci d'avance,\n{emetteur}" },
@@ -1849,6 +1853,16 @@ async function loadRelanceTemplates(force) {
   if (error) { relanceTplReady = false; relanceTemplates = RELANCE_TEMPLATES_DEFAUT.map((t, i) => ({ id: "def-" + i, ...t })); return; }
   relanceTplReady = true;
   relanceTemplates = data || [];
+  // Modèle d'envoi des factures d'abonnement : ajouté une fois pour ceux qui avaient déjà leurs modèles
+  let aboSeeded = false; try { aboSeeded = localStorage.getItem("pcw-abo-tpl-seeded") === "1"; } catch (e) {}
+  let relSeeded = false; try { relSeeded = localStorage.getItem("pcw-relance-seeded") === "1"; } catch (e) {}
+  if (relanceTemplates.length && !aboSeeded && !relanceTemplates.some(t => (t.nom || "").startsWith("Envoi facture d'abonnement"))) {
+    const t = RELANCE_TEMPLATES_DEFAUT.find(x => x.nom.startsWith("Envoi facture d'abonnement"));
+    await insertRow("relance_templates", { ...t });
+    try { localStorage.setItem("pcw-abo-tpl-seeded", "1"); } catch (e) {}
+    const r0 = await sb.from("relance_templates").select("*").order("id", { ascending: true });
+    relanceTemplates = r0.data || relanceTemplates;
+  }
   let seeded = false; try { seeded = localStorage.getItem("pcw-relance-seeded") === "1"; } catch (e) {}
   if (!relanceTemplates.length && !seeded) {
     for (const t of RELANCE_TEMPLATES_DEFAUT) await insertRow("relance_templates", { ...t });
@@ -1872,13 +1886,27 @@ function fillRelanceVars(text, f) {
     echeance: f && f.date_echeance ? " le " + fmtDateFR(f.date_echeance) : "",
     retard,
     emetteur: EMETTEUR.nom,
+    prenom: c ? (c.prenom || nom) : "",
+    date_echeance: f && f.date_echeance ? fmtDateFR(f.date_echeance) : "—",
+    lien_espace: new URL("espace-client/", location.href).href,
+    periodicite: "", intitule: "",
   };
-  return (text || "").replace(/\{(client|numero|montant|echeance|retard|emetteur)\}/g, (m, k) => vars[k]);
+  if (f && f.type_facture === "Facture d'abonnement") {
+    const l0 = Array.isArray(f.lignes) && f.lignes[0] ? f.lignes[0] : null;
+    const ev = f.evenement_id ? findEvenement(f.evenement_id) : null;
+    const mode = l0 && l0.mode_paiement;
+    const per = mode === "Paiement mensuel" ? "mensuel" : (mode === "Paiement annuel" ? "annuel" : "");
+    const titre = (l0 && l0.designation) || (ev && eventLabel(ev)) || f.type_evenement || "";
+    vars.periodicite = per ? " (" + per + ")" : "";
+    vars.intitule = titre ? " pour « " + titre + " »" : "";
+  }
+  return (text || "").replace(/\{(client|numero|montant|echeance|retard|emetteur|prenom|date_echeance|lien_espace|periodicite|intitule)\}/g, (m, k) => vars[k]);
 }
+const estModeleEnvoi = (t) => (t.nom || "").startsWith("Envoi ");
 function currentRelanceTemplate() {
   const sel = document.getElementById("relance-template");
   const id = sel ? sel.value : "";
-  return relanceTemplates.find(t => String(t.id) === String(id)) || relanceTemplates[0] || null;
+  return relanceTemplates.find(t => String(t.id) === String(id)) || relanceTemplates.find(t => !estModeleEnvoi(t)) || null;
 }
 function applyRelanceTemplate() {
   const f = relanceSelectedFactureId ? findFacture(relanceSelectedFactureId) : null;
@@ -1891,8 +1919,8 @@ function renderRelanceTemplates() {
   const sel = document.getElementById("relance-template");
   if (!sel) return;
   const prev = sel.value;
-  sel.innerHTML = relanceTemplates.map(t => `<option value="${t.id}">${escapeHtml(t.nom || "Sans nom")}</option>`).join("");
-  if (prev && relanceTemplates.some(t => String(t.id) === prev)) sel.value = prev;
+  sel.innerHTML = relanceTemplates.filter(t => !estModeleEnvoi(t)).map(t => `<option value="${t.id}">${escapeHtml(t.nom || "Sans nom")}</option>`).join("");
+  if (prev && relanceTemplates.some(t => String(t.id) === prev && !estModeleEnvoi(t))) sel.value = prev;
   document.getElementById("relance-tpl-banner").innerHTML = relanceTplReady ? "" :
     `<div class="warn-banner">⚠️ Pour modifier ou supprimer les modèles, il faut d'abord créer la table dans Supabase (fichier <strong>relance_templates.sql</strong> → SQL Editor → Run). En attendant, les modèles par défaut restent utilisables.</div>`;
   document.getElementById("relance-tpl-tbody").innerHTML = relanceTemplates.length ? relanceTemplates.map(t => `
@@ -2552,6 +2580,7 @@ function renderFactures() {
         <button title="Visualiser" onclick="generateFacturePDF(${f.id}, 'preview')">👁</button>
         <button title="Télécharger la facture (PDF)" onclick="generateFacturePDF(${f.id})">⬇</button>
         ${pdfBtn}
+        ${f.type_facture === "Facture d'abonnement" ? `<button title="Envoyer la facture au client par email" onclick="sendInvoiceEmailDialog(${f.id})">📨</button>` : ""}
         ${relanceBtn}
         <button title="Éditer la facture" onclick="openFactureEditor(${f.id})">✎</button>
         <button onclick="confirmDelete('factures', ${f.id}, renderFactures)">🗑</button>
@@ -2744,6 +2773,38 @@ async function generateFacturePDF(id, mode) {
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
 }
 
+// ---- Envoi de la facture d'abonnement au client (email + lien de paiement dans l'espace client) ----
+async function sendInvoiceEmailDialog(factureId) {
+  const f = findFacture(factureId); if (!f) return;
+  const c = findContact(f.contact_id);
+  await loadRelanceTemplates();
+  const t = relanceTemplates.find(x => (x.nom || "").startsWith("Envoi facture d'abonnement"))
+    || RELANCE_TEMPLATES_DEFAUT.find(x => x.nom.startsWith("Envoi facture d'abonnement"));
+  const html = `<div class="field"><label>Destinataire</label><input type="email" id="inv-to" value="${escapeAttr((c && c.email) || "")}" placeholder="client@email.com"></div>
+    <div class="field"><label>Objet</label><input type="text" id="inv-subject" value="${escapeAttr(fillRelanceVars(t.objet, f))}"></div>
+    <div class="field"><label>Message</label><textarea id="inv-body" rows="14">${escapeHtml(fillRelanceVars(t.corps, f))}</textarea></div>
+    <div style="font-size:12px;color:var(--muted);">${googleConnected ? "Envoi direct depuis ton Gmail connecté." : "Google non connecté — un brouillon s'ouvrira dans ta messagerie."}
+    Le client peut payer depuis son espace client. <a href="#" onclick="generateFacturePDF(${f.id});return false;">⬇ Télécharger le PDF</a> si tu veux le joindre toi-même.
+    Texte modifiable ici (ou dans « Modèles de relance » → « Envoi facture d'abonnement »).</div>`;
+  openRawModal("Envoyer la facture " + (f.numero || "") + " au client", html, async () => {
+    const to = document.getElementById("inv-to").value.trim();
+    const subject = document.getElementById("inv-subject").value.trim();
+    const body = document.getElementById("inv-body").value.trim();
+    if (!to || !subject || !body) { showToast("Destinataire, objet et message sont requis"); return; }
+    if (!googleConnected) {
+      window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      closeModal(); return;
+    }
+    showToast("Envoi en cours…");
+    const res = await callEdgeFunction("send-gmail-relance", { to, subject, body });
+    if (res && res.ok) {
+      closeModal();
+      if (f.statut === "Brouillon") { await updateRow("factures", f.id, { statut: "Envoyée" }); await refreshCache(); renderPage(currentPage); showToast("Email envoyé ✔ — facture passée au statut « Envoyée »"); }
+      else showToast("Email envoyé ✔");
+    } else showToast(res?.error || "Échec de l'envoi");
+  });
+  const sv = document.getElementById("modal-save"); if (sv) sv.textContent = "Envoyer";
+}
 // ---- Pénalités de retard : calcul + lignes prêtes ----
 const TAUX_PENALITES_DEFAUT = 8.25; // 3 × taux d'intérêt légal (2,75 % au 2e semestre 2026) = minimum légal
 const INDEMNITE_RECOUVREMENT = 40;
@@ -2937,6 +2998,8 @@ function recomputeFactureEditor() {
   document.getElementById("fed-totaux").innerHTML = html;
   const pb = document.getElementById("fed-penalites");
   if (pb) pb.style.display = type === TYPE_FACTURE_PENALITES ? "" : "none";
+  const eb = document.getElementById("fed-email");
+  if (eb) eb.style.display = type === "Facture d'abonnement" ? "" : "none";
 }
 function removeFactureEditorLine(i) { readFactureEditorToState(); fedState.lignes.splice(i, 1); if (!fedState.lignes.length) fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
 function addFactureEditorLine() { readFactureEditorToState(); fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
@@ -3018,6 +3081,7 @@ function bindFactureEditor() {
   $("fed-add-line").addEventListener("click", addFactureEditorLine);
   $("fed-import-devis").addEventListener("click", importFactureLinesFromDevis);
   $("fed-penalites").addEventListener("click", openPenaltiesCalculator);
+  $("fed-email").addEventListener("click", async () => { if (await saveFactureEditor(false, { silent: true })) sendInvoiceEmailDialog(fedState.id); });
   $("fed-close").addEventListener("click", closeFactureEditor);
   $("fed-cgv").addEventListener("click", openFactureCgvPicker);
   $("fed-save").addEventListener("click", () => saveFactureEditor(false));
