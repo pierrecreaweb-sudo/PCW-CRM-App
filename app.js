@@ -777,7 +777,7 @@ function createRecurringInvoiceFor(evenementId, slot) {
   openModal({
     title: "Nouvelle facture récurrente (" + frequence + ") — " + eventLabel(e),
     table: "factures", id: null,
-    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: montant, date_facture: todayStr() }),
+    fields: factureFields({ contact_id: e.contact_id, type_evenement: e.type_evenement, montant_ttc: montant, date_facture: todayStr(), type_facture: "Facture d'abonnement" }),
     onRender: factureOnRender,
     onSaved: async () => {
       const next = advanceDateBy(prochaine || todayStr(), frequence);
@@ -797,7 +797,7 @@ function renderStats() {
   const devisAcceptes = cache.devis.filter(d => d.statut === "Accepté");
   const tauxConversion = devisEmis.length ? round2((devisAcceptes.length / devisEmis.length) * 100) : 0;
   const panierMoyen = devisAcceptes.length ? round2(devisAcceptes.reduce((s, d) => s + Number(d.montant_ttc || 0), 0) / devisAcceptes.length) : 0;
-  const facturesPayees = cache.factures.filter(f => f.statut === "Payée");
+  const facturesPayees = cache.factures.filter(f => f.statut === "Payée" && compteDansCA(f));
   const caTotal = round2(facturesPayees.reduce((s, f) => s + Number(f.montant_ttc || 0), 0));
   const enCours = cache.evenements.filter(e => !["Livré", "Annulé"].includes(e.statut)).length;
 
@@ -901,7 +901,7 @@ function computeCABuckets(view) {
       buckets.push({ from: d, to, label: MOIS_FR[d.getMonth()].slice(0, 3) + " " + String(d.getFullYear()).slice(2) });
     }
   }
-  const paid = cache.factures.filter(f => f.statut === "Payée" && f.date_facture);
+  const paid = cache.factures.filter(f => f.statut === "Payée" && f.date_facture && compteDansCA(f));
   const values = buckets.map(b => {
     const from = isoOf(b.from), to = isoOf(b.to);
     return round2(paid.filter(f => f.date_facture >= from && f.date_facture <= to).reduce((s, f) => s + Number(f.montant_ttc || 0), 0));
@@ -1803,7 +1803,10 @@ function renderRelances() {
         <strong>${f.numero || "—"}</strong> — ${contactLabel(c)}
         <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${f.montant_ttc != null ? f.montant_ttc + " €" : ""} ${f.date_echeance ? "· échue le " + fmtDateFR(f.date_echeance) : ""}</div>
       </div>
-      ${badge(f.statut, color)}
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${f.date_echeance && f.date_echeance < todayStr() ? `<button class="btn secondary" style="padding:5px 10px;font-size:11.5px;" title="Créer la facture de pénalités de retard" onclick="event.stopPropagation();createPenaltyInvoiceFor(${f.id})">⚖ Pénalités</button>` : ""}
+        ${badge(f.statut, color)}
+      </div>
     </div>`;
   }).join("") : `<div style="text-align:center;padding:30px;color:var(--muted);">Aucune relance en attente 🎉</div>`;
 
@@ -2555,7 +2558,11 @@ function renderFactures() {
       </td></tr>`;
   }).join("") : `<tr class="empty-row"><td colspan="8">Aucune facture — crée-la ici ou depuis un devis (🧾)</td></tr>`;
 }
-const TYPES_FACTURE = ["Facture unique", "Facture d'acompte (30%)", "Facture de solde", "Facture d'abonnement"];
+const TYPE_FACTURE_PENALITES = "Pénalités de retard";
+const TYPES_FACTURE = ["Facture unique", "Facture d'acompte (30%)", "Facture de solde", "Facture d'abonnement", TYPE_FACTURE_PENALITES];
+const MENTION_PENALITES = "Pénalités de retard (art. L441-10 C. com.) et indemnité forfaitaire de recouvrement (art. D441-5 C. com.) — sommes non soumises à TVA.";
+// Les pénalités / indemnités de recouvrement ne sont pas du chiffre d'affaires de prestation
+function compteDansCA(f) { return f.type_facture !== TYPE_FACTURE_PENALITES; }
 const ACOMPTE_PERCENT = 30;
 function computeMontantParType(devisId, type, excludeFactureId) {
   const d = findDevis(Number(devisId));
@@ -2590,7 +2597,7 @@ function factureOnRender(form, currentId) {
   const recompute = () => {
     const devisId = form.elements["devis_id"].value;
     const type = form.elements["type_facture"].value;
-    if (!devisId || type === "Facture unique") return;
+    if (!devisId || !["Facture d'acompte (30%)", "Facture de solde"].includes(type)) return;
     const m = computeMontantParType(devisId, type, currentId);
     if (m != null) form.elements["montant_ttc"].value = m;
   };
@@ -2639,7 +2646,7 @@ async function generateFacturePDF(id, mode) {
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
   const montant = Number(f.montant_ttc || 0);
   const logo = await getLogoDataUrl();
-  const factureTag = f.type_facture === "Facture d'acompte (30%)" ? "ACOMPTE 30%" : (f.type_facture === "Facture de solde" ? "SOLDE" : null);
+  const factureTag = f.type_facture === "Facture d'acompte (30%)" ? "ACOMPTE 30%" : (f.type_facture === "Facture de solde" ? "SOLDE" : (f.type_facture === TYPE_FACTURE_PENALITES ? "PÉNALITÉS DE RETARD" : null));
   drawPdfBand(doc, logo, "FACTURE", factureTag);
   const stamp = FACTURE_STAMPS[f.statut];
   if (stamp) drawStamp(doc, stamp[0], stamp[1]);
@@ -2695,7 +2702,10 @@ async function generateFacturePDF(id, mode) {
       doc.text(k, 20, y); doc.text(v, 130, y); y += 7;
     });
   }
-  y += 2; doc.setFontSize(9); doc.setTextColor(90); doc.text(MENTION_TVA, 20, y); doc.setTextColor(0); y += 10;
+  y += 2; doc.setFontSize(9); doc.setTextColor(90);
+  if (f.type_facture === TYPE_FACTURE_PENALITES) { doc.text(doc.splitTextToSize(MENTION_PENALITES, 175), 20, y); y += 5; }
+  else doc.text(MENTION_TVA, 20, y);
+  doc.setTextColor(0); y += 10;
   if (f.type_facture === "Facture d'acompte (30%)" && dev && dev.montant_ttc != null) {
     doc.setFontSize(9.5); doc.setTextColor(90);
     doc.text(`Montant total du projet : ${Number(dev.montant_ttc).toFixed(2)} €   —   Acompte de 30% facturé ce jour : ${montant.toFixed(2)} €`, 20, y);
@@ -2710,6 +2720,8 @@ async function generateFacturePDF(id, mode) {
   }
   if (f.type_facture === "Facture d'acompte (30%)") {
     doc.setFontSize(13); doc.text("ACOMPTE À PAYER (30%) : " + montant.toFixed(2) + " €", 20, y);
+  } else if (f.type_facture === TYPE_FACTURE_PENALITES) {
+    doc.setFontSize(13); doc.text("TOTAL À RÉGLER SANS DÉLAI : " + montant.toFixed(2) + " €", 20, y);
   } else {
     doc.setFontSize(13); doc.text("NET À PAYER : " + montant.toFixed(2) + " €", 20, y);
   }
@@ -2732,6 +2744,76 @@ async function generateFacturePDF(id, mode) {
   else { doc.save((f.numero || "facture").replace(/\s+/g, "_") + ".pdf"); }
 }
 
+// ---- Pénalités de retard : calcul + lignes prêtes ----
+const TAUX_PENALITES_DEFAUT = 8.25; // 3 × taux d'intérêt légal (2,75 % au 2e semestre 2026) = minimum légal
+const INDEMNITE_RECOUVREMENT = 40;
+function joursDeRetard(echeanceISO, jusquAISO) {
+  if (!echeanceISO) return 0;
+  return Math.max(0, Math.floor((new Date(jusquAISO) - new Date(echeanceISO)) / 86400000));
+}
+function lignesPenalites(f, taux, jusquAISO) {
+  const jours = joursDeRetard(f.date_echeance, jusquAISO);
+  const base = Number(f.montant_ttc || 0);
+  const pen = round2(base * (taux / 100) * jours / 365);
+  const numFmt = (n) => String(n).replace(".", ",");
+  return {
+    jours, pen,
+    lignes: [
+      { designation: `Pénalités de retard — facture ${f.numero || ""} (${numFmt(base.toFixed(2))} € × ${numFmt(taux)} % × ${jours} j / 365, arrêtées au ${fmtDateFR(jusquAISO)})`, qte: 1, pu_ttc: pen, remise: 0, mode_paiement: "Paiement unique" },
+      { designation: "Indemnité forfaitaire pour frais de recouvrement (art. D441-5 C. com.)", qte: 1, pu_ttc: INDEMNITE_RECOUVREMENT, remise: 0, mode_paiement: "Paiement unique" },
+    ],
+  };
+}
+function facturesImpayeesEchues() {
+  const today = todayStr();
+  return cache.factures.filter(f => ["Envoyée", "En retard"].includes(f.statut) && f.date_echeance && f.date_echeance < today && f.type_facture !== TYPE_FACTURE_PENALITES);
+}
+// Depuis la page Relances : crée la facture de pénalités pré-remplie pour une facture impayée
+function createPenaltyInvoiceFor(factureId) {
+  const f = findFacture(factureId); if (!f) return;
+  if (!f.date_echeance) { showToast("Cette facture n'a pas de date d'échéance : impossible de calculer les pénalités"); return; }
+  const today = todayStr();
+  const r = lignesPenalites(f, TAUX_PENALITES_DEFAUT, today);
+  openFactureDialog(null, {
+    contact_id: f.contact_id, type_facture: TYPE_FACTURE_PENALITES, date_facture: today, date_echeance: today,
+    montant_ttc: round2(r.pen + INDEMNITE_RECOUVREMENT), statut: "Brouillon", lignes: r.lignes,
+    notes: `Réf. facture ${f.numero || ""} échue le ${fmtDateFR(f.date_echeance)} — pénalités calculées au taux de ${String(TAUX_PENALITES_DEFAUT).replace(".", ",")} % jusqu'au ${fmtDateFR(today)}.`,
+  });
+  showToast("Pénalités calculées au taux de " + String(TAUX_PENALITES_DEFAUT).replace(".", ",") + " % — modifiable dans l'éditeur (bouton « Calculer les pénalités »)");
+}
+// Depuis l'éditeur de facture : choisir la facture impayée, le taux et la date
+function openPenaltiesCalculator() {
+  const list = facturesImpayeesEchues();
+  if (!list.length) { showToast("Aucune facture impayée et échue à pénaliser"); return; }
+  const today = todayStr();
+  const html = `<div class="field"><label>Facture impayée</label><select id="pen-facture">${list.map(f => `<option value="${f.id}">${escapeHtml((f.numero || "") + " — " + contactLabel(findContact(f.contact_id)) + " — " + Number(f.montant_ttc || 0).toFixed(2) + " € — échue le " + fmtDateFR(f.date_echeance))}</option>`).join("")}</select></div>
+    <div class="field"><label>Taux annuel des pénalités (%) — celui de tes CGV / de la facture, minimum légal : 3 × le taux d'intérêt légal</label><input type="number" id="pen-taux" step="0.01" min="0" value="${TAUX_PENALITES_DEFAUT}"></div>
+    <div class="field"><label>Pénalités calculées jusqu'au</label><input type="date" id="pen-date" value="${today}"></div>
+    <div class="field"><label>Indemnité forfaitaire de recouvrement (€) — 40 € entre professionnels, à retirer pour un particulier</label><input type="number" id="pen-indemnite" step="0.01" min="0" value="${INDEMNITE_RECOUVREMENT}"></div>
+    <div id="pen-apercu" style="font-size:12.5px;color:var(--muted);margin-top:8px;"></div>`;
+  const compute = () => {
+    const f = findFacture(Number(document.getElementById("pen-facture").value));
+    const taux = Number(document.getElementById("pen-taux").value) || 0;
+    const r = lignesPenalites(f, taux, document.getElementById("pen-date").value || today);
+    const ind = Number(document.getElementById("pen-indemnite").value) || 0;
+    document.getElementById("pen-apercu").innerHTML = `${r.jours} jour(s) de retard → pénalités <strong>${r.pen.toFixed(2)} €</strong> + indemnité ${ind.toFixed(2)} € = <strong>${round2(r.pen + ind).toFixed(2)} €</strong>`;
+    return { f, taux, r, ind };
+  };
+  openRawModal("Calculer les pénalités de retard", html, () => {
+    const { f, taux, r, ind } = compute();
+    const date = document.getElementById("pen-date").value || today;
+    const lignes = r.lignes;
+    if (ind > 0) lignes[1].pu_ttc = ind; else lignes.splice(1, 1);
+    fedState.lignes = lignes;
+    const ct = document.getElementById("fed-contact"); if (ct && f.contact_id) ct.value = f.contact_id;
+    document.getElementById("fed-notes").value = `Réf. facture ${f.numero || ""} échue le ${fmtDateFR(f.date_echeance)} — pénalités calculées au taux de ${String(taux).replace(".", ",")} % jusqu'au ${fmtDateFR(date)}.`;
+    closeModal();
+    renderFactureEditorContactInfo();
+    renderFactureEditorLines();
+  });
+  ["pen-facture", "pen-taux", "pen-date", "pen-indemnite"].forEach(id => document.getElementById(id).addEventListener("input", compute));
+  compute();
+}
 // ---- Éditeur de facture (A4) — même principe que l'éditeur de devis ----
 let fedState = { id: null, lignes: [], cgv: null };
 function newFactureLine() { return { designation: "", qte: 1, pu_ttc: "", remise: 0, mode_paiement: "Paiement unique" }; }
@@ -2849,10 +2931,12 @@ function recomputeFactureEditor() {
   let html = `<span style="font-size:13px;color:var(--muted);">Total des lignes : ${t.unique.toFixed(2)} €</span>`;
   if (t.mensuel > 0) html += `<br><span style="font-size:13px;color:var(--warning);">Dont mensuel : ${t.mensuel.toFixed(2)} € /mois</span>`;
   if (t.annuel > 0) html += `<br><span style="font-size:13px;color:var(--info);">Dont annuel : ${t.annuel.toFixed(2)} € /an</span>`;
-  const label = type === "Facture d'acompte (30%)" ? "Acompte à payer (30%)" : (type === "Facture de solde" ? "Solde à payer" : "Net à payer");
+  const label = type === "Facture d'acompte (30%)" ? "Acompte à payer (30%)" : (type === "Facture de solde" ? "Solde à payer" : (type === TYPE_FACTURE_PENALITES ? "Total à régler" : "Net à payer"));
   html += `<br><span class="grand">${label} : ${montant.toFixed(2)} €</span>`;
-  html += `<br><span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${MENTION_TVA}</span>`;
+  html += `<br><span style="font-size:11.5px;color:var(--muted);font-weight:normal;">${type === TYPE_FACTURE_PENALITES ? MENTION_PENALITES : MENTION_TVA}</span>`;
   document.getElementById("fed-totaux").innerHTML = html;
+  const pb = document.getElementById("fed-penalites");
+  if (pb) pb.style.display = type === TYPE_FACTURE_PENALITES ? "" : "none";
 }
 function removeFactureEditorLine(i) { readFactureEditorToState(); fedState.lignes.splice(i, 1); if (!fedState.lignes.length) fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
 function addFactureEditorLine() { readFactureEditorToState(); fedState.lignes.push(newFactureLine()); renderFactureEditorLines(); }
@@ -2933,6 +3017,7 @@ function bindFactureEditor() {
   const $ = id => document.getElementById(id);
   $("fed-add-line").addEventListener("click", addFactureEditorLine);
   $("fed-import-devis").addEventListener("click", importFactureLinesFromDevis);
+  $("fed-penalites").addEventListener("click", openPenaltiesCalculator);
   $("fed-close").addEventListener("click", closeFactureEditor);
   $("fed-cgv").addEventListener("click", openFactureCgvPicker);
   $("fed-save").addEventListener("click", () => saveFactureEditor(false));
@@ -3002,7 +3087,7 @@ function openContactHistory(contactId) {
   });
   items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-  const totalPaye = cache.factures.filter(f => f.contact_id === contactId && f.statut === "Payée").reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalPaye = cache.factures.filter(f => f.contact_id === contactId && f.statut === "Payée" && compteDansCA(f)).reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
   const summary = `<div class="page-note" style="margin:0 0 16px;">
     <strong>${contactLabel(c)}</strong>${c && c.email ? " · " + c.email : ""}${c && c.telephone ? " · " + c.telephone : ""}
     ${totalPaye ? `<br>💶 Total facturé payé : <strong>${round2(totalPaye).toFixed(2)} €</strong>` : ""}
