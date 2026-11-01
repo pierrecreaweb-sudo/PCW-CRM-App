@@ -357,10 +357,11 @@ async function seedDefaultTarification() {
   const prestations = TYPES_EVENEMENT.filter(nom => nom !== "Audit Express" && nom !== "Audit Complet").map(nom => ({ nom_presta: nom, categorie: "Prestation" }));
   const optionsUniques = [...new Set([...OPTIONS_SITE, ...OPTIONS_APP])];
   const options = optionsUniques.map(nom => ({ nom_presta: nom, categorie: "Option / Supplément" }));
+  // Formules packs supprimées ; les sites existent en paiement unique (ci-dessus) ET en abonnement mensuel
   const packs = [
-    { nom_presta: "Pack Lancement", categorie: "Prestation", pu_ttc: 790 },
-    { nom_presta: "Pack Croissance", categorie: "Prestation", pu_ttc: 1280 },
-    { nom_presta: "Pack Artisan Connecté", categorie: "Prestation", pu_ttc: 3200 },
+    { nom_presta: "Site Web One Page — abonnement mensuel", categorie: "Prestation", pu_ttc: 59, mode_paiement: "Paiement mensuel", details: "Maintenance et mise à jour comprises" },
+    { nom_presta: "Site Vitrine — abonnement mensuel", categorie: "Prestation", pu_ttc: 99, mode_paiement: "Paiement mensuel", details: "Maintenance et mise à jour comprises" },
+    { nom_presta: "Site Vitrine + — abonnement mensuel", categorie: "Prestation", pu_ttc: 159, mode_paiement: "Paiement mensuel", details: "Maintenance et mise à jour comprises" },
     { nom_presta: "Audit Express", categorie: "Prestation", pu_ttc: 99 },
     { nom_presta: "Audit Complet", categorie: "Prestation", pu_ttc: 249 },
   ];
@@ -369,7 +370,7 @@ async function seedDefaultTarification() {
   const toCreate = toCheck.filter(item => !existingNames.has(item.nom_presta.trim().toLowerCase()));
   if (!toCreate.length) return;
   for (const item of toCreate) {
-    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: null, pu_ht: item.pu_ttc != null ? item.pu_ttc : null, tva: 0, montant_tva: 0, pu_ttc: item.pu_ttc != null ? item.pu_ttc : null, mode_paiement: "Paiement unique" });
+    await insertRow("grille_tarifaire", { nom_presta: item.nom_presta, categorie: item.categorie, details: item.details || null, pu_ht: item.pu_ttc != null ? item.pu_ttc : null, tva: 0, montant_tva: 0, pu_ttc: item.pu_ttc != null ? item.pu_ttc : null, mode_paiement: item.mode_paiement || "Paiement unique" });
   }
   await refreshCache();
   showToast(toCreate.length + " prestation(s)/option(s) ajoutée(s) à la Tarification");
